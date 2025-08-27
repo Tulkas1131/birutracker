@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -13,7 +14,7 @@ import type { Event } from "@/lib/types";
 
 function EventTable({ events, isLoading }: { events: Event[], isLoading: boolean }) {
   const formatDate = (timestamp: Timestamp) => {
-    if (!timestamp || !timestamp.toDate) return 'Fecha inválida';
+    if (!timestamp || !timestamp.toDate) return 'Invalid date';
     return timestamp.toDate().toLocaleString();
   };
 
@@ -30,11 +31,11 @@ function EventTable({ events, isLoading }: { events: Event[], isLoading: boolean
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Fecha</TableHead>
-            <TableHead>Código de Activo</TableHead>
-            <TableHead>Tipo de Evento</TableHead>
-            <TableHead>Cliente</TableHead>
-            <TableHead>Variedad</TableHead>
+            <TableHead>Date</TableHead>
+            <TableHead>Asset Code</TableHead>
+            <TableHead>Event Type</TableHead>
+            <TableHead>Customer</TableHead>
+            <TableHead>Variety</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -51,7 +52,7 @@ function EventTable({ events, isLoading }: { events: Event[], isLoading: boolean
       </Table>
       {events.length === 0 && !isLoading && (
         <div className="py-10 text-center text-muted-foreground">
-          No se encontraron movimientos para los filtros seleccionados.
+          No movements found for the selected filters.
         </div>
       )}
     </>
@@ -96,35 +97,35 @@ export default function HistoryPage() {
   return (
     <div className="flex flex-1 flex-col">
       <PageHeader
-        title="Historial de Movimientos"
-        description="Consulta el registro de todos los movimientos de activos."
+        title="Movement History"
+        description="View the log of all asset movements."
       />
       <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
         <Card>
           <CardContent>
             <div className="flex flex-col sm:flex-row items-center gap-4 py-4">
               <Input
-                placeholder="Filtrar por cliente..."
+                placeholder="Filter by customer..."
                 value={filters.customer}
                 onChange={(e) => handleFilterChange('customer', e.target.value)}
                 className="w-full sm:max-w-sm"
               />
               <Select value={filters.assetType} onValueChange={(value) => handleFilterChange('assetType', value)}>
                 <SelectTrigger className="w-full sm:w-[180px]">
-                  <SelectValue placeholder="Tipo de Activo" />
+                  <SelectValue placeholder="Asset Type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ALL">Todos los Tipos</SelectItem>
-                  <SelectItem value="KEG">BARRIL</SelectItem>
+                  <SelectItem value="ALL">All Types</SelectItem>
+                  <SelectItem value="KEG">KEG</SelectItem>
                   <SelectItem value="CO2">CO2</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={filters.eventType} onValueChange={(value) => handleFilterChange('eventType', value)}>
                 <SelectTrigger className="w-full sm:w-[220px]">
-                  <SelectValue placeholder="Tipo de Evento" />
+                  <SelectValue placeholder="Event Type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ALL">Todos los Eventos</SelectItem>
+                  <SelectItem value="ALL">All Events</SelectItem>
                   <SelectItem value="SALIDA_LLENO">SALIDA_LLENO</SelectItem>
                   <SelectItem value="RETORNO_VACIO">RETORNO_VACIO</SelectItem>
                   <SelectItem value="SALIDA_VACIO">SALIDA_VACIO</SelectItem>

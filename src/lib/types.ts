@@ -36,7 +36,7 @@ export const assetSchema = z.object({
   id: z.string().optional(),
   code: z.string(),
   type: z.enum(['BARRIL', 'CO2']),
-  format: z.string().min(1, 'El formato es requerido'),
+  format: z.string().min(1, 'Format is required'),
   state: z.enum(['LLENO', 'VACIO']),
   location: z.enum(['EN_CLIENTE', 'EN_PLANTA']),
 });
@@ -45,7 +45,7 @@ export type AssetFormData = z.infer<typeof assetSchema>;
 
 export const customerSchema = z.object({
   id: z.string().optional(),
-  name: z.string().min(1, 'El nombre es requerido'),
+  name: z.string().min(1, 'Name is required'),
   address: z.string().optional(),
   contact: z.string().optional(),
   type: z.enum(['BAR', 'DISTRIBUIDOR', 'OTRO']),
@@ -54,9 +54,9 @@ export const customerSchema = z.object({
 export type CustomerFormData = z.infer<typeof customerSchema>;
 
 export const movementSchema = z.object({
-  asset_id: z.string().min(1, "Por favor selecciona un activo."),
+  asset_id: z.string().min(1, "Please select an asset."),
   event_type: z.enum(['SALIDA_LLENO', 'RETORNO_VACIO', 'SALIDA_VACIO', 'DEVOLUCION_LLENO']),
-  customer_id: z.string().min(1, "Por favor selecciona un cliente."),
+  customer_id: z.string().min(1, "Please select a customer."),
   variety: z.string().optional(),
 });
 

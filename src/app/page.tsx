@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -29,8 +30,8 @@ export default function LoginPage() {
     } catch (error: any) {
       console.error(error);
       toast({
-        title: "Error de inicio de sesión",
-        description: "El correo o la contraseña son incorrectos.",
+        title: "Login Error",
+        description: "The email or password you entered is incorrect.",
         variant: "destructive",
       });
     } finally {
@@ -43,18 +44,18 @@ export default function LoginPage() {
       <Card className="mx-auto w-full max-w-sm">
         <CardHeader className="text-center">
           <Logo className="mx-auto mb-4 h-12 w-12" />
-          <CardTitle className="text-2xl">Bienvenido a BiruTracker</CardTitle>
-          <CardDescription>Ingresa tu correo electrónico para iniciar sesión en tu cuenta</CardDescription>
+          <CardTitle className="text-2xl">Welcome to BiruTracker</CardTitle>
+          <CardDescription>Enter your email below to login to your account</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin}>
             <div className="grid gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="email">Correo electrónico</Label>
+                <Label htmlFor="email">Email</Label>
                 <Input 
                   id="email" 
                   type="email" 
-                  placeholder="m@ejemplo.com" 
+                  placeholder="m@example.com" 
                   required 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -62,9 +63,9 @@ export default function LoginPage() {
               </div>
               <div className="grid gap-2">
                 <div className="flex items-center">
-                  <Label htmlFor="password">Contraseña</Label>
+                  <Label htmlFor="password">Password</Label>
                   <Link href="#" className="ml-auto inline-block text-sm underline">
-                    ¿Olvidaste tu contraseña?
+                    Forgot your password?
                   </Link>
                 </div>
                 <Input 
@@ -76,14 +77,14 @@ export default function LoginPage() {
                 />
               </div>
               <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
-                {isLoading ? <Loader2 className="animate-spin" /> : 'Iniciar sesión'}
+                {isLoading ? <Loader2 className="animate-spin" /> : 'Login'}
               </Button>
             </div>
           </form>
           <div className="mt-4 text-center text-sm">
-            ¿No tienes una cuenta?{' '}
+            Don&apos;t have an account?{' '}
             <Link href="/signup" className="underline">
-              Regístrate
+              Sign up
             </Link>
           </div>
         </CardContent>

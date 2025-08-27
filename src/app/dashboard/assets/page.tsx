@@ -62,8 +62,8 @@ export default function AssetsPage() {
   const handleDelete = async (id: string) => {
     if (userRole !== 'Admin') {
        toast({
-        title: "Acceso denegado",
-        description: "No tienes permiso para eliminar activos.",
+        title: "Access Denied",
+        description: "You do not have permission to delete assets.",
         variant: "destructive",
       });
       return;
@@ -71,14 +71,14 @@ export default function AssetsPage() {
     try {
       await deleteDoc(doc(db, "assets", id));
       toast({
-        title: "Activo Eliminado",
-        description: "El activo ha sido eliminado de la base de datos.",
+        title: "Asset Deleted",
+        description: "The asset has been removed from the database.",
       });
     } catch (error) {
       console.error("Error deleting asset: ", error);
       toast({
         title: "Error",
-        description: "No se pudo eliminar el activo.",
+        description: "Could not delete asset.",
         variant: "destructive",
       });
     }
@@ -117,8 +117,8 @@ export default function AssetsPage() {
         };
         await updateDoc(doc(db, "assets", selectedAsset.id), assetDataToUpdate);
         toast({
-          title: "Activo Actualizado",
-          description: "Los cambios han sido guardados.",
+          title: "Asset Updated",
+          description: "Changes have been saved.",
         });
       } else {
         // Creating new asset
@@ -126,8 +126,8 @@ export default function AssetsPage() {
         const newAssetData = { ...data, code: newCode };
         await addDoc(collection(db, "assets"), newAssetData);
         toast({
-          title: "Activo Creado",
-          description: `El nuevo activo ha sido añadido con el código ${newCode}.`,
+          title: "Asset Created",
+          description: `The new asset has been added with code ${newCode}.`,
         });
       }
       setFormOpen(false);
@@ -136,7 +136,7 @@ export default function AssetsPage() {
       console.error("Error saving asset: ", error);
       toast({
         title: "Error",
-        description: "No se pudieron guardar los datos.",
+        description: "Could not save data.",
         variant: "destructive",
       });
     }
@@ -160,12 +160,12 @@ export default function AssetsPage() {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Código</TableHead>
-          <TableHead>Formato</TableHead>
-          <TableHead>Estado</TableHead>
-          <TableHead>Ubicación</TableHead>
+          <TableHead>Code</TableHead>
+          <TableHead>Format</TableHead>
+          <TableHead>State</TableHead>
+          <TableHead>Location</TableHead>
           <TableHead>
-            <span className="sr-only">Acciones</span>
+            <span className="sr-only">Actions</span>
           </TableHead>
         </TableRow>
       </TableHeader>
@@ -179,7 +179,7 @@ export default function AssetsPage() {
         ) : assetList.length === 0 ? (
           <TableRow>
              <TableCell colSpan={5} className="h-24 text-center">
-              No hay activos. ¡Añade uno nuevo para empezar!
+              No assets yet. Add one to get started!
             </TableCell>
           </TableRow>
         ) : (
@@ -189,12 +189,12 @@ export default function AssetsPage() {
               <TableCell>{asset.format}</TableCell>
               <TableCell>
                 <Badge variant={asset.state === 'LLENO' ? 'default' : 'secondary'}>
-                  {asset.state === 'LLENO' ? 'Lleno' : 'Vacío'}
+                  {asset.state === 'LLENO' ? 'Full' : 'Empty'}
                 </Badge>
               </TableCell>
               <TableCell>
                 <Badge variant={getLocationVariant(asset.location)}>
-                  {asset.location === 'EN_PLANTA' ? 'En Planta' : 'En Cliente'}
+                  {asset.location === 'EN_PLANTA' ? 'In Plant' : 'At Customer'}
                 </Badge>
               </TableCell>
               <TableCell>
@@ -206,11 +206,11 @@ export default function AssetsPage() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                    <DropdownMenuItem onSelect={() => handleEdit(asset)}>Editar</DropdownMenuItem>
+                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                    <DropdownMenuItem onSelect={() => handleEdit(asset)}>Edit</DropdownMenuItem>
                     {userRole === 'Admin' && (
                         <DropdownMenuItem onSelect={() => handleDelete(asset.id)} className="text-destructive">
-                            Eliminar
+                            Delete
                         </DropdownMenuItem>
                     )}
                   </DropdownMenuContent>
@@ -227,13 +227,13 @@ export default function AssetsPage() {
     <div className="flex flex-1 flex-col">
        <Dialog open={isFormOpen} onOpenChange={setFormOpen}>
         <PageHeader
-          title="Activos"
-          description="Gestiona tus barriles de cerveza y cilindros de CO₂."
+          title="Assets"
+          description="Manage your beer kegs and CO₂ cylinders."
           action={
             <DialogTrigger asChild>
                 <Button size="lg" onClick={handleNew}>
                     <PlusCircle className="mr-2 h-5 w-5" />
-                    Nuevo Activo
+                    New Asset
                 </Button>
             </DialogTrigger>
           }
@@ -241,7 +241,7 @@ export default function AssetsPage() {
         <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
             <Tabs defaultValue="barrels">
               <TabsList>
-                <TabsTrigger value="barrels">Barriles ({barrels.length})</TabsTrigger>
+                <TabsTrigger value="barrels">Barrels ({barrels.length})</TabsTrigger>
                 <TabsTrigger value="co2">CO2 ({co2Cylinders.length})</TabsTrigger>
               </TabsList>
               <TabsContent value="barrels">
@@ -262,7 +262,7 @@ export default function AssetsPage() {
         </main>
         <DialogContent>
             <DialogHeader>
-                <DialogTitle>{selectedAsset ? "Editar Activo" : "Crear Nuevo Activo"}</DialogTitle>
+                <DialogTitle>{selectedAsset ? "Edit Asset" : "Create New Asset"}</DialogTitle>
             </DialogHeader>
             <AssetForm
               defaultValues={selectedAsset}
@@ -277,5 +277,3 @@ export default function AssetsPage() {
     </div>
   );
 }
-
-    
