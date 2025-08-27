@@ -43,6 +43,15 @@ export const assetSchema = z.object({
 
 export type AssetFormData = z.infer<typeof assetSchema>;
 
+export const assetBatchSchema = z.object({
+  type: z.enum(['BARRIL', 'CO2'], { required_error: 'Debes seleccionar un tipo.' }),
+  format: z.string().min(1, 'El formato es requerido.'),
+  quantity: z.coerce.number().int().min(1, 'La cantidad debe ser al menos 1.').max(100, 'No se pueden crear más de 100 activos a la vez.'),
+});
+
+export type AssetBatchFormData = z.infer<typeof assetBatchSchema>;
+
+
 export const customerSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1, 'Name is required'),

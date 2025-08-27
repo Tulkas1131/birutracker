@@ -2,8 +2,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer } from "lucide-react";
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, orderBy, limit } from "firebase/firestore";
+import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus } from "lucide-react";
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, orderBy, limit, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import QRCode from "qrcode.react";
 
@@ -27,8 +27,9 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/page-header";
-import type { Asset } from "@/lib/types";
+import type { Asset, AssetBatchFormData } from "@/lib/types";
 import { AssetForm } from "@/components/asset-form";
+import { AssetBatchForm } from "@/components/asset-batch-form";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/use-user-role";
@@ -38,6 +39,7 @@ export default function AssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setFormOpen] = useState(false);
+  const [isBatchFormOpen, setBatchFormOpen] = useState(false);
   const [isQrCodeOpen, setQrCodeOpen] = useState(false);
   const [isBatchQrOpen, setBatchQrOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('barrels');
@@ -69,6 +71,10 @@ export default function AssetsPage() {
   const handleNew = () => {
     setSelectedAsset(undefined);
     setFormOpen(true);
+  };
+  
+  const handleNewBatch = () => {
+    setBatchFormOpen(true);
   };
 
   const handleShowQrCode = (asset: Asset) => {
@@ -158,7 +164,7 @@ export default function AssetsPage() {
     }
   };
 
-  const generateNextCode = async (type: 'BARRIL' | 'CO2'): Promise<string> => {
+  const generateNextCode = async (type: 'BARRIL' | 'CO2'): Promise<{prefix: string, nextNumber: number}> => {
     const firestore = db();
     const prefix = type === 'BARRIL' ? 'KEG' : 'CO2';
     const q = query(
@@ -170,15 +176,12 @@ export default function AssetsPage() {
     
     const querySnapshot = await getDocs(q);
     if (querySnapshot.empty) {
-      return `${prefix}-001`;
+      return { prefix, nextNumber: 1 };
     }
     
     const lastCode = querySnapshot.docs[0].data().code;
     const lastNumber = parseInt(lastCode.split('-')[1], 10);
-    const nextNumber = lastNumber + 1;
-    const nextCode = `${prefix}-${String(nextNumber).padStart(3, '0')}`;
-    
-    return nextCode;
+    return { prefix, nextNumber: lastNumber + 1 };
   };
   
   const handleFormSubmit = async (data: Omit<Asset, 'id' | 'code'>) => {
@@ -198,7 +201,8 @@ export default function AssetsPage() {
         });
       } else {
         // Creating new asset
-        const newCode = await generateNextCode(data.type);
+        const { prefix, nextNumber } = await generateNextCode(data.type);
+        const newCode = `${prefix}-${String(nextNumber).padStart(3, '0')}`;
         const newAssetData = { ...data, code: newCode };
         await addDoc(collection(firestore, "assets"), newAssetData);
         toast({
@@ -213,6 +217,44 @@ export default function AssetsPage() {
       toast({
         title: "Error",
         description: "No se pudieron guardar los datos.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleBatchFormSubmit = async (data: AssetBatchFormData) => {
+    const firestore = db();
+    try {
+      const { prefix, nextNumber } = await generateNextCode(data.type);
+      const batch = writeBatch(firestore);
+      
+      for (let i = 0; i < data.quantity; i++) {
+        const currentNumber = nextNumber + i;
+        const newCode = `${prefix}-${String(currentNumber).padStart(3, '0')}`;
+        const newAssetData = {
+          type: data.type,
+          format: data.format,
+          code: newCode,
+          state: 'LLENO' as const,
+          location: 'EN_PLANTA' as const,
+        };
+        const newAssetRef = doc(collection(firestore, "assets"));
+        batch.set(newAssetRef, newAssetData);
+      }
+      
+      await batch.commit();
+
+      toast({
+        title: "Lote Creado Exitosamente",
+        description: `Se han creado ${data.quantity} nuevos activos de tipo ${data.type}.`,
+      });
+
+      setBatchFormOpen(false);
+    } catch (error) {
+      console.error("Error creando lote de activos: ", error);
+      toast({
+        title: "Error",
+        description: "No se pudo crear el lote de activos.",
         variant: "destructive",
       });
     }
@@ -314,10 +356,14 @@ export default function AssetsPage() {
           title="Activos"
           description="Gestiona tus barriles de cerveza y cilindros de CO₂."
           action={
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row items-center gap-2">
                  <Button size="lg" variant="outline" onClick={() => setBatchQrOpen(true)} disabled={assetsToPrint.length === 0}>
                     <Printer className="mr-2 h-5 w-5" />
                     Imprimir Lote de QR
+                </Button>
+                <Button size="lg" variant="outline" onClick={handleNewBatch}>
+                    <PackagePlus className="mr-2 h-5 w-5" />
+                    Crear Lote
                 </Button>
                 <DialogTrigger asChild>
                     <Button size="lg" onClick={handleNew}>
@@ -363,6 +409,20 @@ export default function AssetsPage() {
               }}
             />
         </DialogContent>
+      </Dialog>
+      <Dialog open={isBatchFormOpen} onOpenChange={setBatchFormOpen}>
+          <DialogContent>
+              <DialogHeader>
+                  <DialogTitle>Crear Lote de Activos</DialogTitle>
+                  <DialogDescription>
+                      Genera múltiples activos con formato y tipo idénticos. Los códigos se asignarán automáticamente.
+                  </DialogDescription>
+              </DialogHeader>
+              <AssetBatchForm
+                onSubmit={handleBatchFormSubmit}
+                onCancel={() => setBatchFormOpen(false)}
+              />
+          </DialogContent>
       </Dialog>
       <Dialog open={isQrCodeOpen} onOpenChange={setQrCodeOpen}>
         <DialogContent>
