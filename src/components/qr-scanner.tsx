@@ -1,8 +1,8 @@
 
 "use client";
 
-import { useEffect, useRef } from 'react';
-import { Html5QrcodeScanner, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { useEffect, useRef, memo } from 'react';
+import { Html5QrcodeScanner, Html5QrcodeSupportedFormats, Html5QrcodeScannerState } from 'html5-qrcode';
 import { useToast } from "@/hooks/use-toast";
 
 interface QrScannerProps {
@@ -10,7 +10,7 @@ interface QrScannerProps {
     onScanError: (errorMessage: string) => void;
 }
 
-export function QrScanner({ onScanSuccess, onScanError }: QrScannerProps) {
+function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
     const scannerRef = useRef<Html5QrcodeScanner | null>(null);
     const { toast } = useToast();
 
@@ -18,14 +18,14 @@ export function QrScanner({ onScanSuccess, onScanError }: QrScannerProps) {
         const config = {
             fps: 10,
             qrbox: { width: 250, height: 250 },
-            supportedScanTypes: [], // Let the library decide
+            supportedScanTypes: [],
             formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE]
         };
         
         const html5QrcodeScanner = new Html5QrcodeScanner(
             "qr-reader", 
             config, 
-            false // verbose
+            false
         );
 
         scannerRef.current = html5QrcodeScanner;
@@ -33,7 +33,9 @@ export function QrScanner({ onScanSuccess, onScanError }: QrScannerProps) {
         const startScanner = async () => {
              try {
                 await Html5QrcodeScanner.getCameras();
-                html5QrcodeScanner.render(onScanSuccess, onScanError);
+                if (scannerRef.current && scannerRef.current.getState() !== Html5QrcodeScannerState.SCANNING) {
+                  html5QrcodeScanner.render(onScanSuccess, onScanError);
+                }
             } catch (err) {
                 console.error("Error getting cameras", err);
                  toast({
@@ -47,7 +49,7 @@ export function QrScanner({ onScanSuccess, onScanError }: QrScannerProps) {
         startScanner();
 
         return () => {
-            if (scannerRef.current && scannerRef.current.getState() === 2) { // 2 is SCANNING state
+            if (scannerRef.current && scannerRef.current.getState() === Html5QrcodeScannerState.SCANNING) {
                  scannerRef.current.clear().catch(error => {
                     console.error("Failed to clear html5QrcodeScanner.", error);
                 });
@@ -57,3 +59,6 @@ export function QrScanner({ onScanSuccess, onScanError }: QrScannerProps) {
 
     return <div id="qr-reader" className="w-full"></div>;
 }
+
+// Memoize the component to prevent unnecessary re-renders
+export const QrScanner = memo(QrScannerComponent);

@@ -1,10 +1,11 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { Timestamp, collection, onSnapshot, addDoc, doc, runTransaction, getDoc } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
@@ -19,7 +20,13 @@ import { useToast } from "@/hooks/use-toast";
 import { movementSchema, type MovementFormData, type Asset, type Customer } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { QrScanner } from "@/components/qr-scanner";
+
+// Dynamically import the QrScanner component
+const QrScanner = dynamic(() => import('@/components/qr-scanner').then(mod => mod.QrScanner), {
+  ssr: false,
+  loading: () => <div className="flex justify-center items-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>,
+});
+
 
 export default function MovementsPage() {
   const { toast } = useToast();
@@ -182,7 +189,7 @@ export default function MovementsPage() {
             description="Registra la salida o entrada de un activo a un cliente."
             action={
                 <DialogTrigger asChild>
-                    <Button size="lg" variant="outline">
+                    <Button size="lg" variant="outline" onClick={() => setScannerOpen(true)}>
                         <QrCode className="mr-2 h-5 w-5" />
                         Escanear QR
                     </Button>
@@ -297,10 +304,14 @@ export default function MovementsPage() {
             <DialogHeader>
                 <DialogTitle>Escanear Código QR</DialogTitle>
             </DialogHeader>
-            <QrScanner
-                onScanSuccess={handleScanSuccess}
-                onScanError={handleScanError}
-            />
+            <Suspense fallback={<div className="flex justify-center items-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+              {isScannerOpen && (
+                <QrScanner
+                    onScanSuccess={handleScanSuccess}
+                    onScanError={handleScanError}
+                />
+              )}
+            </Suspense>
         </DialogContent>
       </Dialog>
     </div>
