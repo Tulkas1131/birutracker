@@ -1,6 +1,6 @@
 "use server";
 
-import { collection, writeBatch, getDocs } from "firebase/firestore";
+import { collection, writeBatch, getDocs, doc } from "firebase/firestore";
 import { db } from "./firebase";
 import type { Asset, Customer } from "./types";
 
@@ -25,6 +25,7 @@ const mockCustomers: Omit<Customer, 'id'>[] = [
 async function clearCollection(collectionName: string) {
   const collectionRef = collection(db, collectionName);
   const querySnapshot = await getDocs(collectionRef);
+  if (querySnapshot.empty) return;
   const batch = writeBatch(db);
   querySnapshot.forEach((doc) => {
     batch.delete(doc.ref);
@@ -41,8 +42,9 @@ export async function seedDatabase() {
 
     // Batch write assets
     const assetsBatch = writeBatch(db);
+    const assetsCollectionRef = collection(db, 'assets');
     mockAssets.forEach((asset) => {
-      const docRef = collection(db, 'assets').doc(); // Auto-generate ID
+      const docRef = doc(assetsCollectionRef); // Auto-generate ID
       assetsBatch.set(docRef, asset);
     });
     await assetsBatch.commit();
@@ -50,8 +52,9 @@ export async function seedDatabase() {
 
     // Batch write customers
     const customersBatch = writeBatch(db);
+    const customersCollectionRef = collection(db, 'customers');
     mockCustomers.forEach((customer) => {
-      const docRef = collection(db, 'customers').doc(); // Auto-generate ID
+      const docRef = doc(customersCollectionRef); // Auto-generate ID
       customersBatch.set(docRef, customer);
     });
     await customersBatch.commit();
