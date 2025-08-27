@@ -12,9 +12,57 @@ import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import type { Event } from "@/lib/types";
 
+function EventTable({ events, isLoading }: { events: Event[], isLoading: boolean }) {
+  const formatDate = (timestamp: Timestamp) => {
+    if (!timestamp) return 'Fecha inválida';
+    return timestamp.toDate().toLocaleString();
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center py-10">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Fecha</TableHead>
+            <TableHead>Código de Activo</TableHead>
+            <TableHead>Tipo de Evento</TableHead>
+            <TableHead>Cliente</TableHead>
+            <TableHead>Variedad</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {events.map((event) => (
+            <TableRow key={event.id}>
+              <TableCell>{formatDate(event.timestamp)}</TableCell>
+              <TableCell className="font-medium">{event.asset_code}</TableCell>
+              <TableCell>{event.event_type}</TableCell>
+              <TableCell>{event.customer_name}</TableCell>
+              <TableCell>{event.variety || 'N/A'}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      {events.length === 0 && (
+        <div className="py-10 text-center text-muted-foreground">
+          No se encontraron movimientos para los filtros seleccionados.
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function HistoryPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isClient, setIsClient] = useState(false);
   const { toast } = useToast();
 
   const [filters, setFilters] = useState({
@@ -24,6 +72,7 @@ export default function HistoryPage() {
   });
 
   useEffect(() => {
+    setIsClient(true);
     const fetchEvents = async () => {
       try {
         setIsLoading(true);
@@ -43,7 +92,7 @@ export default function HistoryPage() {
       }
     };
     fetchEvents();
-  }, []);
+  }, [toast]);
 
   const handleFilterChange = (name: string, value: string) => {
     setFilters(prev => ({ ...prev, [name]: value }));
@@ -53,15 +102,11 @@ export default function HistoryPage() {
     return events
       .filter(event => {
         const customerMatch = event.customer_name.toLowerCase().includes(filters.customer.toLowerCase());
-        const assetTypeMatch = filters.assetType === 'ALL' || event.asset_code.startsWith(filters.assetType);
+        const assetTypeMatch = filters.assetType === 'ALL' || (event.asset_code && event.asset_code.startsWith(filters.assetType));
         const eventTypeMatch = filters.eventType === 'ALL' || event.event_type === filters.eventType;
         return customerMatch && assetTypeMatch && eventTypeMatch;
       });
   }, [events, filters]);
-
-  const formatDate = (timestamp: Timestamp) => {
-    return timestamp.toDate().toLocaleString();
-  };
   
   return (
     <div className="flex flex-1 flex-col">
@@ -102,40 +147,12 @@ export default function HistoryPage() {
                 </SelectContent>
               </Select>
             </div>
-            {isLoading ? (
+            {isClient ? (
+              <EventTable events={filteredEvents} isLoading={isLoading} />
+            ) : (
                <div className="flex justify-center items-center py-10">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                </div>
-            ) : (
-              <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Código de Activo</TableHead>
-                    <TableHead>Tipo de Evento</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Variedad</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredEvents.map((event) => (
-                    <TableRow key={event.id}>
-                      <TableCell>{formatDate(event.timestamp)}</TableCell>
-                      <TableCell className="font-medium">{event.asset_code}</TableCell>
-                      <TableCell>{event.event_type}</TableCell>
-                      <TableCell>{event.customer_name}</TableCell>
-                      <TableCell>{event.variety || 'N/A'}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              {filteredEvents.length === 0 && (
-                <div className="py-10 text-center text-muted-foreground">
-                  No se encontraron movimientos para los filtros seleccionados.
-                </div>
-              )}
-              </>
             )}
           </CardContent>
         </Card>
