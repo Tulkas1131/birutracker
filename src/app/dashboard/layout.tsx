@@ -146,7 +146,7 @@ export default function DashboardLayout({
         <SidebarFooter>
           <div className="flex items-center gap-2 p-2">
              <Avatar className="size-8">
-                <AvatarImage src={user.photoURL || "https://picsum.photos/100"} alt="Avatar de usuario" data-ai-hint="user avatar" />
+                <AvatarImage src={user.photoURL || "https://picsum.photos/100"} alt="Avatar del usuario" data-ai-hint="user avatar" />
                 <AvatarFallback>{user.email?.[0].toUpperCase() || 'U'}</AvatarFallback>
               </Avatar>
               <div className="flex flex-col text-sm">
