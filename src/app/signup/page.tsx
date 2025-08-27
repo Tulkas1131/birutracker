@@ -45,14 +45,21 @@ export default function SignupPage() {
       // 2. If allowed, create user
       await createUserWithEmailAndPassword(auth, email, password);
       router.push('/dashboard');
-    } catch (error: any)
- {
+    } catch (error: any) {
       console.error(error);
-       toast({
-        title: "Error de registro",
-        description: error.message,
-        variant: "destructive",
-      });
+      if (error.code === 'auth/email-already-in-use') {
+        toast({
+          title: "Error de registro",
+          description: "Este correo electrónico ya está registrado. Por favor, inicia sesión.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error de registro",
+          description: "Ocurrió un error inesperado. Inténtalo de nuevo.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsLoading(false);
     }
