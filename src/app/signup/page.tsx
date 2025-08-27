@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { collection, query, where, getDocs, setDoc, doc, getCountFromServer } from 'firebase/firestore';
+import { collection, query, where, getDocs, setDoc, doc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -42,18 +42,13 @@ export default function SignupPage() {
         return;
       }
       
-      // 2. Check if this will be the first user to determine the role
-      const usersCollectionRef = collection(db, "users");
-      const snapshot = await getCountFromServer(usersCollectionRef);
-      const isFirstUser = snapshot.data().count === 0;
-      const role = isFirstUser ? "Admin" : "Operador";
+      const role = "Operador";
 
-
-      // 3. If allowed, create user
+      // 2. If allowed, create user
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // 4. Create user profile in 'users' collection with the determined role
+      // 3. Create user profile in 'users' collection with the determined role
       await setDoc(doc(db, "users", user.uid), {
         email: user.email,
         role: role,
