@@ -76,6 +76,7 @@ export default function HistoryPage() {
                   <TableHead>Código de Activo</TableHead>
                   <TableHead>Tipo de Evento</TableHead>
                   <TableHead>Cliente</TableHead>
+                  <TableHead>Variedad</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -85,6 +86,7 @@ export default function HistoryPage() {
                     <TableCell className="font-medium">{event.asset_code}</TableCell>
                     <TableCell>{event.event_type}</TableCell>
                     <TableCell>{event.customer_name}</TableCell>
+                    <TableCell>{event.variety || 'N/A'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

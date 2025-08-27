@@ -26,6 +26,7 @@ export type Event = {
   customer_name: string;
   user_id: string;
   timestamp: string;
+  variety?: string;
 };
 
 // Zod Schemas for form validation
@@ -53,6 +54,7 @@ export const movementSchema = z.object({
   asset_id: z.string().min(1, "Por favor selecciona un activo."),
   event_type: z.enum(['SALIDA_LLENO', 'DEVOLUCION_VACIO']),
   customer_id: z.string().min(1, "Por favor selecciona un cliente."),
+  variety: z.string().optional(),
 });
 
 export type MovementFormData = z.infer<typeof movementSchema>;

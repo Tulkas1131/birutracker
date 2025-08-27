@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { movementSchema, type MovementFormData } from "@/lib/types";
 import { mockAssets, mockCustomers } from "@/lib/data";
 import { useRouter } from "next/navigation";
+import { Input } from "@/components/ui/input";
 
 export default function MovementsPage() {
   const { toast } = useToast();
@@ -20,8 +21,16 @@ export default function MovementsPage() {
     resolver: zodResolver(movementSchema),
     defaultValues: {
       event_type: "SALIDA_LLENO",
+      variety: "",
     },
   });
+
+  const watchAssetId = form.watch("asset_id");
+  const watchEventType = form.watch("event_type");
+
+  const selectedAsset = mockAssets.find(asset => asset.id === watchAssetId);
+  const showVarietyField = selectedAsset?.type === 'BARRIL' && watchEventType === 'SALIDA_LLENO';
+
 
   function onSubmit(data: MovementFormData) {
     console.log(data);
@@ -64,7 +73,7 @@ export default function MovementsPage() {
                         <SelectContent>
                           {mockAssets.map(asset => (
                             <SelectItem key={asset.id} value={asset.id}>
-                              {asset.code} ({asset.format}) - <span className="text-muted-foreground">{asset.status}</span>
+                              {asset.code} ({asset.type} - {asset.format}) - <span className="text-muted-foreground">{asset.status}</span>
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -94,6 +103,21 @@ export default function MovementsPage() {
                     </FormItem>
                   )}
                 />
+                {showVarietyField && (
+                  <FormField
+                    control={form.control}
+                    name="variety"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Variedad de Cerveza</FormLabel>
+                        <FormControl>
+                          <Input placeholder="ej., IPA, Stout, Lager" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
                  <FormField
                   control={form.control}
                   name="customer_id"

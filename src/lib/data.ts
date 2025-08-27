@@ -25,6 +25,7 @@ export const mockEvents: Event[] = [
     customer_name: 'Bar La Esquina',
     user_id: 'user1',
     timestamp: '2025-08-25T10:00:00Z',
+    variety: 'IPA',
   },
   {
     id: '2',
@@ -45,5 +46,6 @@ export const mockEvents: Event[] = [
     customer_name: 'The Thirsty Monk',
     user_id: 'user2',
     timestamp: '2025-08-23T11:00:00Z',
+    variety: 'Stout',
   },
 ];
