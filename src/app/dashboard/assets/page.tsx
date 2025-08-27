@@ -1,0 +1,148 @@
+"use client";
+
+import { useState } from "react";
+import { MoreHorizontal, PlusCircle } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { PageHeader } from "@/components/page-header";
+import { mockAssets } from "@/lib/data";
+import type { Asset } from "@/lib/types";
+import { AssetForm } from "@/components/asset-form";
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
+export default function AssetsPage() {
+  const [assets, setAssets] = useState<Asset[]>(mockAssets);
+  const [isFormOpen, setFormOpen] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState<Asset | undefined>(undefined);
+
+  const handleEdit = (asset: Asset) => {
+    setSelectedAsset(asset);
+    setFormOpen(true);
+  };
+  
+  const handleNew = () => {
+    setSelectedAsset(undefined);
+    setFormOpen(true);
+  };
+  
+  const handleDelete = (id: string) => {
+    setAssets(assets.filter((asset) => asset.id !== id));
+  };
+  
+  const handleFormSubmit = (data: Asset) => {
+    if (selectedAsset) {
+      setAssets(assets.map((asset) => (asset.id === selectedAsset.id ? { ...data, id: asset.id } : asset)));
+    } else {
+      setAssets([...assets, { ...data, id: (assets.length + 1).toString() }]);
+    }
+    setFormOpen(false);
+    setSelectedAsset(undefined);
+  };
+  
+  const getStatusVariant = (status: Asset["status"]) => {
+    switch (status) {
+      case "LLENO":
+        return "default";
+      case "VACIO":
+        return "secondary";
+      case "EN_CLIENTE":
+        return "outline";
+      case "EN_PLANTA":
+        return "destructive";
+      default:
+        return "default";
+    }
+  };
+
+  return (
+    <div className="flex flex-1 flex-col">
+       <Dialog open={isFormOpen} onOpenChange={setFormOpen}>
+        <PageHeader
+          title="Assets"
+          description="Manage your beer kegs and CO₂ cylinders."
+          action={
+            <DialogTrigger asChild>
+                <Button size="lg" onClick={handleNew}>
+                    <PlusCircle className="mr-2 h-5 w-5" />
+                    New Asset
+                </Button>
+            </DialogTrigger>
+          }
+        />
+        <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
+          <Card>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Code</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Format</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {assets.map((asset) => (
+                    <TableRow key={asset.id}>
+                      <TableCell className="font-medium">{asset.code}</TableCell>
+                      <TableCell>{asset.type}</TableCell>
+                      <TableCell>{asset.format}</TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusVariant(asset.status)}>{asset.status}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button aria-haspopup="true" size="icon" variant="ghost">
+                              <MoreHorizontal className="h-4 w-4" />
+                              <span className="sr-only">Toggle menu</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem onSelect={() => handleEdit(asset)}>Edit</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => handleDelete(asset.id)}>Delete</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </main>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>{selectedAsset ? "Edit Asset" : "Create New Asset"}</DialogTitle>
+            </DialogHeader>
+            <AssetForm
+              defaultValues={selectedAsset}
+              onSubmit={handleFormSubmit}
+              onCancel={() => setFormOpen(false)}
+            />
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
