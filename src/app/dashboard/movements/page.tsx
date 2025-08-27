@@ -29,7 +29,7 @@ export default function MovementsPage() {
   const watchEventType = form.watch("event_type");
 
   const selectedAsset = mockAssets.find(asset => asset.id === watchAssetId);
-  const showVarietyField = selectedAsset?.type === 'BARRIL' && watchEventType === 'SALIDA_LLENO';
+  const showVarietyField = selectedAsset?.type === 'BARRIL' && (watchEventType === 'SALIDA_LLENO' || watchEventType === 'ENTRADA_LLENO');
 
 
   function onSubmit(data: MovementFormData) {
@@ -97,6 +97,8 @@ export default function MovementsPage() {
                         <SelectContent>
                           <SelectItem value="SALIDA_LLENO">SALIDA_LLENO (Salida)</SelectItem>
                           <SelectItem value="DEVOLUCION_VACIO">DEVOLUCION_VACIO (Retorno)</SelectItem>
+                          <SelectItem value="SALIDA_VACIO">SALIDA_VACIO (Caso especial)</SelectItem>
+                          <SelectItem value="ENTRADA_LLENO">ENTRADA_LLENO (Caso especial)</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />

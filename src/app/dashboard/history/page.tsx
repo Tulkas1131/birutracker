@@ -66,6 +66,8 @@ export default function HistoryPage() {
                   <SelectItem value="ALL">Todos los Eventos</SelectItem>
                   <SelectItem value="SALIDA_LLENO">SALIDA_LLENO</SelectItem>
                   <SelectItem value="DEVOLUCION_VACIO">DEVOLUCION_VACIO</SelectItem>
+                  <SelectItem value="SALIDA_VACIO">SALIDA_VACIO</SelectItem>
+                  <SelectItem value="ENTRADA_LLENO">ENTRADA_LLENO</SelectItem>
                 </SelectContent>
               </Select>
             </div>
