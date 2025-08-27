@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { MoreHorizontal, PlusCircle, Loader2 } from "lucide-react";
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs } from "firebase/firestore";
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, orderBy, limit } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 import { Badge } from "@/components/ui/badge";
@@ -73,49 +73,46 @@ export default function AssetsPage() {
       });
     }
   };
+
+  const generateNextCode = async (type: 'BARRIL' | 'CO2'): Promise<string> => {
+    const prefix = type === 'BARRIL' ? 'KEG' : 'CO2';
+    const q = query(
+      collection(db, "assets"), 
+      where("type", "==", type),
+      orderBy("code", "desc"),
+      limit(1)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    if (querySnapshot.empty) {
+      return `${prefix}-001`;
+    }
+    
+    const lastCode = querySnapshot.docs[0].data().code;
+    const lastNumber = parseInt(lastCode.split('-')[1], 10);
+    const nextNumber = lastNumber + 1;
+    const nextCode = `${prefix}-${String(nextNumber).padStart(3, '0')}`;
+    
+    return nextCode;
+  };
   
-  const handleFormSubmit = async (data: Omit<Asset, 'id'>) => {
+  const handleFormSubmit = async (data: Omit<Asset, 'id' | 'code'>) => {
     try {
-      // Check for uniqueness of the asset code
-      const q = query(collection(db, "assets"), where("code", "==", data.code));
-      const querySnapshot = await getDocs(q);
-      
-      let isDuplicate = false;
-      if (!querySnapshot.empty) {
-        if (selectedAsset) {
-          // If editing, check if the found asset is different from the current one
-          querySnapshot.forEach((doc) => {
-            if (doc.id !== selectedAsset.id) {
-              isDuplicate = true;
-            }
-          });
-        } else {
-          // If creating, any result is a duplicate
-          isDuplicate = true;
-        }
-      }
-
-      if (isDuplicate) {
-        toast({
-          title: "Código Duplicado",
-          description: `El código "${data.code}" ya está en uso. Por favor, elige uno diferente.`,
-          variant: "destructive",
-        });
-        return;
-      }
-
-
       if (selectedAsset) {
+        // Editing existing asset
         await updateDoc(doc(db, "assets", selectedAsset.id), data);
         toast({
           title: "Activo Actualizado",
           description: "Los cambios han sido guardados.",
         });
       } else {
-        await addDoc(collection(db, "assets"), data);
+        // Creating new asset
+        const newCode = await generateNextCode(data.type);
+        const newAssetData = { ...data, code: newCode };
+        await addDoc(collection(db, "assets"), newAssetData);
         toast({
           title: "Activo Creado",
-          description: "El nuevo activo ha sido añadido.",
+          description: `El nuevo activo ha sido añadido con el código ${newCode}.`,
         });
       }
       setFormOpen(false);

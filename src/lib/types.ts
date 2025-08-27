@@ -33,7 +33,8 @@ export type Event = {
 // Zod Schemas for form validation
 export const assetSchema = z.object({
   id: z.string().optional(),
-  code: z.string().min(1, 'El código es requerido'),
+  // Code is no longer required in the form, it will be generated. It can be optional or validated differently if needed.
+  code: z.string(),
   type: z.enum(['BARRIL', 'CO2']),
   format: z.string().min(1, 'El formato es requerido'),
   status: z.enum(['LLENO', 'VACIO', 'EN_CLIENTE', 'EN_PLANTA']),

@@ -7,10 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { assetSchema, type AssetFormData } from "@/lib/types";
+import { useEffect } from "react";
 
 interface AssetFormProps {
   defaultValues?: AssetFormData;
-  onSubmit: (data: AssetFormData) => void;
+  onSubmit: (data: Omit<AssetFormData, 'code'>) => void;
   onCancel: () => void;
 }
 
@@ -18,12 +19,28 @@ export function AssetForm({ defaultValues, onSubmit, onCancel }: AssetFormProps)
   const form = useForm<AssetFormData>({
     resolver: zodResolver(assetSchema),
     defaultValues: defaultValues || {
-      code: "",
+      code: "Se autogenerará",
       type: "BARRIL",
       format: "",
       status: "EN_PLANTA",
     },
   });
+
+  // When editing, set the actual code value
+  useEffect(() => {
+    if (defaultValues) {
+      form.reset(defaultValues);
+    } else {
+       form.reset({
+        code: "Se autogenerará",
+        type: "BARRIL",
+        format: "",
+        status: "EN_PLANTA",
+      });
+    }
+  }, [defaultValues, form]);
+
+  const isEditing = !!defaultValues;
 
   return (
     <Form {...form}>
@@ -35,7 +52,7 @@ export function AssetForm({ defaultValues, onSubmit, onCancel }: AssetFormProps)
             <FormItem>
               <FormLabel>Código del Activo</FormLabel>
               <FormControl>
-                <Input placeholder="ej., KEG-001" {...field} />
+                <Input placeholder="ej., KEG-001" {...field} disabled />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -47,7 +64,7 @@ export function AssetForm({ defaultValues, onSubmit, onCancel }: AssetFormProps)
           render={({ field }) => (
             <FormItem>
               <FormLabel>Tipo</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isEditing}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecciona el tipo de activo" />
