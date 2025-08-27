@@ -22,11 +22,11 @@ export function AssetForm({ defaultValues, onSubmit, onCancel }: AssetFormProps)
       code: "Se autogenerará",
       type: "BARRIL",
       format: "",
-      status: "EN_PLANTA",
+      state: "LLENO",
+      location: "EN_PLANTA",
     },
   });
 
-  // When editing, set the actual code value
   useEffect(() => {
     if (defaultValues) {
       form.reset(defaultValues);
@@ -35,7 +35,8 @@ export function AssetForm({ defaultValues, onSubmit, onCancel }: AssetFormProps)
         code: "Se autogenerará",
         type: "BARRIL",
         format: "",
-        status: "EN_PLANTA",
+        state: "LLENO",
+        location: "EN_PLANTA",
       });
     }
   }, [defaultValues, form]);
@@ -94,7 +95,7 @@ export function AssetForm({ defaultValues, onSubmit, onCancel }: AssetFormProps)
         />
         <FormField
           control={form.control}
-          name="status"
+          name="state"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Estado</FormLabel>
@@ -107,8 +108,27 @@ export function AssetForm({ defaultValues, onSubmit, onCancel }: AssetFormProps)
                 <SelectContent>
                   <SelectItem value="LLENO">LLENO</SelectItem>
                   <SelectItem value="VACIO">VACIO</SelectItem>
-                  <SelectItem value="EN_CLIENTE">EN CLIENTE</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="location"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Ubicación</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona la ubicación" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
                   <SelectItem value="EN_PLANTA">EN PLANTA</SelectItem>
+                  <SelectItem value="EN_CLIENTE">EN CLIENTE</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />

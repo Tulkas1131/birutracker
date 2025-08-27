@@ -75,7 +75,7 @@ export default function MovementsPage() {
       return;
     }
     
-    const newStatus = data.event_type === 'SALIDA_LLENO' || data.event_type === 'SALIDA_VACIO' ? 'EN_CLIENTE' : 'EN_PLANTA';
+    const newLocation = data.event_type === 'SALIDA_LLENO' || data.event_type === 'SALIDA_VACIO' ? 'EN_CLIENTE' : 'EN_PLANTA';
 
     try {
       await runTransaction(db, async (transaction) => {
@@ -92,9 +92,9 @@ export default function MovementsPage() {
         };
         transaction.set(doc(collection(db, "events")), eventData);
 
-        // 2. Update the asset status
+        // 2. Update the asset location
         const assetRef = doc(db, "assets", selectedAsset.id);
-        transaction.update(assetRef, { status: newStatus });
+        transaction.update(assetRef, { location: newLocation });
       });
 
       toast({
@@ -146,7 +146,7 @@ export default function MovementsPage() {
                         <SelectContent>
                           {assets.map(asset => (
                             <SelectItem key={asset.id} value={asset.id}>
-                              {asset.code} ({asset.type} - {asset.format}) - <span className="text-muted-foreground">{asset.status}</span>
+                              {asset.code} ({asset.type} - {asset.format}) - <span className="text-muted-foreground">{asset.location}</span>
                             </SelectItem>
                           ))}
                         </SelectContent>

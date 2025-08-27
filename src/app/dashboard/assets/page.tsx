@@ -127,16 +127,12 @@ export default function AssetsPage() {
     }
   };
   
-  const getStatusVariant = (status: Asset["status"]) => {
-    switch (status) {
-      case "LLENO":
-        return "default";
-      case "VACIO":
-        return "secondary";
+  const getLocationVariant = (location: Asset["location"]) => {
+    switch (location) {
       case "EN_CLIENTE":
         return "outline";
       case "EN_PLANTA":
-        return "destructive";
+        return "secondary";
       default:
         return "default";
     }
@@ -152,6 +148,7 @@ export default function AssetsPage() {
           <TableHead>Código</TableHead>
           <TableHead>Formato</TableHead>
           <TableHead>Estado</TableHead>
+          <TableHead>Ubicación</TableHead>
           <TableHead>
             <span className="sr-only">Acciones</span>
           </TableHead>
@@ -160,13 +157,13 @@ export default function AssetsPage() {
       <TableBody>
         {isLoading ? (
           <TableRow>
-            <TableCell colSpan={4} className="h-24 text-center">
+            <TableCell colSpan={5} className="h-24 text-center">
               <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
             </TableCell>
           </TableRow>
         ) : assetList.length === 0 ? (
           <TableRow>
-             <TableCell colSpan={4} className="h-24 text-center">
+             <TableCell colSpan={5} className="h-24 text-center">
               No hay activos. ¡Añade uno nuevo para empezar!
             </TableCell>
           </TableRow>
@@ -176,7 +173,10 @@ export default function AssetsPage() {
               <TableCell className="font-medium">{asset.code}</TableCell>
               <TableCell>{asset.format}</TableCell>
               <TableCell>
-                <Badge variant={getStatusVariant(asset.status)}>{asset.status}</Badge>
+                <Badge variant={asset.state === 'LLENO' ? 'default' : 'secondary'}>{asset.state}</Badge>
+              </TableCell>
+              <TableCell>
+                <Badge variant={getLocationVariant(asset.location)}>{asset.location}</Badge>
               </TableCell>
               <TableCell>
                 <DropdownMenu>
