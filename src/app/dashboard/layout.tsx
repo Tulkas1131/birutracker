@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -5,7 +6,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { signOut } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
 import {
   Archive,
   History,
@@ -38,6 +40,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [user, loading, error] = useAuthState(auth);
+  const [userRole, setUserRole] = React.useState("Operador");
   const router = useRouter();
 
   const handleSignOut = async () => {
@@ -48,6 +51,16 @@ export default function DashboardLayout({
   React.useEffect(() => {
     if (!loading && !user) {
       router.push('/');
+    }
+    if (user) {
+      const getUserRole = async () => {
+        const userDocRef = doc(db, "users", user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        if (userDocSnap.exists()) {
+          setUserRole(userDocSnap.data().role || "Operador");
+        }
+      };
+      getUserRole();
     }
   }, [user, loading, router]);
 
@@ -132,7 +145,7 @@ export default function DashboardLayout({
                 <AvatarFallback>{user.email?.[0].toUpperCase() || 'U'}</AvatarFallback>
               </Avatar>
               <div className="flex flex-col text-sm">
-                <span className="font-semibold">Operador</span>
+                <span className="font-semibold">{userRole}</span>
                 <span className="text-muted-foreground truncate">{user.email}</span>
               </div>
             <button onClick={handleSignOut} className="ml-auto">
