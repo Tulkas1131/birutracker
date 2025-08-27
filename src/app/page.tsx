@@ -43,7 +43,7 @@ export default function LoginPage() {
       <Card className="mx-auto w-full max-w-sm">
         <CardHeader className="text-center">
           <Logo className="mx-auto mb-4 h-12 w-12" />
-          <CardTitle className="text-2xl">Bienvenido a KegTrack</CardTitle>
+          <CardTitle className="text-2xl">Bienvenido a BiruTracker</CardTitle>
           <CardDescription>Ingresa tu correo electrónico para iniciar sesión en tu cuenta</CardDescription>
         </CardHeader>
         <CardContent>

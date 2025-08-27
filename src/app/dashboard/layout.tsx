@@ -95,7 +95,7 @@ export default function DashboardLayout({
         <SidebarHeader>
           <div className="flex items-center gap-2">
             <Logo className="size-7" />
-            <span className="text-lg font-semibold">KegTrack</span>
+            <span className="text-lg font-semibold">BiruTracker</span>
             <SidebarTrigger className="ml-auto" />
           </div>
         </SidebarHeader>
@@ -163,5 +163,3 @@ export default function DashboardLayout({
     </SidebarProvider>
   );
 }
-
-    

@@ -3,7 +3,7 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: 'KegTrack Mobile',
+  title: 'BiruTracker',
   description: 'Seguimiento de activos para cervecerías',
 };
 
