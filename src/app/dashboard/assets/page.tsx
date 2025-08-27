@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { MoreHorizontal, PlusCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { MoreHorizontal, PlusCircle, Loader2 } from "lucide-react";
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,14 +29,22 @@ import type { Asset } from "@/lib/types";
 import { AssetForm } from "@/components/asset-form";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { mockAssets } from "@/lib/data";
-
 
 export default function AssetsPage() {
-  const [assets, setAssets] = useState<Asset[]>(mockAssets);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setFormOpen] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<Asset | undefined>(undefined);
   const { toast } = useToast();
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "assets"), (snapshot) => {
+      const assetsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
+      setAssets(assetsData);
+      setIsLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleEdit = (asset: Asset) => {
     setSelectedAsset(asset);
@@ -46,31 +56,48 @@ export default function AssetsPage() {
     setFormOpen(true);
   };
   
-  const handleDelete = (id: string) => {
-    setAssets(assets.filter(asset => asset.id !== id));
-    toast({
-      title: "Activo Eliminado",
-      description: "El activo ha sido eliminado (simulación).",
-    });
-  };
-  
-  const handleFormSubmit = (data: Omit<Asset, 'id'>) => {
-    if (selectedAsset) {
-      setAssets(assets.map(asset => asset.id === selectedAsset.id ? { ...selectedAsset, ...data } : asset));
-       toast({
-        title: "Activo Actualizado",
-        description: "Los cambios han sido guardados (simulación).",
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, "assets", id));
+      toast({
+        title: "Activo Eliminado",
+        description: "El activo ha sido eliminado de la base de datos.",
       });
-    } else {
-      const newAsset = { ...data, id: `new-${Date.now()}`};
-      setAssets([...assets, newAsset]);
-       toast({
-        title: "Activo Creado",
-        description: "El nuevo activo ha sido añadido (simulación).",
+    } catch (error) {
+      console.error("Error deleting asset: ", error);
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el activo.",
+        variant: "destructive",
       });
     }
-    setFormOpen(false);
-    setSelectedAsset(undefined);
+  };
+  
+  const handleFormSubmit = async (data: Omit<Asset, 'id'>) => {
+    try {
+      if (selectedAsset) {
+        await updateDoc(doc(db, "assets", selectedAsset.id), data);
+        toast({
+          title: "Activo Actualizado",
+          description: "Los cambios han sido guardados.",
+        });
+      } else {
+        await addDoc(collection(db, "assets"), data);
+        toast({
+          title: "Activo Creado",
+          description: "El nuevo activo ha sido añadido.",
+        });
+      }
+      setFormOpen(false);
+      setSelectedAsset(undefined);
+    } catch (error) {
+      console.error("Error saving asset: ", error);
+      toast({
+        title: "Error",
+        description: "No se pudieron guardar los datos.",
+        variant: "destructive",
+      });
+    }
   };
   
   const getStatusVariant = (status: Asset["status"]) => {
@@ -104,7 +131,13 @@ export default function AssetsPage() {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {assetList.length === 0 ? (
+        {isLoading ? (
+          <TableRow>
+            <TableCell colSpan={4} className="h-24 text-center">
+              <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+            </TableCell>
+          </TableRow>
+        ) : assetList.length === 0 ? (
           <TableRow>
              <TableCell colSpan={4} className="h-24 text-center">
               No hay activos. ¡Añade uno nuevo para empezar!

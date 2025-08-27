@@ -1,20 +1,19 @@
 "use client";
 
-import { useState, useMemo } from 'react';
-import { Timestamp } from "firebase/firestore";
+import { useState, useMemo, useEffect } from 'react';
+import { Timestamp, collection, onSnapshot, query, orderBy } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useToast } from '@/hooks/use-toast';
 import type { Event } from "@/lib/types";
-import { mockEvents } from '@/lib/data';
 
 function EventTable({ events, isLoading }: { events: Event[], isLoading: boolean }) {
   const formatDate = (timestamp: Timestamp) => {
-    if (!timestamp) return 'Fecha inválida';
+    if (!timestamp || !timestamp.toDate) return 'Fecha inválida';
     return timestamp.toDate().toLocaleString();
   };
 
@@ -50,7 +49,7 @@ function EventTable({ events, isLoading }: { events: Event[], isLoading: boolean
           ))}
         </TableBody>
       </Table>
-      {events.length === 0 && (
+      {events.length === 0 && !isLoading && (
         <div className="py-10 text-center text-muted-foreground">
           No se encontraron movimientos para los filtros seleccionados.
         </div>
@@ -60,8 +59,18 @@ function EventTable({ events, isLoading }: { events: Event[], isLoading: boolean
 }
 
 export default function HistoryPage() {
-  const [events, setEvents] = useState<Event[]>(mockEvents);
-  const [isLoading, setIsLoading] = useState(false);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(collection(db, "events"), orderBy("timestamp", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
+      setEvents(eventsData);
+      setIsLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const [filters, setFilters] = useState({
     customer: '',

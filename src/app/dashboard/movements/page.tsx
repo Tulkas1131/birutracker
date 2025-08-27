@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { Timestamp } from "firebase/firestore";
+import { Timestamp, collection, onSnapshot, addDoc, doc, runTransaction } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,16 +15,27 @@ import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { movementSchema, type MovementFormData, type Asset, type Customer } from "@/lib/types";
 import { Input } from "@/components/ui/input";
-import { mockAssets, mockCustomers } from "@/lib/data";
-import { Loader2 } from "lucide-react";
-
 
 export default function MovementsPage() {
   const { toast } = useToast();
   const router = useRouter();
-  const [assets] = useState<Asset[]>(mockAssets);
-  const [customers] = useState<Customer[]>(mockCustomers);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
+  useEffect(() => {
+    const unsubAssets = onSnapshot(collection(db, "assets"), (snapshot) => {
+      setAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)));
+    });
+    const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
+      setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer)));
+    });
+    return () => {
+      unsubAssets();
+      unsubCustomers();
+    };
+  }, []);
+
   const form = useForm<MovementFormData>({
     resolver: zodResolver(movementSchema),
     defaultValues: {
@@ -40,35 +52,58 @@ export default function MovementsPage() {
 
 
   async function onSubmit(data: MovementFormData) {
+    setIsSubmitting(true);
     if (!selectedAsset) {
       toast({ title: "Error", description: "Activo no encontrado.", variant: "destructive" });
+      setIsSubmitting(false);
       return;
     }
     const selectedCustomer = customers.find(c => c.id === data.customer_id);
      if (!selectedCustomer) {
       toast({ title: "Error", description: "Cliente no encontrado.", variant: "destructive" });
+      setIsSubmitting(false);
       return;
     }
-
-    // Simulate creating an event and updating an asset
-    console.log("New Event (simulated):", {
-      asset_id: selectedAsset.id,
-      asset_code: selectedAsset.code,
-      customer_id: selectedCustomer.id,
-      customer_name: selectedCustomer.name,
-      event_type: data.event_type,
-      timestamp: Timestamp.now(),
-      user_id: "user_placeholder",
-      variety: data.variety || "",
-    });
-
-    toast({
-      title: "Movimiento Registrado",
-      description: `Se ha registrado el movimiento del activo ${selectedAsset.code} (simulación).`,
-    });
     
-    form.reset();
-    router.push("/dashboard/history");
+    const newStatus = data.event_type === 'SALIDA_LLENO' || data.event_type === 'SALIDA_VACIO' ? 'EN_CLIENTE' : 'EN_PLANTA';
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        // 1. Create the new event
+        const eventData = {
+          asset_id: selectedAsset.id,
+          asset_code: selectedAsset.code,
+          customer_id: selectedCustomer.id,
+          customer_name: selectedCustomer.name,
+          event_type: data.event_type,
+          timestamp: Timestamp.now(),
+          user_id: "user_placeholder", // Replace with actual user ID
+          variety: data.variety || "",
+        };
+        transaction.set(doc(collection(db, "events")), eventData);
+
+        // 2. Update the asset status
+        const assetRef = doc(db, "assets", selectedAsset.id);
+        transaction.update(assetRef, { status: newStatus });
+      });
+
+      toast({
+        title: "Movimiento Registrado",
+        description: `Se ha registrado el movimiento del activo ${selectedAsset.code}.`,
+      });
+      
+      form.reset();
+      router.push("/dashboard/history");
+    } catch (e) {
+      console.error("Transaction failed: ", e);
+      toast({
+        title: "Error",
+        description: "No se pudo completar la operación. Inténtalo de nuevo.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -172,7 +207,8 @@ export default function MovementsPage() {
                     </FormItem>
                   )}
                 />
-                <Button type="submit" size="lg" className="w-full">
+                <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
+                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Guardar Movimiento
                 </Button>
               </form>

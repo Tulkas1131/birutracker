@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { MoreHorizontal, PlusCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { MoreHorizontal, PlusCircle, Loader2 } from "lucide-react";
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,13 +28,23 @@ import type { Customer } from "@/lib/types";
 import { CustomerForm } from "@/components/customer-form";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { mockCustomers } from "@/lib/data";
 
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>(mockCustomers);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setFormOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | undefined>(undefined);
   const { toast } = useToast();
+  
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "customers"), (snapshot) => {
+      const customersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
+      setCustomers(customersData);
+      setIsLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
 
   const handleEdit = (customer: Customer) => {
     setSelectedCustomer(customer);
@@ -45,30 +57,47 @@ export default function CustomersPage() {
   };
   
   const handleDelete = async (id: string) => {
-    setCustomers(customers.filter(customer => customer.id !== id));
-    toast({
-      title: "Cliente Eliminado",
-      description: "El cliente ha sido eliminado (simulación).",
-    });
+    try {
+      await deleteDoc(doc(db, "customers", id));
+      toast({
+        title: "Cliente Eliminado",
+        description: "El cliente ha sido eliminado de la base de datos.",
+      });
+    } catch (error) {
+       console.error("Error deleting customer: ", error);
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el cliente.",
+        variant: "destructive",
+      });
+    }
   };
   
   const handleFormSubmit = async (data: Omit<Customer, 'id'>) => {
-    if (selectedCustomer) {
-      setCustomers(customers.map(customer => customer.id === selectedCustomer.id ? { ...selectedCustomer, ...data } : customer));
+    try {
+      if (selectedCustomer) {
+        await updateDoc(doc(db, "customers", selectedCustomer.id), data);
+        toast({
+          title: "Cliente Actualizado",
+          description: "Los cambios han sido guardados.",
+        });
+      } else {
+        await addDoc(collection(db, "customers"), data);
+        toast({
+          title: "Cliente Creado",
+          description: "El nuevo cliente ha sido añadido.",
+        });
+      }
+      setFormOpen(false);
+      setSelectedCustomer(undefined);
+    } catch (error) {
+      console.error("Error saving customer: ", error);
       toast({
-        title: "Cliente Actualizado",
-        description: "Los cambios han sido guardados (simulación).",
-      });
-    } else {
-      const newCustomer = { ...data, id: `new-${Date.now()}` };
-      setCustomers([...customers, newCustomer]);
-      toast({
-        title: "Cliente Creado",
-        description: "El nuevo cliente ha sido añadido (simulación).",
+        title: "Error",
+        description: "No se pudieron guardar los datos.",
+        variant: "destructive",
       });
     }
-    setFormOpen(false);
-    setSelectedCustomer(undefined);
   };
 
   return (
@@ -102,7 +131,13 @@ export default function CustomersPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {customers.length === 0 ? (
+                    {isLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="h-24 text-center">
+                          <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+                        </TableCell>
+                      </TableRow>
+                    ) : customers.length === 0 ? (
                        <TableRow>
                           <TableCell colSpan={5} className="h-24 text-center">
                             No hay clientes. ¡Añade uno nuevo para empezar!
