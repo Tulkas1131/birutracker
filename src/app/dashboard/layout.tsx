@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { signOut } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import {
   Archive,
   History,
@@ -56,8 +56,16 @@ export default function DashboardLayout({
       const getUserRole = async () => {
         const userDocRef = doc(db, "users", user.uid);
         const userDocSnap = await getDoc(userDocRef);
+        
         if (userDocSnap.exists()) {
           setUserRole(userDocSnap.data().role || "Operador");
+        } else {
+          // User exists in Auth but not in Firestore (old user), create their profile.
+          await setDoc(userDocRef, {
+            email: user.email,
+            role: "Operador",
+          });
+          setUserRole("Operador");
         }
       };
       getUserRole();
