@@ -23,7 +23,7 @@ export type Event = {
   id: string;
   asset_id: string;
   asset_code: string;
-  event_type: 'SALIDA_LLENO' | 'DEVOLUCION_VACIO' | 'SALIDA_VACIO' | 'ENTRADA_LLENO';
+  event_type: 'SALIDA_LLENO' | 'RETORNO_VACIO' | 'SALIDA_VACIO' | 'DEVOLUCION_LLENO';
   customer_id: string;
   customer_name: string;
   user_id: string; // This would be the authenticated user's ID
@@ -55,7 +55,7 @@ export type CustomerFormData = z.infer<typeof customerSchema>;
 
 export const movementSchema = z.object({
   asset_id: z.string().min(1, "Por favor selecciona un activo."),
-  event_type: z.enum(['SALIDA_LLENO', 'DEVOLUCION_VACIO', 'SALIDA_VACIO', 'ENTRADA_LLENO']),
+  event_type: z.enum(['SALIDA_LLENO', 'RETORNO_VACIO', 'SALIDA_VACIO', 'DEVOLUCION_LLENO']),
   customer_id: z.string().min(1, "Por favor selecciona un cliente."),
   variety: z.string().optional(),
 });
