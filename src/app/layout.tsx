@@ -24,6 +24,8 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <meta name="theme-color" content="#00BFFF" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body className={`${ptSans.variable} font-body antialiased`}>
         {children}
