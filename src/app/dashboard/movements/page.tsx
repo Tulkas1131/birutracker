@@ -5,10 +5,10 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { Timestamp, collection, onSnapshot, addDoc, doc, runTransaction } from "firebase/firestore";
+import { Timestamp, collection, onSnapshot, addDoc, doc, runTransaction, getDoc } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { Loader2 } from "lucide-react";
+import { Loader2, QrCode } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,8 @@ import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { movementSchema, type MovementFormData, type Asset, type Customer } from "@/lib/types";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { QrScanner } from "@/components/qr-scanner";
 
 export default function MovementsPage() {
   const { toast } = useToast();
@@ -26,6 +28,7 @@ export default function MovementsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isScannerOpen, setScannerOpen] = useState(false);
   
   useEffect(() => {
     const unsubAssets = onSnapshot(collection(db, "assets"), (snapshot) => {
@@ -53,6 +56,39 @@ export default function MovementsPage() {
 
   const selectedAsset = assets.find(asset => asset.id === watchAssetId);
   const showVarietyField = selectedAsset?.type === 'BARRIL' && (watchEventType === 'SALIDA_LLENO' || watchEventType === 'DEVOLUCION_LLENO');
+
+  const handleScanSuccess = async (decodedText: string) => {
+    setScannerOpen(false);
+    try {
+      const assetRef = doc(db, 'assets', decodedText);
+      const assetSnap = await getDoc(assetRef);
+      if (assetSnap.exists()) {
+        const scannedAsset = { id: assetSnap.id, ...assetSnap.data() } as Asset;
+        form.setValue('asset_id', scannedAsset.id);
+        toast({
+            title: "Activo Encontrado",
+            description: `Se ha seleccionado el activo: ${scannedAsset.code}.`
+        });
+      } else {
+        toast({
+            title: "Error",
+            description: "No se encontró ningún activo con el QR escaneado.",
+            variant: "destructive"
+        });
+      }
+    } catch (error) {
+        console.error("Error fetching asset by ID: ", error);
+        toast({
+            title: "Error de Búsqueda",
+            description: "No se pudo verificar el código QR.",
+            variant: "destructive"
+        });
+    }
+  };
+
+  const handleScanError = (errorMessage: string) => {
+    console.error(errorMessage);
+  };
 
 
   async function onSubmit(data: MovementFormData) {
@@ -140,114 +176,133 @@ export default function MovementsPage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <PageHeader
-        title="Registrar un Movimiento"
-        description="Registra la salida o entrada de un activo a un cliente."
-      />
-      <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
-        <Card className="mx-auto w-full max-w-2xl">
-          <CardHeader>
-            <CardTitle>Detalles del Nuevo Movimiento</CardTitle>
-            <CardDescription>Selecciona un activo, tipo de evento y cliente.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-                <FormField
-                  control={form.control}
-                  name="asset_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Activo</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecciona un activo para mover" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {assets.map(asset => (
-                            <SelectItem key={asset.id} value={asset.id}>
-                              {asset.code} ({asset.type} - {asset.format}) - <span className="text-muted-foreground">{asset.location}</span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="event_type"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tipo de Evento</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecciona un tipo de evento" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="SALIDA_LLENO">SALIDA_LLENO (Entrega)</SelectItem>
-                          <SelectItem value="RETORNO_VACIO">RETORNO_VACIO (Retorno)</SelectItem>
-                          <SelectItem value="SALIDA_VACIO">SALIDA_VACIO (Caso Especial)</SelectItem>
-                          <SelectItem value="DEVOLUCION_LLENO">DEVOLUCION_LLENO (Caso Especial)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                {showVarietyField && (
-                  <FormField
+      <Dialog open={isScannerOpen} onOpenChange={setScannerOpen}>
+        <PageHeader
+            title="Registrar un Movimiento"
+            description="Registra la salida o entrada de un activo a un cliente."
+            action={
+                <DialogTrigger asChild>
+                    <Button size="lg" variant="outline">
+                        <QrCode className="mr-2 h-5 w-5" />
+                        Escanear QR
+                    </Button>
+                </DialogTrigger>
+            }
+        />
+        <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
+            <Card className="mx-auto w-full max-w-2xl">
+            <CardHeader>
+                <CardTitle>Detalles del Nuevo Movimiento</CardTitle>
+                <CardDescription>Selecciona un activo (manualmente o con QR), tipo de evento y cliente.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+                    <FormField
                     control={form.control}
-                    name="variety"
+                    name="asset_id"
                     render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Variedad de Cerveza</FormLabel>
-                        <FormControl>
-                          <Input placeholder="ej., IPA, Stout, Lager" {...field} />
-                        </FormControl>
+                        <FormItem>
+                        <FormLabel>Activo</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                            <FormControl>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Selecciona un activo para mover" />
+                            </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                            {assets.map(asset => (
+                                <SelectItem key={asset.id} value={asset.id}>
+                                {asset.code} ({asset.type} - {asset.format}) - <span className="text-muted-foreground">{asset.location}</span>
+                                </SelectItem>
+                            ))}
+                            </SelectContent>
+                        </Select>
                         <FormMessage />
-                      </FormItem>
+                        </FormItem>
                     )}
-                  />
-                )}
-                 <FormField
-                  control={form.control}
-                  name="customer_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Cliente</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecciona el cliente asociado" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {customers.map(customer => (
-                            <SelectItem key={customer.id} value={customer.id}>
-                              {customer.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
-                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Guardar Movimiento
-                </Button>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
-      </main>
+                    />
+                    <FormField
+                    control={form.control}
+                    name="event_type"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Tipo de Evento</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Selecciona un tipo de evento" />
+                            </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                            <SelectItem value="SALIDA_LLENO">SALIDA_LLENO (Entrega)</SelectItem>
+                            <SelectItem value="RETORNO_VACIO">RETORNO_VACIO (Retorno)</SelectItem>
+                            <SelectItem value="SALIDA_VACIO">SALIDA_VACIO (Caso Especial)</SelectItem>
+                            <SelectItem value="DEVOLUCION_LLENO">DEVOLUCION_LLENO (Caso Especial)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                    />
+                    {showVarietyField && (
+                    <FormField
+                        control={form.control}
+                        name="variety"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Variedad de Cerveza</FormLabel>
+                            <FormControl>
+                            <Input placeholder="ej., IPA, Stout, Lager" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                    )}
+                    <FormField
+                    control={form.control}
+                    name="customer_id"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Cliente</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Selecciona el cliente asociado" />
+                            </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                            {customers.map(customer => (
+                                <SelectItem key={customer.id} value={customer.id}>
+                                {customer.name}
+                                </SelectItem>
+                            ))}
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                    />
+                    <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
+                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Guardar Movimiento
+                    </Button>
+                </form>
+                </Form>
+            </CardContent>
+            </Card>
+        </main>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Escanear Código QR</DialogTitle>
+            </DialogHeader>
+            <QrScanner
+                onScanSuccess={handleScanSuccess}
+                onScanError={handleScanError}
+            />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

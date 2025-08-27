@@ -1,10 +1,11 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
-import { MoreHorizontal, PlusCircle, Loader2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { MoreHorizontal, PlusCircle, Loader2, QrCode } from "lucide-react";
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, orderBy, limit } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import QRCode from "qrcode.react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,7 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/page-header";
 import type { Asset } from "@/lib/types";
 import { AssetForm } from "@/components/asset-form";
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/use-user-role";
 
@@ -36,9 +37,11 @@ export default function AssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setFormOpen] = useState(false);
+  const [isQrCodeOpen, setQrCodeOpen] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<Asset | undefined>(undefined);
   const { toast } = useToast();
   const userRole = useUserRole();
+  const qrCodeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "assets"), (snapshot) => {
@@ -57,6 +60,25 @@ export default function AssetsPage() {
   const handleNew = () => {
     setSelectedAsset(undefined);
     setFormOpen(true);
+  };
+
+  const handleShowQrCode = (asset: Asset) => {
+    setSelectedAsset(asset);
+    setQrCodeOpen(true);
+  };
+
+  const handlePrintQrCode = () => {
+    const printWindow = window.open('', '', 'height=600,width=800');
+    if (printWindow && qrCodeRef.current) {
+        printWindow.document.write('<html><head><title>Imprimir QR</title>');
+        printWindow.document.write('<style>body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; } .qr-container { text-align: center; } h1 { font-family: sans-serif; }</style>');
+        printWindow.document.write('</head><body>');
+        printWindow.document.write(qrCodeRef.current.innerHTML);
+        printWindow.document.write('</body></html>');
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+    }
   };
   
   const handleDelete = async (id: string) => {
@@ -164,6 +186,7 @@ export default function AssetsPage() {
           <TableHead>Formato</TableHead>
           <TableHead>Estado</TableHead>
           <TableHead>Ubicación</TableHead>
+          <TableHead>QR</TableHead>
           <TableHead>
             <span className="sr-only">Acciones</span>
           </TableHead>
@@ -172,13 +195,13 @@ export default function AssetsPage() {
       <TableBody>
         {isLoading ? (
           <TableRow>
-            <TableCell colSpan={5} className="h-24 text-center">
+            <TableCell colSpan={6} className="h-24 text-center">
               <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
             </TableCell>
           </TableRow>
         ) : assetList.length === 0 ? (
           <TableRow>
-             <TableCell colSpan={5} className="h-24 text-center">
+             <TableCell colSpan={6} className="h-24 text-center">
               No hay activos. ¡Añade uno para empezar!
             </TableCell>
           </TableRow>
@@ -196,6 +219,11 @@ export default function AssetsPage() {
                 <Badge variant={getLocationVariant(asset.location)}>
                   {asset.location === 'EN_PLANTA' ? 'En Planta' : 'En Cliente'}
                 </Badge>
+              </TableCell>
+              <TableCell>
+                <Button variant="ghost" size="icon" onClick={() => handleShowQrCode(asset)}>
+                    <QrCode className="h-5 w-5" />
+                </Button>
               </TableCell>
               <TableCell>
                 <DropdownMenu>
@@ -272,6 +300,24 @@ export default function AssetsPage() {
                 setSelectedAsset(undefined);
               }}
             />
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isQrCodeOpen} onOpenChange={setQrCodeOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Código QR del Activo</DialogTitle>
+                <DialogDescription>
+                    Escanea este código para registrar movimientos rápidos. Puedes imprimirlo y pegarlo en el activo físico.
+                </DialogDescription>
+            </DialogHeader>
+            {selectedAsset && (
+                <div ref={qrCodeRef} className="qr-container flex flex-col items-center justify-center gap-4 py-4">
+                    <QRCode value={selectedAsset.id} size={256} />
+                    <h1 className="text-2xl font-bold">{selectedAsset.code}</h1>
+                    <p>{selectedAsset.format} - {selectedAsset.type}</p>
+                </div>
+            )}
+            <Button onClick={handlePrintQrCode}>Imprimir QR</Button>
         </DialogContent>
       </Dialog>
     </div>
