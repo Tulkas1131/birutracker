@@ -1,60 +1,149 @@
+
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
-import { History, Package, Truck, Users } from "lucide-react";
-import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { PageHeader } from "@/components/page-header";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { signOut } from "firebase/auth";
+import { auth, db } from "@/lib/firebase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import {
+  History,
+  LayoutDashboard,
+  LogOut,
+  Package,
+  Truck,
+  Users,
+  Loader2
+} from "lucide-react";
 
-const features = [
-  {
-    title: "Gestionar Activos",
-    description: "Ver, crear y editar barriles y cilindros.",
-    href: "/dashboard/assets",
-    icon: <Package className="h-8 w-8 text-primary" />,
-  },
-  {
-    title: "Gestionar Clientes",
-    description: "Mantén un registro de tus clientes y distribuidores.",
-    href: "/dashboard/customers",
-    icon: <Users className="h-8 w-8 text-primary" />,
-  },
-  {
-    title: "Registrar un Movimiento",
-    description: "Registra entregas y retornos de activos.",
-    href: "/dashboard/movements",
-    icon: <Truck className="h-8 w-8 text-primary" />,
-  },
-  {
-    title: "Ver Historial",
-    description: "Explora el historial completo de movimientos.",
-    href: "/dashboard/history",
-    icon: <History className="h-8 w-8 text-primary" />,
-  },
-];
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import { Logo } from "@/components/logo";
+import { useUserRole } from "@/hooks/use-user-role";
 
-export default function DashboardPage() {
+function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
+  const authInstance = auth();
+  const firestore = db();
+  const [user, loading, error] = useAuthState(authInstance);
+  const userRole = useUserRole();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const navItems = [
+    { href: "/dashboard", icon: LayoutDashboard, label: "Panel de Control" },
+    { href: "/assets", icon: Package, label: "Activos" },
+    { href: "/customers", icon: Users, label: "Clientes" },
+    { href: "/movements", icon: Truck, label: "Registrar Movimiento" },
+    { href: "/history", icon: History, label: "Historial" },
+  ];
+
+  const handleSignOut = async () => {
+    await signOut(authInstance);
+    router.push('/');
+  };
+
+  React.useEffect(() => {
+    if (!loading && !user) {
+      router.push('/');
+    }
+    if (user && !userRole) {
+      const getUserRole = async () => {
+        const userDocRef = doc(firestore, "users", user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        
+        if (!userDocSnap.exists()) {
+          await setDoc(userDocRef, {
+            email: user.email,
+            role: "Operador",
+          });
+        }
+      };
+      getUserRole();
+    }
+  }, [user, loading, userRole, router, firestore]);
+
+  if (loading) {
+    return (
+       <div className="flex h-screen w-full items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+     return (
+       <div className="flex h-screen w-full items-center justify-center">
+        <p className="text-destructive">Error: {error.message}</p>
+      </div>
+    );
+  }
+  
+  if (!user) {
+    return null;
+  }
+  
   return (
-    <div className="flex flex-1 flex-col">
-      <PageHeader title="Panel de Control" description="¡Bienvenido de nuevo! Aquí tienes un resumen rápido." />
-      <main className="flex-1 p-4 md:p-6">
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-2">
-          {features.map((feature) => (
-            <Link href={feature.href} key={feature.title}>
-              <Card className="flex h-full flex-col justify-between transition-transform hover:scale-105 hover:shadow-lg">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle className="mb-1 text-xl">{feature.title}</CardTitle>
-                      <CardDescription>{feature.description}</CardDescription>
-                    </div>
-                    {feature.icon}
-                  </div>
-                </CardHeader>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      </main>
-    </div>
+    <SidebarProvider>
+      <Sidebar>
+        <SidebarHeader>
+          <div className="flex items-center gap-2">
+            <Logo className="size-7" />
+            <span className="text-lg font-semibold">BiruTracker</span>
+            <SidebarTrigger className="ml-auto" />
+          </div>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarMenu>
+            {navItems.map((item) => (
+              <SidebarMenuItem key={item.href}>
+                <SidebarMenuButton asChild tooltip={item.label} isActive={pathname === item.href}>
+                  <Link href={item.href}>
+                    <item.icon />
+                    <span>{item.label}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
+        </SidebarContent>
+        <SidebarFooter>
+          <div className="flex items-center gap-2 p-2">
+             <Avatar className="size-8">
+                <AvatarImage src={user.photoURL || "https://picsum.photos/100"} alt="Avatar del usuario" data-ai-hint="user avatar" />
+                <AvatarFallback>{user.email?.[0].toUpperCase() || 'U'}</AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col text-sm">
+                <span className="font-semibold">{userRole || 'Cargando...'}</span>
+                <span className="text-muted-foreground truncate">{user.email}</span>
+              </div>
+            <button onClick={handleSignOut} className="ml-auto" title="Cerrar Sesión">
+              <LogOut className="size-5" />
+            </button>
+          </div>
+        </SidebarFooter>
+      </Sidebar>
+      <SidebarInset>{children}</SidebarInset>
+    </SidebarProvider>
   );
+}
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return <DashboardLayoutContent>{children}</DashboardLayoutContent>;
 }
