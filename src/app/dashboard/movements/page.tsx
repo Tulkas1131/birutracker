@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -75,7 +76,28 @@ export default function MovementsPage() {
       return;
     }
     
-    const newLocation = data.event_type === 'SALIDA_LLENO' || data.event_type === 'SALIDA_VACIO' ? 'EN_CLIENTE' : 'EN_PLANTA';
+    // Determine new location and state based on event type
+    let newLocation: Asset['location'] = selectedAsset.location;
+    let newState: Asset['state'] = selectedAsset.state;
+
+    switch (data.event_type) {
+      case 'SALIDA_LLENO':
+        newLocation = 'EN_CLIENTE';
+        newState = 'LLENO';
+        break;
+      case 'SALIDA_VACIO':
+        newLocation = 'EN_CLIENTE';
+        newState = 'VACIO';
+        break;
+      case 'RETORNO_VACIO':
+        newLocation = 'EN_PLANTA';
+        newState = 'VACIO';
+        break;
+      case 'DEVOLUCION_LLENO':
+        newLocation = 'EN_PLANTA';
+        newState = 'LLENO';
+        break;
+    }
 
     try {
       await runTransaction(db, async (transaction) => {
@@ -92,9 +114,9 @@ export default function MovementsPage() {
         };
         transaction.set(doc(collection(db, "events")), eventData);
 
-        // 2. Update the asset location
+        // 2. Update the asset location and state
         const assetRef = doc(db, "assets", selectedAsset.id);
-        transaction.update(assetRef, { location: newLocation });
+        transaction.update(assetRef, { location: newLocation, state: newState });
       });
 
       toast({
