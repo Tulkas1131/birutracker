@@ -1,10 +1,12 @@
+
 "use client";
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { auth, db } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -23,14 +25,32 @@ export default function SignupPage() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+
     try {
+      // 1. Check if email is in the allowed list
+      const allowedEmailsRef = collection(db, "allowed_emails");
+      const q = query(allowedEmailsRef, where("email", "==", email.toLowerCase()));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        toast({
+          title: "Acceso no autorizado",
+          description: "Este correo electrónico no tiene permiso para registrarse.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // 2. If allowed, create user
       await createUserWithEmailAndPassword(auth, email, password);
       router.push('/dashboard');
-    } catch (error: any) {
+    } catch (error: any)
+ {
       console.error(error);
        toast({
         title: "Error de registro",
-        description: error.message, // Provide more specific feedback
+        description: error.message,
         variant: "destructive",
       });
     } finally {
