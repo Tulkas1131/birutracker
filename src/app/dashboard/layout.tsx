@@ -44,10 +44,10 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
 
   const navItems = [
     { href: "/dashboard", icon: LayoutDashboard, label: "Panel de Control" },
-    { href: "/assets", icon: Package, label: "Activos" },
-    { href: "/customers", icon: Users, label: "Clientes" },
-    { href: "/movements", icon: Truck, label: "Registrar Movimiento" },
-    { href: "/history", icon: History, label: "Historial" },
+    { href: "/dashboard/assets", icon: Package, label: "Activos" },
+    { href: "/dashboard/customers", icon: Users, label: "Clientes" },
+    { href: "/dashboard/movements", icon: Truck, label: "Registrar Movimiento" },
+    { href: "/dashboard/history", icon: History, label: "Historial" },
   ];
 
   const handleSignOut = async () => {

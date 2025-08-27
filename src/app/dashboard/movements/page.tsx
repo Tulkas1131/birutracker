@@ -171,7 +171,7 @@ export default function MovementsPage() {
       });
       
       form.reset();
-      router.push("/history");
+      router.push("/dashboard/history");
     } catch (e) {
       console.error("La transacción falló: ", e);
       toast({

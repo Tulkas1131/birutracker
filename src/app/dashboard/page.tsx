@@ -10,25 +10,25 @@ const features = [
   {
     title: "Gestionar Activos",
     description: "Ver, crear y editar barriles y cilindros.",
-    href: "/assets",
+    href: "/dashboard/assets",
     icon: <Package className="h-8 w-8 text-primary" />,
   },
   {
     title: "Gestionar Clientes",
     description: "Mantén un registro de tus clientes y distribuidores.",
-    href: "/customers",
+    href: "/dashboard/customers",
     icon: <Users className="h-8 w-8 text-primary" />,
   },
   {
     title: "Registrar un Movimiento",
     description: "Registra entregas y retornos de activos.",
-    href: "/movements",
+    href: "/dashboard/movements",
     icon: <Truck className="h-8 w-8 text-primary" />,
   },
   {
     title: "Ver Historial",
     description: "Explora el historial completo de movimientos.",
-    href: "/history",
+    href: "/dashboard/history",
     icon: <History className="h-8 w-8 text-primary" />,
   },
 ];
