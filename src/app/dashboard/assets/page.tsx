@@ -5,7 +5,7 @@ import { MoreHorizontal, PlusCircle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/page-header";
 import { mockAssets } from "@/lib/data";
 import type { Asset } from "@/lib/types";
@@ -71,6 +72,50 @@ export default function AssetsPage() {
     }
   };
 
+  const barrels = assets.filter(asset => asset.type === 'BARRIL');
+  const co2Cylinders = assets.filter(asset => asset.type === 'CO2');
+
+  const AssetTable = ({ assetList }: { assetList: Asset[] }) => (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Código</TableHead>
+          <TableHead>Formato</TableHead>
+          <TableHead>Estado</TableHead>
+          <TableHead>
+            <span className="sr-only">Acciones</span>
+          </TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {assetList.map((asset) => (
+          <TableRow key={asset.id}>
+            <TableCell className="font-medium">{asset.code}</TableCell>
+            <TableCell>{asset.format}</TableCell>
+            <TableCell>
+              <Badge variant={getStatusVariant(asset.status)}>{asset.status}</Badge>
+            </TableCell>
+            <TableCell>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button aria-haspopup="true" size="icon" variant="ghost">
+                    <MoreHorizontal className="h-4 w-4" />
+                    <span className="sr-only">Toggle menu</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                  <DropdownMenuItem onSelect={() => handleEdit(asset)}>Editar</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => handleDelete(asset.id)}>Eliminar</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+
   return (
     <div className="flex flex-1 flex-col">
        <Dialog open={isFormOpen} onOpenChange={setFormOpen}>
@@ -87,50 +132,26 @@ export default function AssetsPage() {
           }
         />
         <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
-          <Card>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Código</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Formato</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>
-                      <span className="sr-only">Acciones</span>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {assets.map((asset) => (
-                    <TableRow key={asset.id}>
-                      <TableCell className="font-medium">{asset.code}</TableCell>
-                      <TableCell>{asset.type}</TableCell>
-                      <TableCell>{asset.format}</TableCell>
-                      <TableCell>
-                        <Badge variant={getStatusVariant(asset.status)}>{asset.status}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button aria-haspopup="true" size="icon" variant="ghost">
-                              <MoreHorizontal className="h-4 w-4" />
-                              <span className="sr-only">Toggle menu</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                            <DropdownMenuItem onSelect={() => handleEdit(asset)}>Editar</DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => handleDelete(asset.id)}>Eliminar</DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <Tabs defaultValue="barrels">
+            <TabsList>
+              <TabsTrigger value="barrels">Barriles</TabsTrigger>
+              <TabsTrigger value="co2">CO2</TabsTrigger>
+            </TabsList>
+            <TabsContent value="barrels">
+              <Card>
+                <CardContent>
+                  <AssetTable assetList={barrels} />
+                </CardContent>
+              </Card>
+            </TabsContent>
+            <TabsContent value="co2">
+              <Card>
+                <CardContent>
+                  <AssetTable assetList={co2Cylinders} />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </main>
         <DialogContent>
             <DialogHeader>
@@ -146,3 +167,5 @@ export default function AssetsPage() {
     </div>
   );
 }
+
+    
