@@ -1,4 +1,10 @@
+"use client";
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { signOut } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 import {
   Archive,
   History,
@@ -7,6 +13,7 @@ import {
   Package,
   Truck,
   Users,
+  Loader2
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -29,6 +36,40 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const [user, loading, error] = useAuthState(auth);
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    await signOut(auth);
+    router.push('/');
+  };
+
+  React.useEffect(() => {
+    if (!loading && !user) {
+      router.push('/');
+    }
+  }, [user, loading, router]);
+
+  if (loading) {
+    return (
+       <div className="flex h-screen w-full items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+     return (
+       <div className="flex h-screen w-full items-center justify-center">
+        <p className="text-destructive">Error: {error.message}</p>
+      </div>
+    );
+  }
+  
+  if (!user) {
+    return null; // or a redirect component
+  }
+
   return (
     <SidebarProvider>
       <Sidebar>
@@ -86,16 +127,16 @@ export default function DashboardLayout({
         <SidebarFooter>
           <div className="flex items-center gap-2 p-2">
              <Avatar className="size-8">
-                <AvatarImage src="https://picsum.photos/100" alt="Avatar de usuario" data-ai-hint="user avatar" />
-                <AvatarFallback>U</AvatarFallback>
+                <AvatarImage src={user.photoURL || "https://picsum.photos/100"} alt="Avatar de usuario" data-ai-hint="user avatar" />
+                <AvatarFallback>{user.email?.[0].toUpperCase() || 'U'}</AvatarFallback>
               </Avatar>
               <div className="flex flex-col text-sm">
                 <span className="font-semibold">Operador</span>
-                <span className="text-muted-foreground">user@kegtrack.com</span>
+                <span className="text-muted-foreground truncate">{user.email}</span>
               </div>
-            <Link href="/" className="ml-auto">
+            <button onClick={handleSignOut} className="ml-auto">
               <LogOut className="size-5" />
-            </Link>
+            </button>
           </div>
         </SidebarFooter>
       </Sidebar>

@@ -5,7 +5,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { Timestamp, collection, onSnapshot, addDoc, doc, runTransaction } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
+import { useAuthState } from "react-firebase-hooks/auth";
 import { Loader2 } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +21,7 @@ import { Input } from "@/components/ui/input";
 export default function MovementsPage() {
   const { toast } = useToast();
   const router = useRouter();
+  const [user] = useAuthState(auth);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -54,6 +56,13 @@ export default function MovementsPage() {
 
   async function onSubmit(data: MovementFormData) {
     setIsSubmitting(true);
+
+    if (!user) {
+       toast({ title: "Error", description: "Debes iniciar sesión para registrar un movimiento.", variant: "destructive" });
+       setIsSubmitting(false);
+       return;
+    }
+
     if (!selectedAsset) {
       toast({ title: "Error", description: "Activo no encontrado.", variant: "destructive" });
       setIsSubmitting(false);
@@ -78,7 +87,7 @@ export default function MovementsPage() {
           customer_name: selectedCustomer.name,
           event_type: data.event_type,
           timestamp: Timestamp.now(),
-          user_id: "user_placeholder", // Replace with actual user ID
+          user_id: user.uid,
           variety: data.variety || "",
         };
         transaction.set(doc(collection(db, "events")), eventData);
