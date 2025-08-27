@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { collection, getDocs, addDoc, doc, updateDoc, Timestamp, query, orderBy } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { Timestamp } from "firebase/firestore";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,13 +14,15 @@ import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { movementSchema, type MovementFormData, type Asset, type Customer } from "@/lib/types";
 import { Input } from "@/components/ui/input";
+import { mockAssets, mockCustomers } from "@/lib/data";
+import { Loader2 } from "lucide-react";
+
 
 export default function MovementsPage() {
   const { toast } = useToast();
   const router = useRouter();
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [assets] = useState<Asset[]>(mockAssets);
+  const [customers] = useState<Customer[]>(mockCustomers);
   
   const form = useForm<MovementFormData>({
     resolver: zodResolver(movementSchema),
@@ -30,37 +31,6 @@ export default function MovementsPage() {
       variety: "",
     },
   });
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setIsLoading(true);
-        const assetsQuery = query(collection(db, "assets"), orderBy("code"));
-        const customersQuery = query(collection(db, "customers"), orderBy("name"));
-        
-        const [assetsSnapshot, customersSnapshot] = await Promise.all([
-          getDocs(assetsQuery),
-          getDocs(customersQuery)
-        ]);
-        
-        const assetsList = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
-        const customersList = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
-        
-        setAssets(assetsList);
-        setCustomers(customersList);
-      } catch (error) {
-         console.error("Error fetching data: ", error);
-         toast({
-          title: "Error",
-          description: "No se pudieron cargar los activos y clientes.",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchData();
-  }, [toast]);
 
   const watchAssetId = form.watch("asset_id");
   const watchEventType = form.watch("event_type");
@@ -80,54 +50,25 @@ export default function MovementsPage() {
       return;
     }
 
-    try {
-      // 1. Create event document
-      const newEvent = {
-        asset_id: selectedAsset.id,
-        asset_code: selectedAsset.code,
-        customer_id: selectedCustomer.id,
-        customer_name: selectedCustomer.name,
-        event_type: data.event_type,
-        timestamp: Timestamp.now(),
-        user_id: "user_placeholder", // Replace with actual user ID in a real app
-        variety: data.variety || "",
-      };
-      await addDoc(collection(db, "events"), newEvent);
+    // Simulate creating an event and updating an asset
+    console.log("New Event (simulated):", {
+      asset_id: selectedAsset.id,
+      asset_code: selectedAsset.code,
+      customer_id: selectedCustomer.id,
+      customer_name: selectedCustomer.name,
+      event_type: data.event_type,
+      timestamp: Timestamp.now(),
+      user_id: "user_placeholder",
+      variety: data.variety || "",
+    });
 
-      // 2. Update asset status based on event type
-      let newStatus: Asset['status'] = selectedAsset.status;
-      switch(data.event_type) {
-        case 'SALIDA_LLENO':
-        case 'SALIDA_VACIO':
-          newStatus = 'EN_CLIENTE';
-          break;
-        case 'DEVOLUCION_VACIO':
-          newStatus = 'VACIO';
-          break;
-        case 'ENTRADA_LLENO':
-           newStatus = 'LLENO';
-           break;
-      }
-      
-      const assetRef = doc(db, "assets", selectedAsset.id);
-      await updateDoc(assetRef, { status: newStatus });
-
-      toast({
-        title: "Movimiento Registrado",
-        description: `Se ha registrado el movimiento del activo ${selectedAsset.code}.`,
-      });
-      
-      form.reset();
-      router.push("/dashboard/history");
-
-    } catch(error) {
-       console.error("Error submitting movement: ", error);
-       toast({
-        title: "Error",
-        description: "No se pudo registrar el movimiento.",
-        variant: "destructive",
-      });
-    }
+    toast({
+      title: "Movimiento Registrado",
+      description: `Se ha registrado el movimiento del activo ${selectedAsset.code} (simulación).`,
+    });
+    
+    form.reset();
+    router.push("/dashboard/history");
   }
 
   return (
@@ -151,10 +92,10 @@ export default function MovementsPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Activo</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading}>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder={isLoading ? "Cargando activos..." : "Selecciona un activo para mover"} />
+                            <SelectValue placeholder="Selecciona un activo para mover" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -213,10 +154,10 @@ export default function MovementsPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Cliente</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading}>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder={isLoading ? "Cargando clientes..." : "Selecciona el cliente asociado"} />
+                            <SelectValue placeholder="Selecciona el cliente asociado" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -231,8 +172,7 @@ export default function MovementsPage() {
                     </FormItem>
                   )}
                 />
-                <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <Button type="submit" size="lg" className="w-full">
                   Guardar Movimiento
                 </Button>
               </form>

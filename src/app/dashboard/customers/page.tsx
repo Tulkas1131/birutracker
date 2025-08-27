@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { MoreHorizontal, PlusCircle, Loader2 } from "lucide-react";
-import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, query, orderBy } from "firebase/firestore";
+import { useState } from "react";
+import { MoreHorizontal, PlusCircle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,38 +25,14 @@ import { PageHeader } from "@/components/page-header";
 import type { Customer } from "@/lib/types";
 import { CustomerForm } from "@/components/customer-form";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
+import { mockCustomers } from "@/lib/data";
 
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [customers, setCustomers] = useState<Customer[]>(mockCustomers);
   const [isFormOpen, setFormOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | undefined>(undefined);
   const { toast } = useToast();
-
-  const fetchCustomers = async () => {
-    try {
-      setIsLoading(true);
-      const q = query(collection(db, "customers"), orderBy("name"));
-      const querySnapshot = await getDocs(q);
-      const customersList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
-      setCustomers(customersList);
-    } catch (error) {
-      console.error("Error fetching customers: ", error);
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los clientes.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchCustomers();
-  }, []);
 
   const handleEdit = (customer: Customer) => {
     setSelectedCustomer(customer);
@@ -70,50 +45,30 @@ export default function CustomersPage() {
   };
   
   const handleDelete = async (id: string) => {
-     try {
-      await deleteDoc(doc(db, "customers", id));
-      toast({
-        title: "Cliente Eliminado",
-        description: "El cliente ha sido eliminado correctamente.",
-      });
-      fetchCustomers(); // Refresh list
-    } catch (error) {
-       console.error("Error deleting customer: ", error);
-       toast({
-        title: "Error",
-        description: "No se pudo eliminar el cliente.",
-        variant: "destructive",
-      });
-    }
+    setCustomers(customers.filter(customer => customer.id !== id));
+    toast({
+      title: "Cliente Eliminado",
+      description: "El cliente ha sido eliminado (simulación).",
+    });
   };
   
   const handleFormSubmit = async (data: Omit<Customer, 'id'>) => {
-    try {
-      if (selectedCustomer) {
-        const customerRef = doc(db, "customers", selectedCustomer.id);
-        await updateDoc(customerRef, data);
-        toast({
-          title: "Cliente Actualizado",
-          description: "Los cambios han sido guardados.",
-        });
-      } else {
-        await addDoc(collection(db, "customers"), data);
-        toast({
-          title: "Cliente Creado",
-          description: "El nuevo cliente ha sido añadido.",
-        });
-      }
-      setFormOpen(false);
-      setSelectedCustomer(undefined);
-      fetchCustomers(); // Refresh list
-    } catch (error) {
-      console.error("Error saving customer: ", error);
-       toast({
-        title: "Error",
-        description: "No se pudo guardar el cliente.",
-        variant: "destructive",
+    if (selectedCustomer) {
+      setCustomers(customers.map(customer => customer.id === selectedCustomer.id ? { ...selectedCustomer, ...data } : customer));
+      toast({
+        title: "Cliente Actualizado",
+        description: "Los cambios han sido guardados (simulación).",
+      });
+    } else {
+      const newCustomer = { ...data, id: `new-${Date.now()}` };
+      setCustomers([...customers, newCustomer]);
+      toast({
+        title: "Cliente Creado",
+        description: "El nuevo cliente ha sido añadido (simulación).",
       });
     }
+    setFormOpen(false);
+    setSelectedCustomer(undefined);
   };
 
   return (
@@ -134,11 +89,6 @@ export default function CustomersPage() {
         <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
           <Card>
             <CardContent>
-              {isLoading ? (
-                <div className="flex justify-center items-center py-10">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-              ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -187,7 +137,6 @@ export default function CustomersPage() {
                     )}
                   </TableBody>
                 </Table>
-              )}
             </CardContent>
           </Card>
         </main>

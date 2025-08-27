@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { MoreHorizontal, PlusCircle, Loader2 } from "lucide-react";
-import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, query, orderBy } from "firebase/firestore";
+import { useState } from "react";
+import { MoreHorizontal, PlusCircle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,38 +26,15 @@ import { PageHeader } from "@/components/page-header";
 import type { Asset } from "@/lib/types";
 import { AssetForm } from "@/components/asset-form";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
+import { mockAssets } from "@/lib/data";
+
 
 export default function AssetsPage() {
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [assets, setAssets] = useState<Asset[]>(mockAssets);
   const [isFormOpen, setFormOpen] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<Asset | undefined>(undefined);
   const { toast } = useToast();
-
-  const fetchAssets = async () => {
-    try {
-      setIsLoading(true);
-      const q = query(collection(db, "assets"), orderBy("code"));
-      const querySnapshot = await getDocs(q);
-      const assetsList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
-      setAssets(assetsList);
-    } catch (error) {
-      console.error("Error fetching assets: ", error);
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los activos.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchAssets();
-  }, []);
 
   const handleEdit = (asset: Asset) => {
     setSelectedAsset(asset);
@@ -70,51 +46,31 @@ export default function AssetsPage() {
     setFormOpen(true);
   };
   
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteDoc(doc(db, "assets", id));
-      toast({
-        title: "Activo Eliminado",
-        description: "El activo ha sido eliminado correctamente.",
-      });
-      fetchAssets(); // Refresh list
-    } catch (error) {
-       console.error("Error deleting asset: ", error);
-       toast({
-        title: "Error",
-        description: "No se pudo eliminar el activo.",
-        variant: "destructive",
-      });
-    }
+  const handleDelete = (id: string) => {
+    setAssets(assets.filter(asset => asset.id !== id));
+    toast({
+      title: "Activo Eliminado",
+      description: "El activo ha sido eliminado (simulación).",
+    });
   };
   
-  const handleFormSubmit = async (data: Omit<Asset, 'id'>) => {
-    try {
-      if (selectedAsset) {
-        const assetRef = doc(db, "assets", selectedAsset.id);
-        await updateDoc(assetRef, data);
-        toast({
-          title: "Activo Actualizado",
-          description: "Los cambios han sido guardados.",
-        });
-      } else {
-        await addDoc(collection(db, "assets"), data);
-        toast({
-          title: "Activo Creado",
-          description: "El nuevo activo ha sido añadido.",
-        });
-      }
-      setFormOpen(false);
-      setSelectedAsset(undefined);
-      fetchAssets(); // Refresh list
-    } catch (error) {
-      console.error("Error saving asset: ", error);
+  const handleFormSubmit = (data: Omit<Asset, 'id'>) => {
+    if (selectedAsset) {
+      setAssets(assets.map(asset => asset.id === selectedAsset.id ? { ...selectedAsset, ...data } : asset));
        toast({
-        title: "Error",
-        description: "No se pudo guardar el activo.",
-        variant: "destructive",
+        title: "Activo Actualizado",
+        description: "Los cambios han sido guardados (simulación).",
+      });
+    } else {
+      const newAsset = { ...data, id: `new-${Date.now()}`};
+      setAssets([...assets, newAsset]);
+       toast({
+        title: "Activo Creado",
+        description: "El nuevo activo ha sido añadido (simulación).",
       });
     }
+    setFormOpen(false);
+    setSelectedAsset(undefined);
   };
   
   const getStatusVariant = (status: Asset["status"]) => {
@@ -148,7 +104,7 @@ export default function AssetsPage() {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {assetList.length === 0 && !isLoading ? (
+        {assetList.length === 0 ? (
           <TableRow>
              <TableCell colSpan={4} className="h-24 text-center">
               No hay activos. ¡Añade uno nuevo para empezar!
@@ -200,11 +156,6 @@ export default function AssetsPage() {
           }
         />
         <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
-          {isLoading ? (
-             <div className="flex justify-center items-center py-10">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-             </div>
-          ) : (
             <Tabs defaultValue="barrels">
               <TabsList>
                 <TabsTrigger value="barrels">Barriles ({barrels.length})</TabsTrigger>
@@ -225,7 +176,6 @@ export default function AssetsPage() {
                 </Card>
               </TabsContent>
             </Tabs>
-          )}
         </main>
         <DialogContent>
             <DialogHeader>

@@ -1,16 +1,16 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
-import { collection, getDocs, query, orderBy, Timestamp } from "firebase/firestore";
+import { useState, useMemo } from 'react';
+import { Timestamp } from "firebase/firestore";
 import { Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import type { Event } from "@/lib/types";
+import { mockEvents } from '@/lib/data';
 
 function EventTable({ events, isLoading }: { events: Event[], isLoading: boolean }) {
   const formatDate = (timestamp: Timestamp) => {
@@ -60,10 +60,8 @@ function EventTable({ events, isLoading }: { events: Event[], isLoading: boolean
 }
 
 export default function HistoryPage() {
-  const [events, setEvents] = useState<Event[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isClient, setIsClient] = useState(false);
-  const { toast } = useToast();
+  const [events, setEvents] = useState<Event[]>(mockEvents);
+  const [isLoading, setIsLoading] = useState(false);
 
   const [filters, setFilters] = useState({
     customer: '',
@@ -71,28 +69,6 @@ export default function HistoryPage() {
     eventType: 'ALL',
   });
 
-  useEffect(() => {
-    setIsClient(true);
-    const fetchEvents = async () => {
-      try {
-        setIsLoading(true);
-        const q = query(collection(db, "events"), orderBy("timestamp", "desc"));
-        const querySnapshot = await getDocs(q);
-        const eventsList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
-        setEvents(eventsList);
-      } catch (error) {
-        console.error("Error fetching events: ", error);
-        toast({
-          title: "Error",
-          description: "No se pudo cargar el historial de movimientos.",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchEvents();
-  }, [toast]);
 
   const handleFilterChange = (name: string, value: string) => {
     setFilters(prev => ({ ...prev, [name]: value }));
@@ -147,13 +123,7 @@ export default function HistoryPage() {
                 </SelectContent>
               </Select>
             </div>
-            {isClient ? (
-              <EventTable events={filteredEvents} isLoading={isLoading} />
-            ) : (
-               <div className="flex justify-center items-center py-10">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-               </div>
-            )}
+            <EventTable events={filteredEvents} isLoading={isLoading} />
           </CardContent>
         </Card>
       </main>
