@@ -30,6 +30,7 @@ import type { Asset } from "@/lib/types";
 import { AssetForm } from "@/components/asset-form";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useUserRole } from "@/hooks/use-user-role";
 
 export default function AssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -37,6 +38,7 @@ export default function AssetsPage() {
   const [isFormOpen, setFormOpen] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<Asset | undefined>(undefined);
   const { toast } = useToast();
+  const userRole = useUserRole();
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "assets"), (snapshot) => {
@@ -58,6 +60,14 @@ export default function AssetsPage() {
   };
   
   const handleDelete = async (id: string) => {
+    if (userRole !== 'Admin') {
+       toast({
+        title: "Acceso denegado",
+        description: "No tienes permiso para eliminar activos.",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       await deleteDoc(doc(db, "assets", id));
       toast({
@@ -100,7 +110,12 @@ export default function AssetsPage() {
     try {
       if (selectedAsset) {
         // Editing existing asset
-        await updateDoc(doc(db, "assets", selectedAsset.id), data);
+        const assetDataToUpdate: Partial<Asset> = {
+          format: data.format,
+          state: data.state,
+          location: data.location,
+        };
+        await updateDoc(doc(db, "assets", selectedAsset.id), assetDataToUpdate);
         toast({
           title: "Activo Actualizado",
           description: "Los cambios han sido guardados.",
@@ -137,7 +152,7 @@ export default function AssetsPage() {
         return "default";
     }
   };
-
+  
   const barrels = assets.filter(asset => asset.type === 'BARRIL');
   const co2Cylinders = assets.filter(asset => asset.type === 'CO2');
 
@@ -193,7 +208,11 @@ export default function AssetsPage() {
                   <DropdownMenuContent align="end">
                     <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                     <DropdownMenuItem onSelect={() => handleEdit(asset)}>Editar</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => handleDelete(asset.id)}>Eliminar</DropdownMenuItem>
+                    {userRole === 'Admin' && (
+                        <DropdownMenuItem onSelect={() => handleDelete(asset.id)} className="text-destructive">
+                            Eliminar
+                        </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </TableCell>
@@ -227,14 +246,14 @@ export default function AssetsPage() {
               </TabsList>
               <TabsContent value="barrels">
                 <Card>
-                  <CardContent>
+                  <CardContent className="p-0">
                     <AssetTable assetList={barrels} />
                   </CardContent>
                 </Card>
               </TabsContent>
               <TabsContent value="co2">
                 <Card>
-                  <CardContent>
+                  <CardContent className="p-0">
                     <AssetTable assetList={co2Cylinders} />
                   </CardContent>
                 </Card>

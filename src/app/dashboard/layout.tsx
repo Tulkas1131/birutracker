@@ -9,7 +9,6 @@ import { signOut } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import {
-  Archive,
   History,
   LayoutDashboard,
   LogOut,
@@ -33,6 +32,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Logo } from "@/components/logo";
+import { useUserRole } from "@/hooks/use-user-role";
 
 export default function DashboardLayout({
   children,
@@ -40,7 +40,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [user, loading, error] = useAuthState(auth);
-  const [userRole, setUserRole] = React.useState("Operador");
+  const userRole = useUserRole();
   const router = useRouter();
 
   const handleSignOut = async () => {
@@ -52,25 +52,22 @@ export default function DashboardLayout({
     if (!loading && !user) {
       router.push('/');
     }
-    if (user) {
+    if (user && !userRole) {
       const getUserRole = async () => {
         const userDocRef = doc(db, "users", user.uid);
         const userDocSnap = await getDoc(userDocRef);
         
-        if (userDocSnap.exists()) {
-          setUserRole(userDocSnap.data().role || "Operador");
-        } else {
+        if (!userDocSnap.exists()) {
           // User exists in Auth but not in Firestore (old user), create their profile.
           await setDoc(userDocRef, {
             email: user.email,
             role: "Operador",
           });
-          setUserRole("Operador");
         }
       };
       getUserRole();
     }
-  }, [user, loading, router]);
+  }, [user, loading, userRole, router]);
 
   if (loading) {
     return (
@@ -153,7 +150,7 @@ export default function DashboardLayout({
                 <AvatarFallback>{user.email?.[0].toUpperCase() || 'U'}</AvatarFallback>
               </Avatar>
               <div className="flex flex-col text-sm">
-                <span className="font-semibold">{userRole}</span>
+                <span className="font-semibold">{userRole || 'Cargando...'}</span>
                 <span className="text-muted-foreground truncate">{user.email}</span>
               </div>
             <button onClick={handleSignOut} className="ml-auto">
@@ -166,3 +163,5 @@ export default function DashboardLayout({
     </SidebarProvider>
   );
 }
+
+    

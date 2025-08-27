@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -28,6 +29,7 @@ import type { Customer } from "@/lib/types";
 import { CustomerForm } from "@/components/customer-form";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useUserRole } from "@/hooks/use-user-role";
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -35,6 +37,7 @@ export default function CustomersPage() {
   const [isFormOpen, setFormOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | undefined>(undefined);
   const { toast } = useToast();
+  const userRole = useUserRole();
   
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "customers"), (snapshot) => {
@@ -57,6 +60,14 @@ export default function CustomersPage() {
   };
   
   const handleDelete = async (id: string) => {
+    if (userRole !== 'Admin') {
+       toast({
+        title: "Acceso denegado",
+        description: "No tienes permiso para eliminar clientes.",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       await deleteDoc(doc(db, "customers", id));
       toast({
@@ -117,7 +128,7 @@ export default function CustomersPage() {
         />
         <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
           <Card>
-            <CardContent>
+            <CardContent className="p-0">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -163,7 +174,11 @@ export default function CustomersPage() {
                               <DropdownMenuContent align="end">
                                 <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                                 <DropdownMenuItem onSelect={() => handleEdit(customer)}>Editar</DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => handleDelete(customer.id)}>Eliminar</DropdownMenuItem>
+                                {userRole === 'Admin' && (
+                                  <DropdownMenuItem onSelect={() => handleDelete(customer.id)} className="text-destructive">
+                                    Eliminar
+                                  </DropdownMenuItem>
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </TableCell>
@@ -192,3 +207,5 @@ export default function CustomersPage() {
     </div>
   );
 }
+
+    
