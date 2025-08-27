@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useRef, memo } from 'react';
-import { Html5QrcodeScanner, Html5QrcodeSupportedFormats, Html5QrcodeScannerState } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeScanner, Html5QrcodeSupportedFormats, Html5QrcodeScannerState } from 'html5-qrcode';
 import { useToast } from "@/hooks/use-toast";
 
 interface QrScannerProps {
@@ -32,7 +32,7 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
 
         const startScanner = async () => {
              try {
-                await Html5QrcodeScanner.getCameras();
+                await Html5Qrcode.getCameras();
                 if (scannerRef.current && scannerRef.current.getState() !== Html5QrcodeScannerState.SCANNING) {
                   html5QrcodeScanner.render(onScanSuccess, onScanError);
                 }
