@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { MoreHorizontal, PlusCircle, Loader2, QrCode } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer } from "lucide-react";
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, orderBy, limit } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import QRCode from "qrcode.react";
@@ -32,16 +32,20 @@ import { AssetForm } from "@/components/asset-form";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/use-user-role";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export default function AssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setFormOpen] = useState(false);
   const [isQrCodeOpen, setQrCodeOpen] = useState(false);
+  const [isBatchQrOpen, setBatchQrOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('barrels');
   const [selectedAsset, setSelectedAsset] = useState<Asset | undefined>(undefined);
   const { toast } = useToast();
   const userRole = useUserRole();
   const qrCodeRef = useRef<HTMLDivElement>(null);
+  const batchQrRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "assets"), (snapshot) => {
@@ -67,17 +71,59 @@ export default function AssetsPage() {
     setQrCodeOpen(true);
   };
 
-  const handlePrintQrCode = () => {
-    const printWindow = window.open('', '', 'height=600,width=800');
-    if (printWindow && qrCodeRef.current) {
+  const handlePrint = (ref: React.RefObject<HTMLDivElement>) => {
+    const printWindow = window.open('', '', 'height=800,width=1000');
+    if (printWindow && ref.current) {
         printWindow.document.write('<html><head><title>Imprimir QR</title>');
-        printWindow.document.write('<style>body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; } .qr-container { text-align: center; } h1 { font-family: sans-serif; }</style>');
+        printWindow.document.write(`
+          <style>
+            @media print {
+              body { -webkit-print-color-adjust: exact; }
+            }
+            body { font-family: sans-serif; }
+            .print-container {
+              display: grid;
+              grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+              gap: 40px 20px;
+              padding: 20px;
+            }
+            .qr-item {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              text-align: center;
+              page-break-inside: avoid;
+            }
+            .qr-item h1 {
+              font-size: 1.5rem;
+              margin: 8px 0 0 0;
+            }
+            .qr-item p {
+              font-size: 1rem;
+              margin: 4px 0 0 0;
+            }
+            .single-qr-container {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              gap: 1rem;
+              padding: 1rem;
+              height: 100vh;
+            }
+             .single-qr-container h1 { font-size: 2rem; }
+             .single-qr-container p { font-size: 1.25rem; }
+          </style>
+        `);
         printWindow.document.write('</head><body>');
-        printWindow.document.write(qrCodeRef.current.innerHTML);
+        printWindow.document.write(ref.current.innerHTML);
         printWindow.document.write('</body></html>');
         printWindow.document.close();
         printWindow.focus();
-        printWindow.print();
+        setTimeout(() => {
+            printWindow.print();
+        }, 500); // Wait for content to render
     }
   };
   
@@ -178,6 +224,8 @@ export default function AssetsPage() {
   const barrels = assets.filter(asset => asset.type === 'BARRIL');
   const co2Cylinders = assets.filter(asset => asset.type === 'CO2');
 
+  const assetsToPrint = activeTab === 'barrels' ? barrels : co2Cylinders;
+
   const AssetTable = ({ assetList }: { assetList: Asset[] }) => (
     <Table>
       <TableHeader>
@@ -258,16 +306,22 @@ export default function AssetsPage() {
           title="Activos"
           description="Gestiona tus barriles de cerveza y cilindros de CO₂."
           action={
-            <DialogTrigger asChild>
-                <Button size="lg" onClick={handleNew}>
-                    <PlusCircle className="mr-2 h-5 w-5" />
-                    Nuevo Activo
+            <div className="flex items-center gap-2">
+                 <Button size="lg" variant="outline" onClick={() => setBatchQrOpen(true)} disabled={assetsToPrint.length === 0}>
+                    <Printer className="mr-2 h-5 w-5" />
+                    Imprimir Lote de QR
                 </Button>
-            </DialogTrigger>
+                <DialogTrigger asChild>
+                    <Button size="lg" onClick={handleNew}>
+                        <PlusCircle className="mr-2 h-5 w-5" />
+                        Nuevo Activo
+                    </Button>
+                </DialogTrigger>
+            </div>
           }
         />
         <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
-            <Tabs defaultValue="barrels">
+            <Tabs defaultValue={activeTab} onValueChange={setActiveTab}>
               <TabsList>
                 <TabsTrigger value="barrels">Barriles ({barrels.length})</TabsTrigger>
                 <TabsTrigger value="co2">CO2 ({co2Cylinders.length})</TabsTrigger>
@@ -311,15 +365,41 @@ export default function AssetsPage() {
                 </DialogDescription>
             </DialogHeader>
             {selectedAsset && (
-                <div ref={qrCodeRef} className="qr-container flex flex-col items-center justify-center gap-4 py-4">
+                <div ref={qrCodeRef} className="single-qr-container">
                     <QRCode value={selectedAsset.id} size={256} />
-                    <h1 className="text-2xl font-bold">{selectedAsset.code}</h1>
-                    <p>{selectedAsset.format} - {selectedAsset.type}</p>
+                    <h1>{selectedAsset.code}</h1>
+                    <p>{selectedAsset.format} - {selectedAsset.type === 'BARRIL' ? 'Barril' : 'CO2'}</p>
                 </div>
             )}
-            <Button onClick={handlePrintQrCode}>Imprimir QR</Button>
+            <Button onClick={() => handlePrint(qrCodeRef)}>Imprimir QR</Button>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isBatchQrOpen} onOpenChange={setBatchQrOpen}>
+        <DialogContent className="max-w-4xl">
+            <DialogHeader>
+                <DialogTitle>Imprimir Lote de Códigos QR</DialogTitle>
+                <DialogDescription>
+                    Aquí están todos los códigos QR para la categoría seleccionada: {activeTab === 'barrels' ? 'Barriles' : 'CO2'}.
+                </DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="h-[60vh] p-4">
+              <div ref={batchQrRef} className="print-container">
+                {assetsToPrint.map(asset => (
+                  <div key={asset.id} className="qr-item">
+                    <QRCode value={asset.id} size={180} />
+                    <h1>{asset.code}</h1>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+            <Button onClick={() => handlePrint(batchQrRef)} className="mt-4">
+              <Printer className="mr-2 h-5 w-5" />
+              Imprimir Todos ({assetsToPrint.length})
+            </Button>
         </DialogContent>
       </Dialog>
     </div>
   );
 }
+
+    
