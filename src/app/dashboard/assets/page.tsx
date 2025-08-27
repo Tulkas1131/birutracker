@@ -173,10 +173,14 @@ export default function AssetsPage() {
               <TableCell className="font-medium">{asset.code}</TableCell>
               <TableCell>{asset.format}</TableCell>
               <TableCell>
-                <Badge variant={asset.state === 'LLENO' ? 'default' : 'secondary'}>{asset.state}</Badge>
+                <Badge variant={asset.state === 'LLENO' ? 'default' : 'secondary'}>
+                  {asset.state === 'LLENO' ? 'Lleno' : 'Vacío'}
+                </Badge>
               </TableCell>
               <TableCell>
-                <Badge variant={getLocationVariant(asset.location)}>{asset.location}</Badge>
+                <Badge variant={getLocationVariant(asset.location)}>
+                  {asset.location === 'EN_PLANTA' ? 'En Planta' : 'En Cliente'}
+                </Badge>
               </TableCell>
               <TableCell>
                 <DropdownMenu>
@@ -254,3 +258,5 @@ export default function AssetsPage() {
     </div>
   );
 }
+
+    
