@@ -75,13 +75,13 @@ export default function AssetsPage() {
     <div className="flex flex-1 flex-col">
        <Dialog open={isFormOpen} onOpenChange={setFormOpen}>
         <PageHeader
-          title="Assets"
-          description="Manage your beer kegs and CO₂ cylinders."
+          title="Activos"
+          description="Gestiona tus barriles de cerveza y cilindros de CO₂."
           action={
             <DialogTrigger asChild>
                 <Button size="lg" onClick={handleNew}>
                     <PlusCircle className="mr-2 h-5 w-5" />
-                    New Asset
+                    Nuevo Activo
                 </Button>
             </DialogTrigger>
           }
@@ -92,12 +92,12 @@ export default function AssetsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Code</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Format</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>Código</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Formato</TableHead>
+                    <TableHead>Estado</TableHead>
                     <TableHead>
-                      <span className="sr-only">Actions</span>
+                      <span className="sr-only">Acciones</span>
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -119,9 +119,9 @@ export default function AssetsPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem onSelect={() => handleEdit(asset)}>Edit</DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => handleDelete(asset.id)}>Delete</DropdownMenuItem>
+                            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                            <DropdownMenuItem onSelect={() => handleEdit(asset)}>Editar</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => handleDelete(asset.id)}>Eliminar</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -134,7 +134,7 @@ export default function AssetsPage() {
         </main>
         <DialogContent>
             <DialogHeader>
-                <DialogTitle>{selectedAsset ? "Edit Asset" : "Create New Asset"}</DialogTitle>
+                <DialogTitle>{selectedAsset ? "Editar Activo" : "Crear Nuevo Activo"}</DialogTitle>
             </DialogHeader>
             <AssetForm
               defaultValues={selectedAsset}

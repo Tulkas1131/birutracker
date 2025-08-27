@@ -11,27 +11,27 @@ export default function SignupPage() {
       <Card className="mx-auto w-full max-w-sm">
         <CardHeader className="text-center">
           <Logo className="mx-auto mb-4 h-12 w-12" />
-          <CardTitle className="text-2xl">Create an Account</CardTitle>
-          <CardDescription>Enter your information to create an account</CardDescription>
+          <CardTitle className="text-2xl">Crear una Cuenta</CardTitle>
+          <CardDescription>Ingresa tu información para crear una cuenta</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="m@example.com" required />
+              <Label htmlFor="email">Correo electrónico</Label>
+              <Input id="email" type="email" placeholder="m@ejemplo.com" required />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">Contraseña</Label>
               <Input id="password" type="password" required />
             </div>
             <Button type="submit" className="w-full" size="lg" asChild>
-              <Link href="/dashboard">Create Account</Link>
+              <Link href="/dashboard">Crear Cuenta</Link>
             </Button>
           </div>
           <div className="mt-4 text-center text-sm">
-            Already have an account?{' '}
+            ¿Ya tienes una cuenta?{' '}
             <Link href="/" className="underline">
-              Log in
+              Inicia sesión
             </Link>
           </div>
         </CardContent>

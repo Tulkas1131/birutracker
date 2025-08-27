@@ -60,13 +60,13 @@ export default function CustomersPage() {
     <div className="flex flex-1 flex-col">
        <Dialog open={isFormOpen} onOpenChange={setFormOpen}>
         <PageHeader
-          title="Customers"
-          description="Manage your clients and distributors."
+          title="Clientes"
+          description="Gestiona tus clientes y distribuidores."
           action={
             <DialogTrigger asChild>
                 <Button size="lg" onClick={handleNew}>
                     <PlusCircle className="mr-2 h-5 w-5" />
-                    New Customer
+                    Nuevo Cliente
                 </Button>
             </DialogTrigger>
           }
@@ -77,12 +77,12 @@ export default function CustomersPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Address</TableHead>
-                    <TableHead>Contact</TableHead>
+                    <TableHead>Nombre</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Dirección</TableHead>
+                    <TableHead>Contacto</TableHead>
                     <TableHead>
-                      <span className="sr-only">Actions</span>
+                      <span className="sr-only">Acciones</span>
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -100,13 +100,13 @@ export default function CustomersPage() {
                           <DropdownMenuTrigger asChild>
                             <Button aria-haspopup="true" size="icon" variant="ghost">
                               <MoreHorizontal className="h-4 w-4" />
-                              <span className="sr-only">Toggle menu</span>
+                              <span className="sr-only">Menú</span>
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem onSelect={() => handleEdit(customer)}>Edit</DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => handleDelete(customer.id)}>Delete</DropdownMenuItem>
+                            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                            <DropdownMenuItem onSelect={() => handleEdit(customer)}>Editar</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => handleDelete(customer.id)}>Eliminar</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -119,7 +119,7 @@ export default function CustomersPage() {
         </main>
         <DialogContent>
             <DialogHeader>
-                <DialogTitle>{selectedCustomer ? "Edit Customer" : "Create New Customer"}</DialogTitle>
+                <DialogTitle>{selectedCustomer ? "Editar Cliente" : "Crear Nuevo Cliente"}</DialogTitle>
             </DialogHeader>
             <CustomerForm
               defaultValues={selectedCustomer}

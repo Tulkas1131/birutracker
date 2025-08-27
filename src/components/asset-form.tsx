@@ -33,9 +33,9 @@ export function AssetForm({ defaultValues, onSubmit, onCancel }: AssetFormProps)
           name="code"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Asset Code</FormLabel>
+              <FormLabel>Código del Activo</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., KEG-001" {...field} />
+                <Input placeholder="ej., KEG-001" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -46,11 +46,11 @@ export function AssetForm({ defaultValues, onSubmit, onCancel }: AssetFormProps)
           name="type"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Type</FormLabel>
+              <FormLabel>Tipo</FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select asset type" />
+                    <SelectValue placeholder="Selecciona el tipo de activo" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
@@ -67,9 +67,9 @@ export function AssetForm({ defaultValues, onSubmit, onCancel }: AssetFormProps)
           name="format"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Format</FormLabel>
+              <FormLabel>Formato</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., 50 L or 6 kg" {...field} />
+                <Input placeholder="ej., 50 L o 6 kg" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -80,18 +80,18 @@ export function AssetForm({ defaultValues, onSubmit, onCancel }: AssetFormProps)
           name="status"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Status</FormLabel>
+              <FormLabel>Estado</FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
+                    <SelectValue placeholder="Selecciona el estado" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
                   <SelectItem value="LLENO">LLENO</SelectItem>
                   <SelectItem value="VACIO">VACIO</SelectItem>
-                  <SelectItem value="EN_CLIENTE">EN_CLIENTE</SelectItem>
-                  <SelectItem value="EN_PLANTA">EN_PLANTA</SelectItem>
+                  <SelectItem value="EN_CLIENTE">EN CLIENTE</SelectItem>
+                  <SelectItem value="EN_PLANTA">EN PLANTA</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -99,8 +99,8 @@ export function AssetForm({ defaultValues, onSubmit, onCancel }: AssetFormProps)
           )}
         />
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-          <Button type="submit">Save</Button>
+          <Button type="button" variant="outline" onClick={onCancel}>Cancelar</Button>
+          <Button type="submit">Guardar</Button>
         </div>
       </form>
     </Form>

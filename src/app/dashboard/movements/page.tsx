@@ -26,10 +26,10 @@ export default function MovementsPage() {
   function onSubmit(data: MovementFormData) {
     console.log(data);
     toast({
-      title: "Movement Logged",
-      description: `Successfully logged movement for asset.`,
+      title: "Movimiento Registrado",
+      description: `Se ha registrado el movimiento del activo.`,
     });
-    // In a real app, you would also update the asset's status here.
+    // En una aplicación real, aquí también actualizarías el estado del activo.
     form.reset();
     router.push("/dashboard/history");
   }
@@ -37,14 +37,14 @@ export default function MovementsPage() {
   return (
     <div className="flex flex-1 flex-col">
       <PageHeader
-        title="Log a Movement"
-        description="Record an asset going to or coming from a customer."
+        title="Registrar un Movimiento"
+        description="Registra la salida o entrada de un activo a un cliente."
       />
       <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
         <Card className="mx-auto w-full max-w-2xl">
           <CardHeader>
-            <CardTitle>New Movement Details</CardTitle>
-            <CardDescription>Select an asset, an event type, and a customer.</CardDescription>
+            <CardTitle>Detalles del Nuevo Movimiento</CardTitle>
+            <CardDescription>Selecciona un activo, un tipo de evento y un cliente.</CardDescription>
           </CardHeader>
           <CardContent>
             <Form {...form}>
@@ -54,11 +54,11 @@ export default function MovementsPage() {
                   name="asset_id"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Asset</FormLabel>
+                      <FormLabel>Activo</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select an asset to move" />
+                            <SelectValue placeholder="Selecciona un activo para mover" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -78,16 +78,16 @@ export default function MovementsPage() {
                   name="event_type"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Event Type</FormLabel>
+                      <FormLabel>Tipo de Evento</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select an event type" />
+                            <SelectValue placeholder="Selecciona un tipo de evento" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="SALIDA_LLENO">SALIDA_LLENO (Check-out)</SelectItem>
-                          <SelectItem value="DEVOLUCION_VACIO">DEVOLUCION_VACIO (Return)</SelectItem>
+                          <SelectItem value="SALIDA_LLENO">SALIDA_LLENO (Salida)</SelectItem>
+                          <SelectItem value="DEVOLUCION_VACIO">DEVOLUCION_VACIO (Retorno)</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -99,11 +99,11 @@ export default function MovementsPage() {
                   name="customer_id"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Customer</FormLabel>
+                      <FormLabel>Cliente</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select the associated customer" />
+                            <SelectValue placeholder="Selecciona el cliente asociado" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -118,7 +118,7 @@ export default function MovementsPage() {
                     </FormItem>
                   )}
                 />
-                <Button type="submit" size="lg" className="w-full">Save Movement</Button>
+                <Button type="submit" size="lg" className="w-full">Guardar Movimiento</Button>
               </form>
             </Form>
           </CardContent>

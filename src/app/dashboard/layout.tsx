@@ -42,42 +42,42 @@ export default function DashboardLayout({
         <SidebarContent>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="Dashboard">
+              <SidebarMenuButton asChild tooltip="Panel">
                 <Link href="/dashboard">
                   <LayoutDashboard />
-                  <span>Dashboard</span>
+                  <span>Panel</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="Assets">
+              <SidebarMenuButton asChild tooltip="Activos">
                 <Link href="/dashboard/assets">
                   <Package />
-                  <span>Assets</span>
+                  <span>Activos</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="Customers">
+              <SidebarMenuButton asChild tooltip="Clientes">
                 <Link href="/dashboard/customers">
                   <Users />
-                  <span>Customers</span>
+                  <span>Clientes</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="Log Movement">
+              <SidebarMenuButton asChild tooltip="Registrar Movimiento">
                 <Link href="/dashboard/movements">
                   <Truck />
-                  <span>Log Movement</span>
+                  <span>Registrar Movimiento</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="History">
+              <SidebarMenuButton asChild tooltip="Historial">
                 <Link href="/dashboard/history">
                   <History />
-                  <span>History</span>
+                  <span>Historial</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -86,11 +86,11 @@ export default function DashboardLayout({
         <SidebarFooter>
           <div className="flex items-center gap-2 p-2">
              <Avatar className="size-8">
-                <AvatarImage src="https://picsum.photos/100" alt="User Avatar" data-ai-hint="user avatar" />
+                <AvatarImage src="https://picsum.photos/100" alt="Avatar de usuario" data-ai-hint="user avatar" />
                 <AvatarFallback>U</AvatarFallback>
               </Avatar>
               <div className="flex flex-col text-sm">
-                <span className="font-semibold">Operator</span>
+                <span className="font-semibold">Operador</span>
                 <span className="text-muted-foreground">user@kegtrack.com</span>
               </div>
             <Link href="/" className="ml-auto">

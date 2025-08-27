@@ -31,9 +31,9 @@ export type Event = {
 // Zod Schemas for form validation
 export const assetSchema = z.object({
   id: z.string().optional(),
-  code: z.string().min(1, 'Code is required'),
+  code: z.string().min(1, 'El código es requerido'),
   type: z.enum(['BARRIL', 'CO2']),
-  format: z.string().min(1, 'Format is required'),
+  format: z.string().min(1, 'El formato es requerido'),
   status: z.enum(['LLENO', 'VACIO', 'EN_CLIENTE', 'EN_PLANTA']),
 });
 
@@ -41,7 +41,7 @@ export type AssetFormData = z.infer<typeof assetSchema>;
 
 export const customerSchema = z.object({
   id: z.string().optional(),
-  name: z.string().min(1, 'Name is required'),
+  name: z.string().min(1, 'El nombre es requerido'),
   address: z.string().optional(),
   contact: z.string().optional(),
   type: z.enum(['BAR', 'DISTRIBUIDOR', 'OTRO']),
@@ -50,9 +50,9 @@ export const customerSchema = z.object({
 export type CustomerFormData = z.infer<typeof customerSchema>;
 
 export const movementSchema = z.object({
-  asset_id: z.string().min(1, "Please select an asset."),
+  asset_id: z.string().min(1, "Por favor selecciona un activo."),
   event_type: z.enum(['SALIDA_LLENO', 'DEVOLUCION_VACIO']),
-  customer_id: z.string().min(1, "Please select a customer."),
+  customer_id: z.string().min(1, "Por favor selecciona un cliente."),
 });
 
 export type MovementFormData = z.infer<typeof movementSchema>;

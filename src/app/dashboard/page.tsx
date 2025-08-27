@@ -5,26 +5,26 @@ import { PageHeader } from "@/components/page-header";
 
 const features = [
   {
-    title: "Manage Assets",
-    description: "View, create, and edit kegs and cylinders.",
+    title: "Gestionar Activos",
+    description: "Ver, crear y editar barriles y cilindros.",
     href: "/dashboard/assets",
     icon: <Package className="h-8 w-8 text-primary" />,
   },
   {
-    title: "Manage Customers",
-    description: "Keep track of your clients and distributors.",
+    title: "Gestionar Clientes",
+    description: "Lleva un registro de tus clientes y distribuidores.",
     href: "/dashboard/customers",
     icon: <Users className="h-8 w-8 text-primary" />,
   },
   {
-    title: "Log a Movement",
-    description: "Record asset check-outs and returns.",
+    title: "Registrar un Movimiento",
+    description: "Registra las salidas y devoluciones de activos.",
     href: "/dashboard/movements",
     icon: <Truck className="h-8 w-8 text-primary" />,
   },
   {
-    title: "View History",
-    description: "Browse the complete history of movements.",
+    title: "Ver Historial",
+    description: "Navega por el historial completo de movimientos.",
     href: "/dashboard/history",
     icon: <History className="h-8 w-8 text-primary" />,
   },
@@ -33,7 +33,7 @@ const features = [
 export default function DashboardPage() {
   return (
     <div className="flex flex-1 flex-col">
-      <PageHeader title="Dashboard" description="Welcome back! Here's a quick overview." />
+      <PageHeader title="Panel" description="¡Bienvenido de nuevo! Aquí tienes un resumen rápido." />
       <main className="flex-1 p-4 md:p-6">
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-2">
           {features.map((feature) => (
