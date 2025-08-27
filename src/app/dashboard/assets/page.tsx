@@ -48,9 +48,13 @@ export default function AssetsPage() {
   const batchQrRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "assets"), (snapshot) => {
+    const q = query(collection(db, "assets"), orderBy("code"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
       const assetsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
       setAssets(assetsData);
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Error fetching assets: ", error);
       setIsLoading(false);
     });
     return () => unsubscribe();
@@ -401,5 +405,3 @@ export default function AssetsPage() {
     </div>
   );
 }
-
-    

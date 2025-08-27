@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { MoreHorizontal, PlusCircle, Loader2 } from "lucide-react";
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 import { Badge } from "@/components/ui/badge";
@@ -40,9 +40,13 @@ export default function CustomersPage() {
   const userRole = useUserRole();
   
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "customers"), (snapshot) => {
+    const q = query(collection(db, "customers"), orderBy("name"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
       const customersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
       setCustomers(customersData);
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Error fetching customers: ", error);
       setIsLoading(false);
     });
     return () => unsubscribe();
