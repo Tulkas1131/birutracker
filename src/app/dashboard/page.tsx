@@ -20,6 +20,8 @@ import {
 import { seedDatabase } from "@/lib/seed";
 import { useToast } from "@/hooks/use-toast";
 
+export const maxDuration = 120; // Aumentar el tiempo de espera a 2 minutos
+
 const features = [
   {
     title: "Gestionar Activos",
@@ -59,6 +61,8 @@ export default function DashboardPage() {
         title: "Base de Datos Poblada",
         description: "Se han añadido los datos de prueba correctamente.",
       });
+      // A simple way to trigger a refresh to show new data on other pages
+      window.location.reload();
     } catch (error) {
       console.error("Error populating database:", error);
       toast({
@@ -115,7 +119,7 @@ export default function DashboardPage() {
                     <AlertDialogHeader>
                       <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Esta acción eliminará todos los datos existentes y los reemplazará con datos de prueba.
+                        Esta acción eliminará todos los datos existentes y los reemplazará con datos de prueba. Esta operación puede tardar unos segundos.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
