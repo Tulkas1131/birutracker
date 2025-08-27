@@ -39,12 +39,14 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [user, loading, error] = useAuthState(auth);
+  const authInstance = auth();
+  const firestore = db();
+  const [user, loading, error] = useAuthState(authInstance);
   const userRole = useUserRole();
   const router = useRouter();
 
   const handleSignOut = async () => {
-    await signOut(auth);
+    await signOut(authInstance);
     router.push('/');
   };
 
@@ -54,7 +56,7 @@ export default function DashboardLayout({
     }
     if (user && !userRole) {
       const getUserRole = async () => {
-        const userDocRef = doc(db, "users", user.uid);
+        const userDocRef = doc(firestore, "users", user.uid);
         const userDocSnap = await getDoc(userDocRef);
         
         if (!userDocSnap.exists()) {
@@ -67,7 +69,7 @@ export default function DashboardLayout({
       };
       getUserRole();
     }
-  }, [user, loading, userRole, router]);
+  }, [user, loading, userRole, router, firestore]);
 
   if (loading) {
     return (

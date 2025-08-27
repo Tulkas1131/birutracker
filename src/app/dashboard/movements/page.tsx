@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { Timestamp, collection, onSnapshot, addDoc, doc, runTransaction, getDoc } from "firebase/firestore";
+import { Timestamp, collection, onSnapshot, doc, runTransaction, getDoc } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { Loader2, QrCode } from "lucide-react";
@@ -31,17 +31,18 @@ const QrScanner = dynamic(() => import('@/components/qr-scanner').then(mod => mo
 export default function MovementsPage() {
   const { toast } = useToast();
   const router = useRouter();
-  const [user] = useAuthState(auth);
+  const [user] = useAuthState(auth());
   const [assets, setAssets] = useState<Asset[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isScannerOpen, setScannerOpen] = useState(false);
   
   useEffect(() => {
-    const unsubAssets = onSnapshot(collection(db, "assets"), (snapshot) => {
+    const firestore = db();
+    const unsubAssets = onSnapshot(collection(firestore, "assets"), (snapshot) => {
       setAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)));
     });
-    const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
+    const unsubCustomers = onSnapshot(collection(firestore, "customers"), (snapshot) => {
       setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer)));
     });
     return () => {
@@ -66,8 +67,9 @@ export default function MovementsPage() {
 
   const handleScanSuccess = async (decodedText: string) => {
     setScannerOpen(false);
+    const firestore = db();
     try {
-      const assetRef = doc(db, 'assets', decodedText);
+      const assetRef = doc(firestore, 'assets', decodedText);
       const assetSnap = await getDoc(assetRef);
       if (assetSnap.exists()) {
         const scannedAsset = { id: assetSnap.id, ...assetSnap.data() } as Asset;
@@ -100,6 +102,7 @@ export default function MovementsPage() {
 
   async function onSubmit(data: MovementFormData) {
     setIsSubmitting(true);
+    const firestore = db();
 
     if (!user) {
        toast({ title: "Error", description: "Debes iniciar sesión para registrar un movimiento.", variant: "destructive" });
@@ -143,7 +146,7 @@ export default function MovementsPage() {
     }
 
     try {
-      await runTransaction(db, async (transaction) => {
+      await runTransaction(firestore, async (transaction) => {
         // 1. Create the new event
         const eventData = {
           asset_id: selectedAsset.id,
@@ -155,10 +158,10 @@ export default function MovementsPage() {
           user_id: user.uid,
           variety: data.variety || "",
         };
-        transaction.set(doc(collection(db, "events")), eventData);
+        transaction.set(doc(collection(firestore, "events")), eventData);
 
         // 2. Update the asset location and state
-        const assetRef = doc(db, "assets", selectedAsset.id);
+        const assetRef = doc(firestore, "assets", selectedAsset.id);
         transaction.update(assetRef, { location: newLocation, state: newState });
       });
 

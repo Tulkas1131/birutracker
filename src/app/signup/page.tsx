@@ -25,10 +25,12 @@ export default function SignupPage() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    const firestore = db();
+    const authInstance = auth();
 
     try {
       // 1. Check if email is in the allowed list
-      const allowedEmailsRef = collection(db, "allowed_emails");
+      const allowedEmailsRef = collection(firestore, "allowed_emails");
       const q = query(allowedEmailsRef, where("email", "==", email.toLowerCase()));
       const querySnapshot = await getDocs(q);
 
@@ -45,11 +47,11 @@ export default function SignupPage() {
       const role = "Operador";
 
       // 2. If allowed, create user
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(authInstance, email, password);
       const user = userCredential.user;
 
       // 3. Create user profile in 'users' collection with the determined role
-      await setDoc(doc(db, "users", user.uid), {
+      await setDoc(doc(firestore, "users", user.uid), {
         email: user.email,
         role: role,
       });

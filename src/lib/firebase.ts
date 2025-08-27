@@ -1,8 +1,8 @@
 
 // Import the functions you need from the SDKs you need
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
+import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
+import { getFirestore, type Firestore } from "firebase/firestore";
+import { getAuth, type Auth } from "firebase/auth";
 
 // Your web app's Firebase configuration - KEEP THIS UPDATED
 const firebaseConfig = {
@@ -16,8 +16,26 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-const db = getFirestore(app);
-const auth = getAuth(app);
+const app: FirebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-export { app, db, auth };
+let db: Firestore;
+let auth: Auth;
+
+// Dynamically get Firestore instance
+const getDb = () => {
+  if (!db) {
+    db = getFirestore(app);
+  }
+  return db;
+};
+
+// Dynamically get Auth instance
+const getAuthInstance = () => {
+  if (!auth) {
+    auth = getAuth(app);
+  }
+  return auth;
+};
+
+// Re-exporting them as 'db' and 'auth' so we don't need to refactor the whole app
+export { app, getDb as db, getAuthInstance as auth };

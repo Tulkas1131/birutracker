@@ -40,7 +40,8 @@ export default function CustomersPage() {
   const userRole = useUserRole();
   
   useEffect(() => {
-    const q = query(collection(db, "customers"), orderBy("name"));
+    const firestore = db();
+    const q = query(collection(firestore, "customers"), orderBy("name"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const customersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
       setCustomers(customersData);
@@ -72,8 +73,9 @@ export default function CustomersPage() {
       });
       return;
     }
+    const firestore = db();
     try {
-      await deleteDoc(doc(db, "customers", id));
+      await deleteDoc(doc(firestore, "customers", id));
       toast({
         title: "Cliente Eliminado",
         description: "El cliente ha sido eliminado de la base de datos.",
@@ -89,15 +91,16 @@ export default function CustomersPage() {
   };
   
   const handleFormSubmit = async (data: Omit<Customer, 'id'>) => {
+    const firestore = db();
     try {
       if (selectedCustomer) {
-        await updateDoc(doc(db, "customers", selectedCustomer.id), data);
+        await updateDoc(doc(firestore, "customers", selectedCustomer.id), data);
         toast({
           title: "Cliente Actualizado",
           description: "Los cambios han sido guardados.",
         });
       } else {
-        await addDoc(collection(db, "customers"), data);
+        await addDoc(collection(firestore, "customers"), data);
         toast({
           title: "Cliente Creado",
           description: "El nuevo cliente ha sido añadido.",

@@ -48,7 +48,8 @@ export default function AssetsPage() {
   const batchQrRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const q = query(collection(db, "assets"), orderBy("code"));
+    const firestore = db();
+    const q = query(collection(firestore, "assets"), orderBy("code"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const assetsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
       setAssets(assetsData);
@@ -140,8 +141,9 @@ export default function AssetsPage() {
       });
       return;
     }
+    const firestore = db();
     try {
-      await deleteDoc(doc(db, "assets", id));
+      await deleteDoc(doc(firestore, "assets", id));
       toast({
         title: "Activo Eliminado",
         description: "El activo ha sido eliminado de la base de datos.",
@@ -157,9 +159,10 @@ export default function AssetsPage() {
   };
 
   const generateNextCode = async (type: 'BARRIL' | 'CO2'): Promise<string> => {
+    const firestore = db();
     const prefix = type === 'BARRIL' ? 'KEG' : 'CO2';
     const q = query(
-      collection(db, "assets"), 
+      collection(firestore, "assets"), 
       where("type", "==", type),
       orderBy("code", "desc"),
       limit(1)
@@ -179,6 +182,7 @@ export default function AssetsPage() {
   };
   
   const handleFormSubmit = async (data: Omit<Asset, 'id' | 'code'>) => {
+    const firestore = db();
     try {
       if (selectedAsset) {
         // Editing existing asset
@@ -187,7 +191,7 @@ export default function AssetsPage() {
           state: data.state,
           location: data.location,
         };
-        await updateDoc(doc(db, "assets", selectedAsset.id), assetDataToUpdate);
+        await updateDoc(doc(firestore, "assets", selectedAsset.id), assetDataToUpdate);
         toast({
           title: "Activo Actualizado",
           description: "Los cambios han sido guardados.",
@@ -196,7 +200,7 @@ export default function AssetsPage() {
         // Creating new asset
         const newCode = await generateNextCode(data.type);
         const newAssetData = { ...data, code: newCode };
-        await addDoc(collection(db, "assets"), newAssetData);
+        await addDoc(collection(firestore, "assets"), newAssetData);
         toast({
           title: "Activo Creado",
           description: `El nuevo activo ha sido añadido con el código ${newCode}.`,

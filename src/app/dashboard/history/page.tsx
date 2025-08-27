@@ -64,7 +64,8 @@ export default function HistoryPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const q = query(collection(db, "events"), orderBy("timestamp", "desc"));
+    const firestore = db();
+    const q = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
       setEvents(eventsData);
