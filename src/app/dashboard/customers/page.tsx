@@ -62,8 +62,8 @@ export default function CustomersPage() {
   const handleDelete = async (id: string) => {
     if (userRole !== 'Admin') {
        toast({
-        title: "Access Denied",
-        description: "You do not have permission to delete customers.",
+        title: "Acceso Denegado",
+        description: "No tienes permiso para eliminar clientes.",
         variant: "destructive",
       });
       return;
@@ -71,14 +71,14 @@ export default function CustomersPage() {
     try {
       await deleteDoc(doc(db, "customers", id));
       toast({
-        title: "Customer Deleted",
-        description: "The customer has been removed from the database.",
+        title: "Cliente Eliminado",
+        description: "El cliente ha sido eliminado de la base de datos.",
       });
     } catch (error) {
-       console.error("Error deleting customer: ", error);
+       console.error("Error eliminando cliente: ", error);
       toast({
         title: "Error",
-        description: "Could not delete customer.",
+        description: "No se pudo eliminar el cliente.",
         variant: "destructive",
       });
     }
@@ -89,23 +89,23 @@ export default function CustomersPage() {
       if (selectedCustomer) {
         await updateDoc(doc(db, "customers", selectedCustomer.id), data);
         toast({
-          title: "Customer Updated",
-          description: "Changes have been saved.",
+          title: "Cliente Actualizado",
+          description: "Los cambios han sido guardados.",
         });
       } else {
         await addDoc(collection(db, "customers"), data);
         toast({
-          title: "Customer Created",
-          description: "The new customer has been added.",
+          title: "Cliente Creado",
+          description: "El nuevo cliente ha sido añadido.",
         });
       }
       setFormOpen(false);
       setSelectedCustomer(undefined);
     } catch (error) {
-      console.error("Error saving customer: ", error);
+      console.error("Error guardando cliente: ", error);
       toast({
         title: "Error",
-        description: "Could not save data.",
+        description: "No se pudieron guardar los datos.",
         variant: "destructive",
       });
     }
@@ -115,13 +115,13 @@ export default function CustomersPage() {
     <div className="flex flex-1 flex-col">
        <Dialog open={isFormOpen} onOpenChange={setFormOpen}>
         <PageHeader
-          title="Customers"
-          description="Manage your customers and distributors."
+          title="Clientes"
+          description="Gestiona tus clientes y distribuidores."
           action={
             <DialogTrigger asChild>
                 <Button size="lg" onClick={handleNew}>
                     <PlusCircle className="mr-2 h-5 w-5" />
-                    New Customer
+                    Nuevo Cliente
                 </Button>
             </DialogTrigger>
           }
@@ -132,12 +132,12 @@ export default function CustomersPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Address</TableHead>
-                      <TableHead>Contact</TableHead>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Dirección</TableHead>
+                      <TableHead>Contacto</TableHead>
                       <TableHead>
-                        <span className="sr-only">Actions</span>
+                        <span className="sr-only">Acciones</span>
                       </TableHead>
                     </TableRow>
                   </TableHeader>
@@ -151,7 +151,7 @@ export default function CustomersPage() {
                     ) : customers.length === 0 ? (
                        <TableRow>
                           <TableCell colSpan={5} className="h-24 text-center">
-                            No customers yet. Add one to get started!
+                            No hay clientes. ¡Añade uno para empezar!
                           </TableCell>
                         </TableRow>
                     ) : (
@@ -172,11 +172,11 @@ export default function CustomersPage() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuItem onSelect={() => handleEdit(customer)}>Edit</DropdownMenuItem>
+                                <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                <DropdownMenuItem onSelect={() => handleEdit(customer)}>Editar</DropdownMenuItem>
                                 {userRole === 'Admin' && (
                                   <DropdownMenuItem onSelect={() => handleDelete(customer.id)} className="text-destructive">
-                                    Delete
+                                    Eliminar
                                   </DropdownMenuItem>
                                 )}
                               </DropdownMenuContent>
@@ -192,7 +192,7 @@ export default function CustomersPage() {
         </main>
         <DialogContent>
             <DialogHeader>
-                <DialogTitle>{selectedCustomer ? "Edit Customer" : "Create New Customer"}</DialogTitle>
+                <DialogTitle>{selectedCustomer ? "Editar Cliente" : "Crear Nuevo Cliente"}</DialogTitle>
             </DialogHeader>
             <CustomerForm
               defaultValues={selectedCustomer}

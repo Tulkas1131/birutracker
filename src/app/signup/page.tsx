@@ -34,8 +34,8 @@ export default function SignupPage() {
 
       if (querySnapshot.empty) {
         toast({
-          title: "Unauthorized Access",
-          description: "This email address is not permitted to register.",
+          title: "Acceso no Autorizado",
+          description: "Esta dirección de correo no tiene permiso para registrarse.",
           variant: "destructive",
         });
         setIsLoading(false);
@@ -55,8 +55,8 @@ export default function SignupPage() {
       });
 
       toast({
-        title: "Account Created!",
-        description: `Welcome. You have been registered as ${role}.`,
+        title: "¡Cuenta Creada!",
+        description: `Bienvenido. Has sido registrado como ${role}.`,
       });
 
       router.push('/dashboard');
@@ -64,14 +64,14 @@ export default function SignupPage() {
       console.error(error);
       if (error.code === 'auth/email-already-in-use') {
         toast({
-          title: "Signup Error",
-          description: "This email is already registered. Please log in instead.",
+          title: "Error de Registro",
+          description: "Este correo ya está registrado. Por favor, inicia sesión.",
           variant: "destructive",
         });
       } else {
         toast({
-          title: "Signup Error",
-          description: "An unexpected error occurred. Please try again.",
+          title: "Error de Registro",
+          description: "Ocurrió un error inesperado. Por favor, inténtalo de nuevo.",
           variant: "destructive",
         });
       }
@@ -86,8 +86,8 @@ export default function SignupPage() {
       <Card className="mx-auto w-full max-w-sm">
         <CardHeader className="text-center">
           <Logo className="mx-auto mb-4 h-12 w-12" />
-          <CardTitle className="text-2xl">Create an account</CardTitle>
-          <CardDescription>Enter your information to create an account</CardDescription>
+          <CardTitle className="text-2xl">Crear una cuenta</CardTitle>
+          <CardDescription>Ingresa tu información para crear una cuenta</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSignup}>
@@ -97,14 +97,14 @@ export default function SignupPage() {
                 <Input 
                   id="email" 
                   type="email" 
-                  placeholder="m@example.com" 
+                  placeholder="m@ejemplo.com" 
                   required 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">Contraseña</Label>
                 <Input 
                   id="password" 
                   type="password" 
@@ -114,14 +114,14 @@ export default function SignupPage() {
                 />
               </div>
               <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
-                 {isLoading ? <Loader2 className="animate-spin" /> : 'Create Account'}
+                 {isLoading ? <Loader2 className="animate-spin" /> : 'Crear Cuenta'}
               </Button>
             </div>
           </form>
           <div className="mt-4 text-center text-sm">
-            Already have an account?{' '}
+            ¿Ya tienes una cuenta?{' '}
             <Link href="/" className="underline">
-              Login
+              Inicia Sesión
             </Link>
           </div>
         </CardContent>

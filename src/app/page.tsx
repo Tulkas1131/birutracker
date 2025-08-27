@@ -30,8 +30,8 @@ export default function LoginPage() {
     } catch (error: any) {
       console.error(error);
       toast({
-        title: "Login Error",
-        description: "The email or password you entered is incorrect.",
+        title: "Error de Inicio de Sesión",
+        description: "El correo electrónico o la contraseña que ingresaste son incorrectos.",
         variant: "destructive",
       });
     } finally {
@@ -44,8 +44,8 @@ export default function LoginPage() {
       <Card className="mx-auto w-full max-w-sm">
         <CardHeader className="text-center">
           <Logo className="mx-auto mb-4 h-12 w-12" />
-          <CardTitle className="text-2xl">Welcome to BiruTracker</CardTitle>
-          <CardDescription>Enter your email below to login to your account</CardDescription>
+          <CardTitle className="text-2xl">Bienvenido a BiruTracker</CardTitle>
+          <CardDescription>Ingresa tu correo para iniciar sesión en tu cuenta</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin}>
@@ -55,7 +55,7 @@ export default function LoginPage() {
                 <Input 
                   id="email" 
                   type="email" 
-                  placeholder="m@example.com" 
+                  placeholder="m@ejemplo.com" 
                   required 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -63,9 +63,9 @@ export default function LoginPage() {
               </div>
               <div className="grid gap-2">
                 <div className="flex items-center">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="password">Contraseña</Label>
                   <Link href="#" className="ml-auto inline-block text-sm underline">
-                    Forgot your password?
+                    ¿Olvidaste tu contraseña?
                   </Link>
                 </div>
                 <Input 
@@ -77,14 +77,14 @@ export default function LoginPage() {
                 />
               </div>
               <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
-                {isLoading ? <Loader2 className="animate-spin" /> : 'Login'}
+                {isLoading ? <Loader2 className="animate-spin" /> : 'Iniciar Sesión'}
               </Button>
             </div>
           </form>
           <div className="mt-4 text-center text-sm">
-            Don&apos;t have an account?{' '}
+            ¿No tienes una cuenta?{' '}
             <Link href="/signup" className="underline">
-              Sign up
+              Regístrate
             </Link>
           </div>
         </CardContent>

@@ -34,9 +34,9 @@ export function CustomerForm({ defaultValues, onSubmit, onCancel }: CustomerForm
           name="name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Customer Name</FormLabel>
+              <FormLabel>Nombre del Cliente</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., The Corner Bar" {...field} />
+                <Input placeholder="ej., El Bar de la Esquina" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -47,17 +47,17 @@ export function CustomerForm({ defaultValues, onSubmit, onCancel }: CustomerForm
           name="type"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Type</FormLabel>
+              <FormLabel>Tipo</FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select customer type" />
+                    <SelectValue placeholder="Selecciona el tipo de cliente" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
                   <SelectItem value="BAR">BAR</SelectItem>
-                  <SelectItem value="DISTRIBUIDOR">DISTRIBUTOR</SelectItem>
-                  <SelectItem value="OTRO">OTHER</SelectItem>
+                  <SelectItem value="DISTRIBUIDOR">DISTRIBUIDOR</SelectItem>
+                  <SelectItem value="OTRO">OTRO</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -69,9 +69,9 @@ export function CustomerForm({ defaultValues, onSubmit, onCancel }: CustomerForm
           name="address"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Address</FormLabel>
+              <FormLabel>Dirección</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., 123 Main St" {...field} />
+                <Input placeholder="ej., Av. Siempre Viva 123" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -82,17 +82,17 @@ export function CustomerForm({ defaultValues, onSubmit, onCancel }: CustomerForm
           name="contact"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Contact</FormLabel>
+              <FormLabel>Contacto</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., John Doe" {...field} />
+                <Input placeholder="ej., Juan Pérez" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-          <Button type="submit">Save</Button>
+          <Button type="button" variant="outline" onClick={onCancel}>Cancelar</Button>
+          <Button type="submit">Guardar</Button>
         </div>
       </form>
     </Form>
