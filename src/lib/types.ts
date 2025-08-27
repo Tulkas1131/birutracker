@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Timestamp } from 'firebase/firestore';
 
 // Data types
 export type Asset = {
@@ -24,8 +25,8 @@ export type Event = {
   event_type: 'SALIDA_LLENO' | 'DEVOLUCION_VACIO' | 'SALIDA_VACIO' | 'ENTRADA_LLENO';
   customer_id: string;
   customer_name: string;
-  user_id: string;
-  timestamp: string;
+  user_id: string; // This would be the authenticated user's ID
+  timestamp: Timestamp;
   variety?: string;
 };
 
