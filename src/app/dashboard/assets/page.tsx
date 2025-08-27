@@ -1,8 +1,9 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
 import { MoreHorizontal, PlusCircle, Loader2 } from "lucide-react";
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 import { Badge } from "@/components/ui/badge";
@@ -75,6 +76,35 @@ export default function AssetsPage() {
   
   const handleFormSubmit = async (data: Omit<Asset, 'id'>) => {
     try {
+      // Check for uniqueness of the asset code
+      const q = query(collection(db, "assets"), where("code", "==", data.code));
+      const querySnapshot = await getDocs(q);
+      
+      let isDuplicate = false;
+      if (!querySnapshot.empty) {
+        if (selectedAsset) {
+          // If editing, check if the found asset is different from the current one
+          querySnapshot.forEach((doc) => {
+            if (doc.id !== selectedAsset.id) {
+              isDuplicate = true;
+            }
+          });
+        } else {
+          // If creating, any result is a duplicate
+          isDuplicate = true;
+        }
+      }
+
+      if (isDuplicate) {
+        toast({
+          title: "Código Duplicado",
+          description: `El código "${data.code}" ya está en uso. Por favor, elige uno diferente.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+
       if (selectedAsset) {
         await updateDoc(doc(db, "assets", selectedAsset.id), data);
         toast({
