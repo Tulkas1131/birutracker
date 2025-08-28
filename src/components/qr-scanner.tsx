@@ -55,11 +55,14 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
                 }
             } catch (err) {
                 console.error("Error getting cameras", err);
-                toast({
-                    title: "Error de Cámara",
-                    description: "No se pudo acceder a la cámara. Asegúrate de tener una y de haber dado los permisos necesarios.",
-                    variant: "destructive",
-                });
+                 // Only show toast error if on mobile, on PC it's an expected scenario
+                if (isMobile) {
+                    toast({
+                        title: "Error de Cámara",
+                        description: "No se pudo acceder a la cámara. Asegúrate de tener una y de haber dado los permisos necesarios.",
+                        variant: "destructive",
+                    });
+                }
             }
         };
 
@@ -72,7 +75,7 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
                 });
             }
         };
-    }, [onScanSuccess, onScanError, toast]);
+    }, [onScanSuccess, onScanError, toast, isMobile]);
 
     const switchCamera = () => {
         if (cameras.length > 1 && activeCameraId) {

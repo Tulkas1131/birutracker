@@ -49,7 +49,7 @@ export default function LoginPage() {
           <Logo className="mx-auto mb-4 h-12 w-12" />
           <CardTitle className="text-2xl">Bienvenido a BiruTracker</CardTitle>
           <CardDescription>
-            {isMobile ? "Ingresa tus datos para iniciar sesión desde tu móvil." : "Ingresa tu correo para iniciar sesión en tu cuenta."}
+            {isMobile ? "Ingresa tus datos para iniciar sesión." : "Ingresa tu correo para iniciar sesión en tu cuenta."}
           </CardDescription>
         </CardHeader>
         <CardContent>
