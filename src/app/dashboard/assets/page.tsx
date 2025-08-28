@@ -266,8 +266,19 @@ export default function AssetsPage() {
         return "outline";
       case "EN_PLANTA":
         return "secondary";
+      case "EN_PROVEEDOR":
+        return "default"; // Or any other variant you prefer
       default:
         return "default";
+    }
+  };
+
+  const getLocationText = (location: Asset["location"]) => {
+    switch (location) {
+        case "EN_CLIENTE": return "En Cliente";
+        case "EN_PLANTA": return "En Planta";
+        case "EN_PROVEEDOR": return "En Proveedor";
+        default: return location;
     }
   };
   
@@ -315,7 +326,7 @@ export default function AssetsPage() {
               </TableCell>
               <TableCell>
                 <Badge variant={getLocationVariant(asset.location)}>
-                  {asset.location === 'EN_PLANTA' ? 'En Planta' : 'En Cliente'}
+                  {getLocationText(asset.location)}
                 </Badge>
               </TableCell>
               <TableCell>

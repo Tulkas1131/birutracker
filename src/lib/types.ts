@@ -8,7 +8,7 @@ export type Asset = {
   type: 'BARRIL' | 'CO2';
   format: string;
   state: 'LLENO' | 'VACIO';
-  location: 'EN_CLIENTE' | 'EN_PLANTA';
+  location: 'EN_CLIENTE' | 'EN_PLANTA' | 'EN_PROVEEDOR';
 };
 
 export type Customer = {
@@ -38,7 +38,7 @@ export const assetSchema = z.object({
   type: z.enum(['BARRIL', 'CO2']),
   format: z.string().min(1, 'Format is required'),
   state: z.enum(['LLENO', 'VACIO']),
-  location: z.enum(['EN_CLIENTE', 'EN_PLANTA']),
+  location: z.enum(['EN_CLIENTE', 'EN_PLANTA', 'EN_PROVEEDOR']),
 });
 
 export type AssetFormData = z.infer<typeof assetSchema>;
