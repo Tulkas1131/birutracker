@@ -1,8 +1,8 @@
 
 "use client";
 
-import { useEffect, useRef, memo } from 'react';
-import { Html5Qrcode, Html5QrcodeScanner, Html5QrcodeSupportedFormats, Html5QrcodeScannerState } from 'html5-qrcode';
+import { useEffect, memo } from 'react';
+import { Html5QrcodeScanner, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { useToast } from "@/hooks/use-toast";
 
 interface QrScannerProps {
@@ -11,7 +11,6 @@ interface QrScannerProps {
 }
 
 function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
-    const scannerRef = useRef<Html5QrcodeScanner | null>(null);
     const { toast } = useToast();
 
     useEffect(() => {
@@ -25,35 +24,17 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
         const html5QrcodeScanner = new Html5QrcodeScanner(
             "qr-reader", 
             config, 
-            false
+            false /* verbose */
         );
 
-        scannerRef.current = html5QrcodeScanner;
-
-        const startScanner = async () => {
-             try {
-                await Html5Qrcode.getCameras();
-                if (scannerRef.current && scannerRef.current.getState() !== Html5QrcodeScannerState.SCANNING) {
-                  html5QrcodeScanner.render(onScanSuccess, onScanError);
-                }
-            } catch (err) {
-                console.error("Error getting cameras", err);
-                 toast({
-                    title: "Error de Cámara",
-                    description: "No se pudo acceder a la cámara. Asegúrate de tener una y de haber dado los permisos necesarios.",
-                    variant: "destructive",
-                });
-            }
-        };
-
-        startScanner();
+        html5QrcodeScanner.render(onScanSuccess, onScanError);
 
         return () => {
-            if (scannerRef.current && scannerRef.current.getState() === Html5QrcodeScannerState.SCANNING) {
-                 scannerRef.current.clear().catch(error => {
-                    console.error("Failed to clear html5QrcodeScanner.", error);
-                });
-            }
+            html5QrcodeScanner.clear().catch(error => {
+                // This can happen if the component is unmounted before the scanner is fully initialized.
+                // It's safe to ignore in this context.
+                console.log("QR Scanner clear failed, likely due to fast unmount:", error);
+            });
         };
     }, [onScanSuccess, onScanError, toast]);
 
