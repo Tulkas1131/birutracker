@@ -36,7 +36,22 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
                     setCameras(devices);
                     // Prioritize rear camera ('environment')
                     const rearCamera = devices.find(device => device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('rear'));
-                    setActiveCameraId(rearCamera ? rearCamera.id : devices[0].id);
+                    const selectedCameraId = rearCamera ? rearCamera.id : devices[0].id;
+                    setActiveCameraId(selectedCameraId);
+
+                    const config = {
+                        fps: 10,
+                        qrbox: { width: 250, height: 250 },
+                        rememberLastUsedCamera: false,
+                        supportedScanTypes: [],
+                        camera: {
+                            deviceId: { exact: selectedCameraId }
+                        }
+                    };
+                    
+                    const html5QrcodeScanner = new Html5QrcodeScanner("qr-reader", config, false);
+                    scannerRef.current = html5QrcodeScanner;
+                    html5QrcodeScanner.render(onScanSuccess, onScanError);
                 }
             } catch (err) {
                 console.error("Error getting cameras", err);
@@ -50,33 +65,6 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
 
         getCamerasAndStart();
 
-    }, [toast]);
-    
-    useEffect(() => {
-        if (!activeCameraId) return;
-
-        const config = {
-            fps: 10,
-            qrbox: { width: 250, height: 250 },
-            rememberLastUsedCamera: false,
-            supportedScanTypes: [],
-            camera: {
-                deviceId: { exact: activeCameraId }
-            }
-        };
-
-        const html5QrcodeScanner = new Html5QrcodeScanner(
-            "qr-reader",
-            config,
-            false // verbose
-        );
-        scannerRef.current = html5QrcodeScanner;
-
-        
-        if (scannerRef.current && scannerRef.current.getState() !== Html5QrcodeScannerState.SCANNING) {
-            html5QrcodeScanner.render(onScanSuccess, onScanError);
-        }
-
         return () => {
             if (scannerRef.current && scannerRef.current.getState() === Html5QrcodeScannerState.SCANNING) {
                 scannerRef.current.clear().catch(error => {
@@ -84,13 +72,23 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
                 });
             }
         };
-    }, [activeCameraId, onScanSuccess, onScanError]);
+    }, [onScanSuccess, onScanError, toast]);
 
     const switchCamera = () => {
         if (cameras.length > 1 && activeCameraId) {
             const currentIndex = cameras.findIndex(c => c.id === activeCameraId);
             const nextIndex = (currentIndex + 1) % cameras.length;
-            setActiveCameraId(cameras[nextIndex].id);
+            const nextCameraId = cameras[nextIndex].id;
+
+            if (scannerRef.current) {
+                scannerRef.current.clear().then(() => {
+                    setActiveCameraId(nextCameraId); // This will trigger the useEffect to restart the scanner
+                }).catch(err => {
+                    console.error("Failed to clear scanner for camera switch", err);
+                });
+            } else {
+                 setActiveCameraId(nextCameraId);
+            }
         }
     };
     
