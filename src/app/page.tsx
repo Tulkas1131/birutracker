@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Logo } from '@/components/logo';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,6 +21,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const isMobile = useIsMobile();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,7 +48,9 @@ export default function LoginPage() {
         <CardHeader className="text-center">
           <Logo className="mx-auto mb-4 h-12 w-12" />
           <CardTitle className="text-2xl">Bienvenido a BiruTracker</CardTitle>
-          <CardDescription>Ingresa tu correo para iniciar sesión en tu cuenta</CardDescription>
+          <CardDescription>
+            {isMobile ? "Ingresa tus datos para iniciar sesión desde tu móvil." : "Ingresa tu correo para iniciar sesión en tu cuenta."}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin}>
