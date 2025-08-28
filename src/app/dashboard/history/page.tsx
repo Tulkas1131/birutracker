@@ -10,16 +10,31 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PageHeader } from "@/components/page-header";
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { Event } from "@/lib/types";
+import type { Event, Asset } from "@/lib/types";
 import { useUserRole } from '@/hooks/use-user-role';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
+import { useData } from '@/context/data-context';
+import { differenceInDays } from 'date-fns';
+import { Badge } from '@/components/ui/badge';
 
-function EventTable({ events, isLoading, onDelete }: { events: Event[], isLoading: boolean, onDelete: (id: string) => void }) {
+function EventTable({ events, assets, isLoading, onDelete }: { events: Event[], assets: Asset[], isLoading: boolean, onDelete: (id: string) => void }) {
   const userRole = useUserRole();
+  const assetsMap = useMemo(() => new Map(assets.map(asset => [asset.id, asset])), [assets]);
+
   const formatDate = (timestamp: Timestamp) => {
     if (!timestamp || !timestamp.toDate) return 'Fecha inválida';
     return timestamp.toDate().toLocaleString();
+  };
+
+  const getDaysAtCustomer = (event: Event) => {
+    const asset = assetsMap.get(event.asset_id);
+    // Only calculate for departure events of assets that are currently with a customer
+    if (event.event_type === 'SALIDA_LLENO' && asset && asset.location === 'EN_CLIENTE') {
+      const days = differenceInDays(new Date(), event.timestamp.toDate());
+      return days;
+    }
+    return null;
   };
 
   if (isLoading) {
@@ -39,32 +54,47 @@ function EventTable({ events, isLoading, onDelete }: { events: Event[], isLoadin
             <TableHead>Código de Activo</TableHead>
             <TableHead>Tipo de Evento</TableHead>
             <TableHead>Cliente</TableHead>
+            <TableHead>Días en Cliente</TableHead>
             <TableHead>Variedad</TableHead>
             {userRole === 'Admin' && <TableHead>Acciones</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
-          {events.map((event) => (
-            <TableRow key={event.id}>
-              <TableCell>{formatDate(event.timestamp)}</TableCell>
-              <TableCell className="font-medium">{event.asset_code}</TableCell>
-              <TableCell>{event.event_type}</TableCell>
-              <TableCell>{event.customer_name}</TableCell>
-              <TableCell>{event.variety || 'N/A'}</TableCell>
-              {userRole === 'Admin' && (
+          {events.map((event) => {
+            const daysAtCustomer = getDaysAtCustomer(event);
+            return (
+              <TableRow key={event.id}>
+                <TableCell>{formatDate(event.timestamp)}</TableCell>
+                <TableCell className="font-medium">{event.asset_code}</TableCell>
+                <TableCell>{event.event_type}</TableCell>
+                <TableCell>{event.customer_name}</TableCell>
                 <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-destructive hover:text-destructive"
-                    onClick={() => onDelete(event.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {daysAtCustomer !== null ? (
+                     daysAtCustomer > 30 ? (
+                       <Badge variant="destructive">{daysAtCustomer} días</Badge>
+                     ) : (
+                       <span>{daysAtCustomer} días</span>
+                     )
+                  ) : (
+                    '--'
+                  )}
                 </TableCell>
-              )}
-            </TableRow>
-          ))}
+                <TableCell>{event.variety || 'N/A'}</TableCell>
+                {userRole === 'Admin' && (
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => onDelete(event.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                )}
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
       {events.length === 0 && !isLoading && (
@@ -78,7 +108,8 @@ function EventTable({ events, isLoading, onDelete }: { events: Event[], isLoadin
 
 export default function HistoryPage() {
   const [events, setEvents] = useState<Event[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { assets, isLoading: isAssetsLoading } = useData();
+  const [isEventsLoading, setIsEventsLoading] = useState(true);
   const { toast } = useToast();
   const userRole = useUserRole();
 
@@ -88,7 +119,7 @@ export default function HistoryPage() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
       setEvents(eventsData);
-      setIsLoading(false);
+      setIsEventsLoading(false);
     });
     return () => unsubscribe();
   }, []);
@@ -141,6 +172,8 @@ export default function HistoryPage() {
       });
   }, [events, filters]);
   
+  const isLoading = isAssetsLoading || isEventsLoading;
+
   return (
     <div className="flex flex-1 flex-col">
       <PageHeader
@@ -180,7 +213,7 @@ export default function HistoryPage() {
                 </SelectContent>
               </Select>
             </div>
-            <EventTable events={filteredEvents} isLoading={isLoading} onDelete={handleDelete} />
+            <EventTable events={filteredEvents} assets={assets} isLoading={isLoading} onDelete={handleDelete} />
           </CardContent>
         </Card>
       </main>
