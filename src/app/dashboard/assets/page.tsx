@@ -1,9 +1,9 @@
 
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus } from "lucide-react";
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, orderBy, limit, writeBatch } from "firebase/firestore";
+import { addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, orderBy, limit, writeBatch, collection } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import QRCode from "qrcode.react";
 
@@ -34,10 +34,10 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, Dialog
 import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/use-user-role";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useData } from "@/context/data-context";
 
 export default function AssetsPage() {
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { assets, isLoading } = useData();
   const [isFormOpen, setFormOpen] = useState(false);
   const [isBatchFormOpen, setBatchFormOpen] = useState(false);
   const [isQrCodeOpen, setQrCodeOpen] = useState(false);
@@ -48,20 +48,6 @@ export default function AssetsPage() {
   const userRole = useUserRole();
   const qrCodeRef = useRef<HTMLDivElement>(null);
   const batchQrRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const firestore = db();
-    const q = query(collection(firestore, "assets"), orderBy("code"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const assetsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
-      setAssets(assetsData);
-      setIsLoading(false);
-    }, (error) => {
-      console.error("Error fetching assets: ", error);
-      setIsLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
 
   const handleEdit = (asset: Asset) => {
     setSelectedAsset(asset);

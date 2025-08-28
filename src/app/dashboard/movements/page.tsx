@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { Timestamp, collection, onSnapshot, doc, runTransaction, getDoc } from "firebase/firestore";
+import { Timestamp, collection, doc, runTransaction, getDoc } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { Loader2, QrCode } from "lucide-react";
@@ -20,6 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { movementSchema, type MovementFormData, type Asset, type Customer } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useData } from "@/context/data-context";
 
 // Dynamically import the QrScanner component
 const QrScanner = dynamic(() => import('@/components/qr-scanner').then(mod => mod.QrScanner), {
@@ -32,25 +33,10 @@ export default function MovementsPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [user] = useAuthState(auth());
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const { assets, customers } = useData();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isScannerOpen, setScannerOpen] = useState(false);
   
-  useEffect(() => {
-    const firestore = db();
-    const unsubAssets = onSnapshot(collection(firestore, "assets"), (snapshot) => {
-      setAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)));
-    });
-    const unsubCustomers = onSnapshot(collection(firestore, "customers"), (snapshot) => {
-      setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer)));
-    });
-    return () => {
-      unsubAssets();
-      unsubCustomers();
-    };
-  }, []);
-
   const form = useForm<MovementFormData>({
     resolver: zodResolver(movementSchema),
     defaultValues: {

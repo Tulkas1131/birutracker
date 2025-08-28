@@ -1,9 +1,9 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { MoreHorizontal, PlusCircle, Loader2 } from "lucide-react";
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, orderBy } from "firebase/firestore";
+import { addDoc, updateDoc, deleteDoc, doc, collection } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 import { Badge } from "@/components/ui/badge";
@@ -30,29 +30,14 @@ import { CustomerForm } from "@/components/customer-form";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/use-user-role";
+import { useData } from "@/context/data-context";
 
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { customers, isLoading } = useData();
   const [isFormOpen, setFormOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | undefined>(undefined);
   const { toast } = useToast();
   const userRole = useUserRole();
-  
-  useEffect(() => {
-    const firestore = db();
-    const q = query(collection(firestore, "customers"), orderBy("name"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const customersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
-      setCustomers(customersData);
-      setIsLoading(false);
-    }, (error) => {
-      console.error("Error fetching customers: ", error);
-      setIsLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
 
   const handleEdit = (customer: Customer) => {
     setSelectedCustomer(customer);
