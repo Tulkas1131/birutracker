@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus } from "lucide-react";
 import { addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, orderBy, limit, writeBatch, collection } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -271,6 +271,18 @@ export default function AssetsPage() {
   const barrels = assets.filter(asset => asset.type === 'BARRIL');
   const co2Cylinders = assets.filter(asset => asset.type === 'CO2');
 
+  const assetCounts = useMemo(() => {
+    const calculateCounts = (assetList: Asset[]) => ({
+      inPlant: assetList.filter(a => a.location === 'EN_PLANTA').length,
+      inCustomer: assetList.filter(a => a.location === 'EN_CLIENTE').length,
+    });
+    return {
+      barrels: calculateCounts(barrels),
+      co2: calculateCounts(co2Cylinders),
+    };
+  }, [barrels, co2Cylinders]);
+
+
   const assetsToPrint = activeTab === 'barrels' ? barrels : co2Cylinders;
 
   const AssetTable = ({ assetList }: { assetList: Asset[] }) => (
@@ -373,10 +385,26 @@ export default function AssetsPage() {
         />
         <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
             <Tabs defaultValue={activeTab} onValueChange={setActiveTab}>
-              <TabsList>
-                <TabsTrigger value="barrels">Barriles ({barrels.length})</TabsTrigger>
-                <TabsTrigger value="co2">CO2 ({co2Cylinders.length})</TabsTrigger>
-              </TabsList>
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
+                <TabsList>
+                  <TabsTrigger value="barrels">Barriles ({barrels.length})</TabsTrigger>
+                  <TabsTrigger value="co2">CO2 ({co2Cylinders.length})</TabsTrigger>
+                </TabsList>
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    {activeTab === 'barrels' && (
+                        <>
+                            <span>En Planta: <Badge variant="secondary">{assetCounts.barrels.inPlant}</Badge></span>
+                            <span>En Cliente: <Badge variant="outline">{assetCounts.barrels.inCustomer}</Badge></span>
+                        </>
+                    )}
+                    {activeTab === 'co2' && (
+                        <>
+                            <span>En Planta: <Badge variant="secondary">{assetCounts.co2.inPlant}</Badge></span>
+                            <span>En Cliente: <Badge variant="outline">{assetCounts.co2.inCustomer}</Badge></span>
+                        </>
+                    )}
+                </div>
+              </div>
               <TabsContent value="barrels">
                 <Card>
                   <CardContent className="p-0">
