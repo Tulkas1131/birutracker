@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Logo } from "@/components/logo";
 import { useUserRole } from "@/hooks/use-user-role";
+import { PageHeader } from "@/components/page-header";
 
 function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const authInstance = auth();
@@ -102,7 +103,9 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2">
             <Logo className="size-7" />
             <span className="text-lg font-semibold">BiruTracker</span>
-            <SidebarTrigger className="ml-auto" />
+             <div className="ml-auto">
+               <span className="sr-only">Toggle Sidebar</span>
+             </div>
           </div>
         </SidebarHeader>
         <SidebarContent>
@@ -135,7 +138,15 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
           </div>
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset>{children}</SidebarInset>
+      <SidebarInset>
+         <header className="flex h-14 items-center justify-between border-b bg-background px-4 md:px-6">
+            <SidebarTrigger />
+            <div className="flex-1">
+              {/* You can add breadcrumbs or other header elements here */}
+            </div>
+          </header>
+        {children}
+      </SidebarInset>
     </SidebarProvider>
   );
 }
