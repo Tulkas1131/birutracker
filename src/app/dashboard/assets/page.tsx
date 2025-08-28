@@ -203,7 +203,7 @@ export default function AssetsPage() {
         // Creating new asset
         const { prefix, nextNumber } = await generateNextCode(data.type);
         const newCode = `${prefix}-${String(nextNumber).padStart(3, '0')}`;
-        const newAssetData = { ...data, code: newCode };
+        const newAssetData = { ...data, code: newCode, state: 'VACIO' as const, location: 'EN_PLANTA' as const };
         await addDoc(collection(firestore, "assets"), newAssetData);
         toast({
           title: "Activo Creado",
@@ -434,7 +434,7 @@ export default function AssetsPage() {
             </DialogHeader>
             {selectedAsset && (
                 <div ref={qrCodeRef} className="single-qr-container">
-                    <QRCode value={selectedAsset.id} size={256} />
+                    <QRCode value={selectedAsset.id} size={256} renderAs="svg" />
                     <h1>{selectedAsset.code}</h1>
                     <p>{selectedAsset.format} - {selectedAsset.type === 'BARRIL' ? 'Barril' : 'CO2'}</p>
                 </div>
@@ -454,7 +454,7 @@ export default function AssetsPage() {
               <div ref={batchQrRef} className="print-container">
                 {assetsToPrint.map(asset => (
                   <div key={asset.id} className="qr-item">
-                    <QRCode value={asset.id} size={180} />
+                    <QRCode value={asset.id} size={180} renderAs="svg" />
                     <h1>{asset.code}</h1>
                   </div>
                 ))}
