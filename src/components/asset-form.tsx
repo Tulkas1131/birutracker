@@ -23,7 +23,7 @@ export function AssetForm({ defaultValues, onSubmit, onCancel }: AssetFormProps)
       code: "Será autogenerado",
       type: "BARRIL",
       format: "",
-      state: "LLENO",
+      state: "VACIO",
       location: "EN_PLANTA",
     },
   });
@@ -36,7 +36,7 @@ export function AssetForm({ defaultValues, onSubmit, onCancel }: AssetFormProps)
         code: "Será autogenerado",
         type: "BARRIL",
         format: "",
-        state: "LLENO",
+        state: "VACIO",
         location: "EN_PLANTA",
       });
     }

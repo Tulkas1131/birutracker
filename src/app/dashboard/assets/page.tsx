@@ -235,7 +235,7 @@ export default function AssetsPage() {
           type: data.type,
           format: data.format,
           code: newCode,
-          state: 'LLENO' as const,
+          state: 'VACIO' as const,
           location: 'EN_PLANTA' as const,
         };
         const newAssetRef = doc(collection(firestore, "assets"));

@@ -2,17 +2,21 @@
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
-import { Timestamp, collection, onSnapshot, query, orderBy } from "firebase/firestore";
+import { Timestamp, collection, onSnapshot, query, orderBy, deleteDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Loader2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { Event } from "@/lib/types";
+import { useUserRole } from '@/hooks/use-user-role';
+import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
 
-function EventTable({ events, isLoading }: { events: Event[], isLoading: boolean }) {
+function EventTable({ events, isLoading, onDelete }: { events: Event[], isLoading: boolean, onDelete: (id: string) => void }) {
+  const userRole = useUserRole();
   const formatDate = (timestamp: Timestamp) => {
     if (!timestamp || !timestamp.toDate) return 'Fecha inválida';
     return timestamp.toDate().toLocaleString();
@@ -36,6 +40,7 @@ function EventTable({ events, isLoading }: { events: Event[], isLoading: boolean
             <TableHead>Tipo de Evento</TableHead>
             <TableHead>Cliente</TableHead>
             <TableHead>Variedad</TableHead>
+            {userRole === 'Admin' && <TableHead>Acciones</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -46,6 +51,18 @@ function EventTable({ events, isLoading }: { events: Event[], isLoading: boolean
               <TableCell>{event.event_type}</TableCell>
               <TableCell>{event.customer_name}</TableCell>
               <TableCell>{event.variety || 'N/A'}</TableCell>
+              {userRole === 'Admin' && (
+                <TableCell>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => onDelete(event.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>
@@ -62,6 +79,8 @@ function EventTable({ events, isLoading }: { events: Event[], isLoading: boolean
 export default function HistoryPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
+  const userRole = useUserRole();
 
   useEffect(() => {
     const firestore = db();
@@ -84,6 +103,33 @@ export default function HistoryPage() {
   const handleFilterChange = (name: string, value: string) => {
     setFilters(prev => ({ ...prev, [name]: value }));
   };
+
+  const handleDelete = async (id: string) => {
+    if (userRole !== 'Admin') {
+      toast({
+        title: "Acceso Denegado",
+        description: "No tienes permiso para eliminar eventos.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const firestore = db();
+    try {
+      await deleteDoc(doc(firestore, "events", id));
+      toast({
+        title: "Evento Eliminado",
+        description: "El evento ha sido eliminado del historial.",
+      });
+    } catch (error) {
+      console.error("Error eliminando evento: ", error);
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el evento.",
+        variant: "destructive",
+      });
+    }
+  };
+
 
   const filteredEvents = useMemo(() => {
     return events
@@ -134,7 +180,7 @@ export default function HistoryPage() {
                 </SelectContent>
               </Select>
             </div>
-            <EventTable events={filteredEvents} isLoading={isLoading} />
+            <EventTable events={filteredEvents} isLoading={isLoading} onDelete={handleDelete} />
           </CardContent>
         </Card>
       </main>
