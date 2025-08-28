@@ -271,11 +271,21 @@ export default function AssetsPage() {
   const barrels = assets.filter(asset => asset.type === 'BARRIL');
   const co2Cylinders = assets.filter(asset => asset.type === 'CO2');
 
-  const assetCounts = useMemo(() => {
-    const calculateCounts = (assetList: Asset[]) => ({
-      inPlant: assetList.filter(a => a.location === 'EN_PLANTA').length,
-      inCustomer: assetList.filter(a => a.location === 'EN_CLIENTE').length,
-    });
+  const assetCountsByFormat = useMemo(() => {
+    const calculateCounts = (assetList: Asset[]) => {
+      return assetList.reduce((acc, asset) => {
+        if (!acc[asset.format]) {
+          acc[asset.format] = { inPlant: 0, inCustomer: 0 };
+        }
+        if (asset.location === 'EN_PLANTA') {
+          acc[asset.format].inPlant++;
+        } else if (asset.location === 'EN_CLIENTE') {
+          acc[asset.format].inCustomer++;
+        }
+        return acc;
+      }, {} as Record<string, { inPlant: number; inCustomer: number }>);
+    };
+
     return {
       barrels: calculateCounts(barrels),
       co2: calculateCounts(co2Cylinders),
@@ -358,6 +368,18 @@ export default function AssetsPage() {
     </Table>
   );
 
+  const CountsDisplay = ({ counts }: { counts: Record<string, { inPlant: number; inCustomer: number }> }) => (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+      {Object.entries(counts).map(([format, data]) => (
+        <div key={format} className="flex items-center gap-2">
+          <span className="font-semibold">{format}:</span>
+          <span>En Planta: <Badge variant="secondary">{data.inPlant}</Badge></span>
+          <span>En Cliente: <Badge variant="outline">{data.inCustomer}</Badge></span>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div className="flex flex-1 flex-col">
        <Dialog open={isFormOpen} onOpenChange={setFormOpen}>
@@ -385,25 +407,13 @@ export default function AssetsPage() {
         />
         <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
             <Tabs defaultValue={activeTab} onValueChange={setActiveTab}>
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
+              <div className="flex flex-col sm:flex-row items-start justify-between gap-4 mb-4">
                 <TabsList>
                   <TabsTrigger value="barrels">Barriles ({barrels.length})</TabsTrigger>
                   <TabsTrigger value="co2">CO2 ({co2Cylinders.length})</TabsTrigger>
                 </TabsList>
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                    {activeTab === 'barrels' && (
-                        <>
-                            <span>En Planta: <Badge variant="secondary">{assetCounts.barrels.inPlant}</Badge></span>
-                            <span>En Cliente: <Badge variant="outline">{assetCounts.barrels.inCustomer}</Badge></span>
-                        </>
-                    )}
-                    {activeTab === 'co2' && (
-                        <>
-                            <span>En Planta: <Badge variant="secondary">{assetCounts.co2.inPlant}</Badge></span>
-                            <span>En Cliente: <Badge variant="outline">{assetCounts.co2.inCustomer}</Badge></span>
-                        </>
-                    )}
-                </div>
+                {activeTab === 'barrels' && <CountsDisplay counts={assetCountsByFormat.barrels} />}
+                {activeTab === 'co2' && <CountsDisplay counts={assetCountsByFormat.co2} />}
               </div>
               <TabsContent value="barrels">
                 <Card>
