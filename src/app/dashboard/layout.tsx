@@ -34,6 +34,7 @@ import {
 import { Logo } from "@/components/logo";
 import { useUserRole } from "@/hooks/use-user-role";
 import { DataProvider } from "@/context/data-context";
+import { PageHeader } from "@/components/page-header";
 
 function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const authInstance = auth();
@@ -125,7 +126,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
         <SidebarFooter>
           <div className="flex items-center gap-2 p-2">
              <Avatar className="size-8">
-                <AvatarImage src={user.photoURL || "https://picsum.photos/100"} alt="Avatar del usuario" data-ai-hint="user avatar" />
+                {user.photoURL && <AvatarImage src={user.photoURL} alt="Avatar del usuario" />}
                 <AvatarFallback>{user.email?.[0].toUpperCase() || 'U'}</AvatarFallback>
               </Avatar>
               <div className="flex flex-col text-sm">
@@ -139,12 +140,11 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
-         <header className="flex h-14 items-center justify-between border-b bg-background px-4 md:px-6">
-            <SidebarTrigger />
-            <div className="flex-1">
-              {/* You can add breadcrumbs or other header elements here */}
-            </div>
-          </header>
+         <PageHeader
+            title=""
+            className="h-14 justify-start px-4 md:px-6"
+            action={<SidebarTrigger />}
+         />
         <DataProvider>
           {children}
         </DataProvider>
