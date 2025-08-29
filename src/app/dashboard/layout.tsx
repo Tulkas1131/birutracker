@@ -7,7 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { signOut } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore/lite";
+import { doc, getDoc } from "firebase/firestore/lite";
 import {
   History,
   LayoutDashboard,
@@ -31,13 +31,13 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Logo } from "@/components/logo";
 import { useUserRole } from "@/hooks/use-user-role";
 import { PageHeader } from "@/components/page-header";
 
 function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const authInstance = auth();
-  const firestore = db();
   const [user, loading, error] = useAuthState(authInstance);
   const userRole = useUserRole();
   const router = useRouter();
@@ -60,21 +60,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
     if (!loading && !user) {
       router.push('/');
     }
-    if (user && !userRole) {
-      const getUserRole = async () => {
-        const userDocRef = doc(firestore, "users", user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        
-        if (!userDocSnap.exists()) {
-          await setDoc(userDocRef, {
-            email: user.email,
-            role: "Operador",
-          });
-        }
-      };
-      getUserRole();
-    }
-  }, [user, loading, userRole, router, firestore]);
+  }, [user, loading, router]);
 
   if (loading) {
     return (
@@ -129,7 +115,11 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
                 <AvatarFallback>{user.email?.[0].toUpperCase() || 'U'}</AvatarFallback>
               </Avatar>
               <div className="flex flex-col text-sm">
-                <span className="font-semibold">{userRole || 'Cargando...'}</span>
+                {userRole ? (
+                  <span className="font-semibold">{userRole}</span>
+                ) : (
+                  <Skeleton className="h-5 w-16" />
+                )}
                 <span className="text-muted-foreground truncate">{user.email}</span>
               </div>
             <button onClick={handleSignOut} className="ml-auto" title="Cerrar Sesión">
