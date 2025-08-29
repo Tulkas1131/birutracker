@@ -1,10 +1,8 @@
 
-// Import the functions you need from the SDKs you need
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { getFirestore, type Firestore } from "firebase/firestore/lite";
-import { getAuth, type Auth, browserSessionPersistence, setPersistence } from "firebase/auth";
+import { getAuth, type Auth, browserSessionPersistence, setPersistence, browserLocalPersistence } from "firebase/auth";
 
-// Your web app's Firebase configuration - KEEP THIS UPDATED
 const firebaseConfig = {
   "projectId": "kegtrack-mobile",
   "appId": "1:603063434971:web:066b_d3952ee869b2756fe",
@@ -15,7 +13,7 @@ const firebaseConfig = {
   "messagingSenderId": "603063434971"
 };
 
-// Initialize Firebase
+// Initialize Firebase App
 let app: FirebaseApp;
 if (!getApps().length) {
     app = initializeApp(firebaseConfig);
@@ -23,14 +21,28 @@ if (!getApps().length) {
     app = getApp();
 }
 
-const db: () => Firestore = () => getFirestore(app);
-const authInstance: Auth = getAuth(app);
+// Lazy initialization for Firestore and Auth
+let firestoreInstance: Firestore | null = null;
+let authInstance: Auth | null = null;
 
-// Set auth persistence to browser session on the client side
-if (typeof window !== 'undefined') {
-    setPersistence(authInstance, browserSessionPersistence);
-}
+const db = (): Firestore => {
+    if (!firestoreInstance) {
+        firestoreInstance = getFirestore(app);
+    }
+    return firestoreInstance;
+};
 
-const auth = () => authInstance;
+const auth = (): Auth => {
+    if (!authInstance) {
+        authInstance = getAuth(app);
+        // We handle persistence in AuthProvider to ensure it runs only on the client
+        // and doesn't block server rendering or initial page load.
+        setPersistence(authInstance, browserSessionPersistence)
+          .catch((error) => {
+            console.error("Error setting auth persistence:", error);
+          });
+    }
+    return authInstance;
+};
 
 export { app, db, auth };
