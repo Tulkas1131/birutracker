@@ -2,13 +2,20 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useAuthState } from 'react-firebase-hooks/auth';
+import { onAuthStateChanged, type User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore/lite';
 import { auth, db } from '@/lib/firebase';
 
 export function useUserRole() {
-  const [user] = useAuthState(auth());
+  const [user, setUser] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth(), (currentUser) => {
+      setUser(currentUser);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -17,8 +24,10 @@ export function useUserRole() {
       getDoc(userDocRef).then((doc) => {
         if (doc.exists()) {
           setUserRole(doc.data().role || "Operador");
+        } else {
+            setUserRole("Operador"); // Default role if doc doesn't exist
         }
-      });
+      }).catch(() => setUserRole("Operador")); // Default on error
     } else {
       setUserRole(null);
     }

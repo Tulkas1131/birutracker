@@ -4,7 +4,6 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useAuthState } from 'react-firebase-hooks/auth';
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import {
@@ -14,7 +13,6 @@ import {
   Package,
   Truck,
   Users,
-  Loader2
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -31,13 +29,15 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { PageHeader } from "@/components/page-header";
-import { useUserRole } from "@/hooks/use-user-role";
 import { Logo } from "@/components/logo";
 
-export function DashboardLayoutContent({ children }: { children: React.React.Node }) {
-  const authInstance = auth();
-  const [user, loading, error] = useAuthState(authInstance);
-  const userRole = useUserRole();
+interface UserData {
+    email?: string;
+    photoURL?: string;
+    role: string;
+}
+
+export function DashboardLayoutContent({ children, user }: { children: React.ReactNode, user: UserData }) {
   const router = useRouter();
   const pathname = usePathname();
 
@@ -50,35 +50,23 @@ export function DashboardLayoutContent({ children }: { children: React.React.Nod
   ];
 
   const handleSignOut = async () => {
+    // Client-side sign out
+    const authInstance = auth();
     await signOut(authInstance);
-    router.push('/');
-  };
 
-  React.useEffect(() => {
-    if (!loading && !user) {
-      router.push('/');
+    // Call server action to clear cookie
+    const response = await fetch('/api/auth/signout', {
+        method: 'POST',
+    });
+
+    if(response.ok) {
+        // Force a full page reload to clear all state and redirect
+        window.location.href = '/';
+    } else {
+        console.error("Failed to sign out on server");
+        // Handle error case if necessary
     }
-  }, [user, loading, router]);
-
-  if (loading) {
-    return (
-       <div className="flex h-screen w-full items-center justify-center">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (error) {
-     return (
-       <div className="flex h-screen w-full items-center justify-center">
-        <p className="text-destructive">Error: {error.message}</p>
-      </div>
-    );
-  }
-  
-  if (!user) {
-    return null;
-  }
+  };
   
   return (
     <SidebarProvider>
@@ -113,11 +101,7 @@ export function DashboardLayoutContent({ children }: { children: React.React.Nod
                 <AvatarFallback>{user.email?.[0].toUpperCase() || 'U'}</AvatarFallback>
               </Avatar>
               <div className="flex flex-col text-sm">
-                {userRole ? (
-                  <span className="font-semibold">{userRole}</span>
-                ) : (
-                  <span className="font-semibold text-muted-foreground">Cargando...</span>
-                )}
+                <span className="font-semibold">{user.role}</span>
                 <span className="text-muted-foreground truncate">{user.email}</span>
               </div>
             <button onClick={handleSignOut} className="ml-auto" title="Cerrar Sesión">
