@@ -2,32 +2,29 @@
 "use client";
 
 import { useEffect, useRef, memo } from 'react';
-import { Html5QrcodeScanner, type QrCodeSuccessCallback, type QrCodeErrorCallback, Html5Qrcode } from 'html5-qrcode';
+import { Html5QrcodeScanner, type QrCodeSuccessCallback, type QrCodeErrorCallback } from 'html5-qrcode';
 
 interface QrScannerProps {
     onScanSuccess: (decodedText: string) => void;
     onScanError: (errorMessage: string) => void;
 }
 
-const config = {
-    fps: 10,
-    qrbox: { width: 250, height: 250 },
-    rememberLastUsedCamera: true,
-    supportedScanTypes: [],
-};
-
 const scannerRegionId = "qr-scanner-region";
 
-// Using a functional component with proper cleanup logic
 function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
     const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
     useEffect(() => {
-        // Ensure this runs only once
-        if (document.getElementById(scannerRegionId)?.innerHTML === '') {
+        // Ensure this runs only once per mount
+        if (!scannerRef.current) {
             const scanner = new Html5QrcodeScanner(
                 scannerRegionId,
-                config,
+                {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 },
+                    rememberLastUsedCamera: true,
+                    supportedScanTypes: [],
+                },
                 false // verbose
             );
 
@@ -43,14 +40,20 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
             scannerRef.current = scanner;
         }
 
-        // Cleanup function to run on component unmount
+        // Cleanup function to run decisively on component unmount
         return () => {
             const scanner = scannerRef.current;
             if (scanner) {
                 scanner.clear().catch(error => {
                     console.error("Failed to clear html5QrcodeScanner.", error);
+                }).finally(() => {
+                    // Force DOM cleanup
+                    const scannerElement = document.getElementById(scannerRegionId);
+                    if (scannerElement) {
+                        scannerElement.innerHTML = '';
+                    }
+                    scannerRef.current = null;
                 });
-                scannerRef.current = null;
             }
         };
     }, [onScanSuccess, onScanError]);
@@ -62,5 +65,5 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
     );
 }
 
-
+// Memoize the component to prevent unnecessary re-renders
 export const QrScanner = memo(QrScannerComponent);
