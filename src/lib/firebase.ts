@@ -17,25 +17,7 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app: FirebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+const db: Firestore = getFirestore(app);
+const auth: Auth = getAuth(app);
 
-let db: Firestore;
-let auth: Auth;
-
-// Dynamically get Firestore instance
-const getDb = () => {
-  if (!db) {
-    db = getFirestore(app);
-  }
-  return db;
-};
-
-// Dynamically get Auth instance
-const getAuthInstance = () => {
-  if (!auth) {
-    auth = getAuth(app);
-  }
-  return auth;
-};
-
-// Re-exporting them as 'db' and 'auth' so we don't need to refactor the whole app
-export { app, getDb as db, getAuthInstance as auth };
+export { app, db, auth };
