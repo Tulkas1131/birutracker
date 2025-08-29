@@ -25,10 +25,21 @@ function EventTable({ events, assets, isLoading, onDelete }: { events: Event[], 
     if (!timestamp || !timestamp.toDate) return 'Fecha inválida';
     return timestamp.toDate().toLocaleString();
   };
+  
+  const formatEventType = (eventType: Event['event_type']) => {
+    switch (eventType) {
+      case 'SALIDA_A_REPARTO': return 'Salida a Reparto';
+      case 'ENTREGA_A_CLIENTE': return 'Entrega a Cliente';
+      case 'RECOLECCION_DE_CLIENTE': return 'Recolección de Cliente';
+      case 'RECEPCION_EN_PLANTA': return 'Recepción en Planta';
+      case 'SALIDA_VACIO': return 'Salida Vacío (Préstamo)';
+      case 'DEVOLUCION': return 'Devolución (Lleno)';
+      default: return eventType;
+    }
+  }
 
   const getDaysAtCustomer = (event: Event) => {
     const asset = assetsMap.get(event.asset_id);
-    // Only calculate for departure events of assets that are currently with a customer
     if (event.event_type === 'ENTREGA_A_CLIENTE' && asset && asset.location === 'EN_CLIENTE') {
       const days = differenceInDays(new Date(), event.timestamp.toDate());
       return days;
@@ -65,7 +76,7 @@ function EventTable({ events, assets, isLoading, onDelete }: { events: Event[], 
               <TableRow key={event.id}>
                 <TableCell>{formatDate(event.timestamp)}</TableCell>
                 <TableCell className="font-medium">{event.asset_code}</TableCell>
-                <TableCell>{event.event_type}</TableCell>
+                <TableCell>{formatEventType(event.event_type)}</TableCell>
                 <TableCell>{event.customer_name}</TableCell>
                 <TableCell>
                   {daysAtCustomer !== null ? (
@@ -233,11 +244,12 @@ export default function HistoryPage() {
                 </SelectTrigger>
                 <SelectContent>
                     <SelectItem value="ALL">Todos los Eventos</SelectItem>
-                    <SelectItem value="SALIDA_A_REPARTO">SALIDA A REPARTO</SelectItem>
-                    <SelectItem value="ENTREGA_A_CLIENTE">ENTREGA A CLIENTE</SelectItem>
-                    <SelectItem value="RETORNO_VACIO">RETORNO VACIO</SelectItem>
-                    <SelectItem value="SALIDA_VACIO">SALIDA VACIO</SelectItem>
-                    <SelectItem value="DEVOLUCION">DEVOLUCION</SelectItem>
+                    <SelectItem value="SALIDA_A_REPARTO">Salida a Reparto</SelectItem>
+                    <SelectItem value="ENTREGA_A_CLIENTE">Entrega a Cliente</SelectItem>
+                    <SelectItem value="RECOLECCION_DE_CLIENTE">Recolección de Cliente</SelectItem>
+                    <SelectItem value="RECEPCION_EN_PLANTA">Recepción en Planta</SelectItem>
+                    <SelectItem value="SALIDA_VACIO">Salida Vacío (Préstamo)</SelectItem>
+                    <SelectItem value="DEVOLUCION">Devolución (Lleno)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

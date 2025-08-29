@@ -33,7 +33,7 @@ export default function MovementsPage() {
   const [user] = useAuthState(auth());
   const [assets, setAssets] = useState<Asset[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [deliveryEvents, setDeliveryEvents] = useState<Event[]>([]);
+  const [pendingEvents, setPendingEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isScannerOpen, setScannerOpen] = useState(false);
@@ -53,21 +53,21 @@ export default function MovementsPage() {
         const firestore = db();
         const assetsQuery = query(collection(firestore, "assets"), orderBy("code"));
         const customersQuery = query(collection(firestore, "customers"), orderBy("name"));
-        const deliveryEventsQuery = query(collection(firestore, "events"), where("event_type", "==", "SALIDA_A_REPARTO"));
+        const pendingEventsQuery = query(collection(firestore, "events"), where("event_type", "in", ["SALIDA_A_REPARTO", "RECOLECCION_DE_CLIENTE"]));
 
-        const [assetsSnapshot, customersSnapshot, deliveryEventsSnapshot] = await Promise.all([
+        const [assetsSnapshot, customersSnapshot, pendingEventsSnapshot] = await Promise.all([
           getDocs(assetsQuery),
           getDocs(customersQuery),
-          getDocs(deliveryEventsQuery),
+          getDocs(pendingEventsQuery),
         ]);
 
         const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
         const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
-        const deliveryEventsData = deliveryEventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
+        const pendingEventsData = pendingEventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
 
         setAssets(assetsData);
         setCustomers(customersData);
-        setDeliveryEvents(deliveryEventsData);
+        setPendingEvents(pendingEventsData);
       } catch (error) {
         console.error("Error fetching data for movements page: ", error);
         toast({
@@ -94,8 +94,9 @@ export default function MovementsPage() {
       case 'SALIDA_VACIO':
         return assets.filter(a => a.location === 'EN_PLANTA');
       case 'ENTREGA_A_CLIENTE':
+      case 'RECEPCION_EN_PLANTA':
         return assets.filter(a => a.location === 'EN_REPARTO');
-      case 'RETORNO_VACIO':
+      case 'RECOLECCION_DE_CLIENTE':
       case 'DEVOLUCION':
         return assets.filter(a => a.location === 'EN_CLIENTE');
       default:
@@ -103,20 +104,20 @@ export default function MovementsPage() {
     }
   }, [assets, watchEventType]);
 
-  // Effect to auto-select customer when delivering an asset
   useEffect(() => {
-    if (watchEventType === 'ENTREGA_A_CLIENTE' && watchAssetId) {
-      const deliveryEvent = deliveryEvents.find(e => e.asset_id === watchAssetId);
-      if (deliveryEvent) {
-        form.setValue('customer_id', deliveryEvent.customer_id);
+    const isSecondStepEvent = watchEventType === 'ENTREGA_A_CLIENTE' || watchEventType === 'RECEPCION_EN_PLANTA';
+    
+    if (isSecondStepEvent && watchAssetId) {
+      const pendingEvent = pendingEvents.find(e => e.asset_id === watchAssetId);
+      if (pendingEvent) {
+        form.setValue('customer_id', pendingEvent.customer_id);
       }
     } else {
-        // Reset customer when event type changes, unless it's an edit of a delivery
-        if (watchEventType !== 'ENTREGA_A_CLIENTE') {
+        if (!isSecondStepEvent) {
              form.resetField('customer_id');
         }
     }
-  }, [watchAssetId, watchEventType, deliveryEvents, form]);
+  }, [watchAssetId, watchEventType, pendingEvents, form]);
 
 
   useEffect(() => {
@@ -167,8 +168,6 @@ export default function MovementsPage() {
   };
 
   const handleScanError = (errorMessage: string) => {
-    // This function is called frequently by the scanner library.
-    // We only want to log significant errors, not "QR code not found" messages.
     if (typeof errorMessage === 'string' && (errorMessage.toLowerCase().includes("not found") || errorMessage.toLowerCase().includes("insufficient"))) {
         return;
     }
@@ -210,13 +209,17 @@ export default function MovementsPage() {
         break;
       case 'ENTREGA_A_CLIENTE':
         newLocation = 'EN_CLIENTE';
-        newState = 'LLENO'; // It should be full when delivered
+        newState = 'LLENO';
         break;
       case 'SALIDA_VACIO':
         newLocation = 'EN_CLIENTE';
         newState = 'VACIO';
         break;
-      case 'RETORNO_VACIO':
+      case 'RECOLECCION_DE_CLIENTE':
+        newLocation = 'EN_REPARTO';
+        newState = 'VACIO';
+        break;
+      case 'RECEPCION_EN_PLANTA':
         newLocation = 'EN_PLANTA';
         newState = 'VACIO';
         break;
@@ -228,17 +231,19 @@ export default function MovementsPage() {
 
     try {
       await runTransaction(firestore, async (transaction) => {
-        
-        // If it's a delivery, update the existing event. Otherwise, create a new one.
-        if (data.event_type === 'ENTREGA_A_CLIENTE') {
-          const deliveryEvent = deliveryEvents.find(e => e.asset_id === currentSelectedAsset.id);
-          if (!deliveryEvent) {
-            throw new Error(`No se encontró el evento de 'SALIDA_A_REPARTO' para el activo ${currentSelectedAsset.code}. No se puede completar la entrega.`);
+        const isUpdateEvent = data.event_type === 'ENTREGA_A_CLIENTE' || data.event_type === 'RECEPCION_EN_PLANTA';
+
+        if (isUpdateEvent) {
+          const expectedInitialEventType = data.event_type === 'ENTREGA_A_CLIENTE' ? 'SALIDA_A_REPARTO' : 'RECOLECCION_DE_CLIENTE';
+          const pendingEvent = pendingEvents.find(e => e.asset_id === currentSelectedAsset.id && e.event_type === expectedInitialEventType);
+
+          if (!pendingEvent) {
+            throw new Error(`No se encontró el evento inicial de '${expectedInitialEventType}' para el activo ${currentSelectedAsset.code}. No se puede completar la operación.`);
           }
-          const eventRef = doc(firestore, "events", deliveryEvent.id);
+          const eventRef = doc(firestore, "events", pendingEvent.id);
           transaction.update(eventRef, {
-            event_type: 'ENTREGA_A_CLIENTE',
-            timestamp: Timestamp.now(), // Update timestamp to reflect delivery time
+            event_type: data.event_type,
+            timestamp: Timestamp.now(),
           });
 
         } else {
@@ -321,11 +326,12 @@ export default function MovementsPage() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              <SelectItem value="SALIDA_A_REPARTO">SALIDA A REPARTO</SelectItem>
-                              <SelectItem value="ENTREGA_A_CLIENTE">ENTREGA A CLIENTE</SelectItem>
-                              <SelectItem value="RETORNO_VACIO">RETORNO VACIO (Retiro)</SelectItem>
+                              <SelectItem value="SALIDA_A_REPARTO">SALIDA A REPARTO (Lleno)</SelectItem>
+                              <SelectItem value="ENTREGA_A_CLIENTE">ENTREGA A CLIENTE (Lleno)</SelectItem>
+                              <SelectItem value="RECOLECCION_DE_CLIENTE">RECOLECCIÓN DE CLIENTE (Vacío)</SelectItem>
+                              <SelectItem value="RECEPCION_EN_PLANTA">RECEPCIÓN EN PLANTA (Vacío)</SelectItem>
                               <SelectItem value="SALIDA_VACIO">SALIDA VACIO (Préstamo)</SelectItem>
-                              <SelectItem value="DEVOLUCION">DEVOLUCION</SelectItem>
+                              <SelectItem value="DEVOLUCION">DEVOLUCION (Lleno)</SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />
@@ -385,7 +391,7 @@ export default function MovementsPage() {
                             onValueChange={field.onChange}
                             value={field.value}
                             defaultValue={field.value}
-                            disabled={watchEventType === 'ENTREGA_A_CLIENTE'}
+                            disabled={watchEventType === 'ENTREGA_A_CLIENTE' || watchEventType === 'RECEPCION_EN_PLANTA'}
                           >
                             <FormControl>
                               <SelectTrigger>
@@ -434,5 +440,3 @@ export default function MovementsPage() {
     </div>
   );
 }
-
-    
