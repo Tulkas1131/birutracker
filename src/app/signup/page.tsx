@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { collection, query, where, getDocs, setDoc, doc, getDoc } from 'firebase/firestore/lite';
+import { collection, query, where, getDocs, setDoc, doc } from 'firebase/firestore/lite';
 import { auth, db } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,7 +29,7 @@ export default function SignupPage() {
     const authInstance = auth();
 
     try {
-      // 1. Check if email is in the allowed list
+      // 1. Check if email is in the allowed list and get its role
       const allowedEmailsRef = collection(firestore, "allowed_emails");
       const q = query(allowedEmailsRef, where("email", "==", email.toLowerCase()));
       const querySnapshot = await getDocs(q);
@@ -44,22 +44,18 @@ export default function SignupPage() {
         return;
       }
       
-      const roleDoc = querySnapshot.docs[0];
-      const role = roleDoc.data().role || "Operador";
+      const role = querySnapshot.docs[0].data().role || "Operador"; // Default to Operador
 
-      // 2. If allowed, create user
+      // 2. If allowed, create user in Auth
       const userCredential = await createUserWithEmailAndPassword(authInstance, email, password);
       const user = userCredential.user;
 
       // 3. Create user profile in 'users' collection with the determined role
       const userDocRef = doc(firestore, "users", user.uid);
-      const userDoc = await getDoc(userDocRef);
-      if (!userDoc.exists()) {
-        await setDoc(userDocRef, {
-            email: user.email,
-            role: role,
-        });
-      }
+      await setDoc(userDocRef, {
+          email: user.email,
+          role: role,
+      });
 
       toast({
         title: "¡Cuenta Creada!",
@@ -131,7 +127,7 @@ export default function SignupPage() {
               Inicia Sesión
             </Link>
           </div>
-        </Content>
+        </CardContent>
       </Card>
     </div>
   );

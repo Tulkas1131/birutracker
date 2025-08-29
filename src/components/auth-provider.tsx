@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { auth } from '@/lib/firebase';
+import { auth, initializeAuth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -13,6 +13,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // This will run only once when the app mounts
+    initializeAuth();
     const unsubscribe = onAuthStateChanged(auth(), (user) => {
       // Once we get the first response from Firebase auth, we are done loading.
       setLoading(false); 
