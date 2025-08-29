@@ -34,7 +34,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/use-user-role";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-const QRCode = dynamic(() => import("qrcode.react"), {
+const QRCode = dynamic(() => import('qrcode.react').then((mod) => mod.default), {
   loading: () => <div className="flex h-[256px] w-[256px] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>,
   ssr: false,
 });
@@ -105,10 +105,11 @@ export default function AssetsPage() {
             @media print {
               body {
                 margin: 0.5in;
+                font-family: sans-serif;
               }
               .print-container {
                 display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+                grid-template-columns: repeat(5, 1fr);
                 gap: 1rem;
               }
               .qr-item {
@@ -134,6 +135,7 @@ export default function AssetsPage() {
               justify-content: center;
               gap: 1rem;
               padding: 1rem;
+              font-family: sans-serif;
             }
              .single-qr-container h1 { font-size: 2rem; }
             .single-qr-container p { font-size: 1.25rem; }
@@ -553,5 +555,7 @@ export default function AssetsPage() {
     </div>
   );
 }
+
+    
 
     
