@@ -23,7 +23,6 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
                     fps: 10,
                     qrbox: { width: 250, height: 250 },
                     rememberLastUsedCamera: true,
-                    supportedScanTypes: [],
                 },
                 false // verbose
             );
