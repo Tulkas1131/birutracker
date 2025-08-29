@@ -21,6 +21,7 @@ import { movementSchema, type MovementFormData, type Asset, type Customer, type 
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 
 const QrScanner = dynamic(() => import('@/components/qr-scanner').then(mod => mod.QrScanner), {
   ssr: false,
@@ -472,3 +473,5 @@ export default function MovementsPage() {
     </div>
   );
 }
+
+    
