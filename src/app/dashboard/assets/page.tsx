@@ -103,14 +103,27 @@ export default function AssetsPage() {
         printWindow.document.write(`
           <style>
             @media print {
-              body { -webkit-print-color-adjust: exact; }
+              @page {
+                size: letter;
+                margin: 0.5in;
+              }
+              body { 
+                -webkit-print-color-adjust: exact; 
+                print-color-adjust: exact;
+              }
             }
-            body { font-family: sans-serif; }
+            body { 
+              font-family: sans-serif; 
+              margin: 0;
+            }
             .print-container {
               display: grid;
-              grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-              gap: 40px 20px;
-              padding: 20px;
+              grid-template-columns: repeat(5, 1fr);
+              grid-template-rows: repeat(8, 1fr);
+              gap: 0;
+              width: 7.5in;
+              height: 10in;
+              box-sizing: border-box;
             }
             .qr-item {
               display: flex;
@@ -118,15 +131,19 @@ export default function AssetsPage() {
               align-items: center;
               justify-content: center;
               text-align: center;
-              page-break-inside: avoid;
+              padding: 4px;
+              box-sizing: border-box;
+              border: 1px dashed #ccc; /* Cut marks */
+              overflow: hidden;
             }
             .qr-item h1 {
-              font-size: 1.5rem;
-              margin: 8px 0 0 0;
+              font-size: 0.6rem;
+              margin: 2px 0 0 0;
+              font-weight: bold;
             }
-            .qr-item p {
-              font-size: 1rem;
-              margin: 4px 0 0 0;
+            .qr-item canvas, .qr-item svg {
+              width: 80% !important;
+              height: auto !important;
             }
             .single-qr-container {
               display: flex;
@@ -539,7 +556,7 @@ export default function AssetsPage() {
                 <div ref={batchQrRef} className="print-container">
                   {assetsToPrint.map(asset => (
                     <div key={asset.id} className="qr-item">
-                      <QRCode value={asset.id} size={180} renderAs="svg" />
+                      <QRCode value={asset.id} size={100} renderAs="svg" />
                       <h1>{asset.code}</h1>
                     </div>
                   ))}
@@ -554,6 +571,5 @@ export default function AssetsPage() {
       </Dialog>
     </div>
   );
-}
 
     
