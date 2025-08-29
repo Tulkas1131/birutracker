@@ -2,8 +2,7 @@
 "use client";
 
 import { useEffect, useRef, memo } from 'react';
-import { Html5QrcodeScanner, type QrCodeSuccessCallback, type QrCodeErrorCallback } from 'html5-qrcode';
-import { useToast } from "@/hooks/use-toast";
+import { Html5QrcodeScanner, type QrCodeSuccessCallback, type QrCodeErrorCallback, Html5Qrcode } from 'html5-qrcode';
 
 interface QrScannerProps {
     onScanSuccess: (decodedText: string) => void;
@@ -19,21 +18,20 @@ const config = {
 
 const scannerRegionId = "qr-scanner-region";
 
+// Using a functional component with proper cleanup logic
 function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
     const scannerRef = useRef<Html5QrcodeScanner | null>(null);
-    const { toast } = useToast();
 
     useEffect(() => {
-        if (!scannerRef.current) {
-            scannerRef.current = new Html5QrcodeScanner(
+        // Ensure this runs only once
+        if (document.getElementById(scannerRegionId)?.innerHTML === '') {
+            const scanner = new Html5QrcodeScanner(
                 scannerRegionId,
                 config,
                 false // verbose
             );
 
             const successCallback: QrCodeSuccessCallback = (decodedText, decodedResult) => {
-                // No pausar el scanner aquí para permitir múltiples escaneos si es necesario,
-                // la limpieza se encargará al cerrar el modal.
                 onScanSuccess(decodedText);
             };
 
@@ -41,18 +39,17 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
                 onScanError(errorMessage);
             };
 
-            scannerRef.current.render(successCallback, errorCallback);
+            scanner.render(successCallback, errorCallback);
+            scannerRef.current = scanner;
         }
 
-        // Cleanup function to properly destroy the scanner instance
+        // Cleanup function to run on component unmount
         return () => {
-            if (scannerRef.current) {
-                scannerRef.current.clear().catch(error => {
-                    // Este error puede ocurrir si el componente se desmonta rápidamente.
-                    // Es seguro ignorarlo en la mayoría de los casos.
-                    console.warn("Failed to clear html5QrcodeScanner, this can happen on fast unmounts.", error);
+            const scanner = scannerRef.current;
+            if (scanner) {
+                scanner.clear().catch(error => {
+                    console.error("Failed to clear html5QrcodeScanner.", error);
                 });
-                // Anular la referencia para asegurar que se cree una nueva instancia la próxima vez.
                 scannerRef.current = null;
             }
         };
@@ -60,9 +57,10 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
 
     return (
         <div className="space-y-4">
-            <div id={scannerRegionId} className="w-full border rounded-md" />
+            <div id={scannerRegionId} className="w-full rounded-md border" />
         </div>
     );
 }
+
 
 export const QrScanner = memo(QrScannerComponent);
