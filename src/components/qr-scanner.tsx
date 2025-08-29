@@ -32,7 +32,8 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
             );
 
             const successCallback: QrCodeSuccessCallback = (decodedText, decodedResult) => {
-                scannerRef.current?.pause(true); // Pause after a successful scan
+                // No pausar el scanner aquí para permitir múltiples escaneos si es necesario,
+                // la limpieza se encargará al cerrar el modal.
                 onScanSuccess(decodedText);
             };
 
@@ -43,12 +44,15 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
             scannerRef.current.render(successCallback, errorCallback);
         }
 
-        // Cleanup function to clear the scanner
+        // Cleanup function to properly destroy the scanner instance
         return () => {
             if (scannerRef.current) {
                 scannerRef.current.clear().catch(error => {
-                    console.error("Failed to clear html5QrcodeScanner.", error);
+                    // Este error puede ocurrir si el componente se desmonta rápidamente.
+                    // Es seguro ignorarlo en la mayoría de los casos.
+                    console.warn("Failed to clear html5QrcodeScanner, this can happen on fast unmounts.", error);
                 });
+                // Anular la referencia para asegurar que se cree una nueva instancia la próxima vez.
                 scannerRef.current = null;
             }
         };
