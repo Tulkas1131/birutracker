@@ -253,7 +253,7 @@ export default function AssetsPage() {
       case "EN_PLANTA":
         return "secondary";
       case "EN_PROVEEDOR":
-        return "default"; // Or any other variant you prefer
+        return "default";
       default:
         return "default";
     }
@@ -295,18 +295,12 @@ export default function AssetsPage() {
 
   const assetsToPrint = activeTab === 'barrels' ? barrels : co2Cylinders;
 
-  const groupedAssets = useMemo(() => {
-    return (assetList: Asset[]) => assetList.reduce((acc, asset) => {
-      (acc[asset.format] = acc[asset.format] || []).push(asset);
-      return acc;
-    }, {} as Record<string, Asset[]>);
-  }, []);
-
   const AssetTable = ({ assetList }: { assetList: Asset[] }) => (
     <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Código</TableHead>
+          <TableHead>Formato</TableHead>
           <TableHead>Estado</TableHead>
           <TableHead>Ubicación</TableHead>
           <TableHead>QR</TableHead>
@@ -318,20 +312,21 @@ export default function AssetsPage() {
       <TableBody>
         {isLoading ? (
           <TableRow>
-            <TableCell colSpan={5} className="h-24 text-center">
+            <TableCell colSpan={6} className="h-24 text-center">
               <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
             </TableCell>
           </TableRow>
         ) : assetList.length === 0 ? (
           <TableRow>
-             <TableCell colSpan={5} className="h-24 text-center">
-              No hay activos de este formato.
+             <TableCell colSpan={6} className="h-24 text-center">
+              No hay activos. ¡Añade uno para empezar!
             </TableCell>
           </TableRow>
         ) : (
           assetList.map((asset) => (
             <TableRow key={asset.id}>
               <TableCell className="font-medium">{asset.code}</TableCell>
+              <TableCell>{asset.format}</TableCell>
               <TableCell>
                 <Badge variant={asset.state === 'LLENO' ? 'default' : 'secondary'}>
                   {asset.state === 'LLENO' ? 'Lleno' : 'Vacío'}
@@ -385,42 +380,6 @@ export default function AssetsPage() {
     </div>
   );
 
-  const renderAssetGroups = (assetList: Asset[]) => {
-    if (isLoading) {
-      return (
-        <div className="flex justify-center items-center py-10">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      );
-    }
-    if (assetList.length === 0) {
-      return (
-        <Card>
-          <CardContent className="p-6 text-center text-muted-foreground">
-            No hay activos. ¡Añade uno para empezar!
-          </CardContent>
-        </Card>
-      );
-    }
-
-    const grouped = groupedAssets(assetList);
-    const sortedFormats = Object.keys(grouped).sort();
-
-    return sortedFormats.map(format => (
-      <Card key={format} className="mb-6">
-        <CardHeader>
-          <CardTitle>Formato: {format}</CardTitle>
-          <CardDescription>
-            Total de {grouped[format].length} activos de este formato.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          <AssetTable assetList={grouped[format]} />
-        </CardContent>
-      </Card>
-    ));
-  };
-
 
   return (
     <div className="flex flex-1 flex-col">
@@ -458,10 +417,18 @@ export default function AssetsPage() {
                 {activeTab === 'co2' && <CountsDisplay counts={assetCountsByFormat.co2} />}
               </div>
               <TabsContent value="barrels">
-                 {renderAssetGroups(barrels)}
+                 <Card>
+                    <CardContent className="p-0">
+                      <AssetTable assetList={barrels} />
+                    </CardContent>
+                  </Card>
               </TabsContent>
               <TabsContent value="co2">
-                 {renderAssetGroups(co2Cylinders)}
+                 <Card>
+                    <CardContent className="p-0">
+                      <AssetTable assetList={co2Cylinders} />
+                    </CardContent>
+                  </Card>
               </TabsContent>
             </Tabs>
         </main>

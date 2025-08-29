@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, Suspense } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
@@ -22,7 +22,6 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { useData } from "@/context/data-context";
 
-// Dynamically import the QrScanner component
 const QrScanner = dynamic(() => import('@/components/qr-scanner').then(mod => mod.QrScanner), {
   ssr: false,
   loading: () => <div className="flex justify-center items-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>,
@@ -108,7 +107,6 @@ export default function MovementsPage() {
       return;
     }
     
-    // Determine new location and state based on event type
     let newLocation: Asset['location'] = selectedAsset.location;
     let newState: Asset['state'] = selectedAsset.state;
 
@@ -133,7 +131,6 @@ export default function MovementsPage() {
 
     try {
       await runTransaction(firestore, async (transaction) => {
-        // 1. Create the new event
         const eventData = {
           asset_id: selectedAsset.id,
           asset_code: selectedAsset.code,
@@ -146,7 +143,6 @@ export default function MovementsPage() {
         };
         transaction.set(doc(collection(firestore, "events")), eventData);
 
-        // 2. Update the asset location and state
         const assetRef = doc(firestore, "assets", selectedAsset.id);
         transaction.update(assetRef, { location: newLocation, state: newState });
       });

@@ -2,11 +2,11 @@
 "use client";
 
 import { useEffect, useRef, memo, useState } from 'react';
-import { Html5QrcodeScanner, Html5Qrcode, QrCodeSuccessCallback, QrCodeErrorCallback, Html5QrcodeScannerState } from 'html5-qrcode';
+import { Html5QrcodeScanner, Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from '@/components/ui/button';
 import { Camera, FileUp, AlertTriangle } from 'lucide-react';
-import { useIsMobile } from '@/hooks/use-is-mobile';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -31,7 +31,6 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
     const isMobile = useIsMobile();
 
     useEffect(() => {
-        // Do not render the scanner on the server
         if (typeof window === 'undefined') return;
 
         const getCamerasAndStart = async () => {
@@ -40,28 +39,33 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
                 if (devices && devices.length) {
                     setPermissionError(false);
                     setCameras(devices);
-                    // Prioritize rear camera ('environment')
                     const rearCamera = devices.find(device => device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('rear'));
                     const selectedCameraId = rearCamera ? rearCamera.id : devices[0].id;
-                    setActiveCameraId(selectedCameraId);
-
-                    const config = {
-                        fps: 10,
-                        qrbox: { width: 250, height: 250 },
-                        rememberLastUsedCamera: false,
-                        supportedScanTypes: [],
-                        camera: {
-                            deviceId: { exact: selectedCameraId }
-                        }
-                    };
                     
-                    const html5QrcodeScanner = new Html5QrcodeScanner("qr-reader", config, false);
-                    scannerRef.current = html5QrcodeScanner;
-                    html5QrcodeScanner.render(onScanSuccess, onScanError);
+                    if (!scannerRef.current) {
+                        const config = {
+                            fps: 10,
+                            qrbox: { width: 250, height: 250 },
+                            rememberLastUsedCamera: false,
+                            supportedScanTypes: [],
+                        };
+                        
+                        const html5QrcodeScanner = new Html5QrcodeScanner("qr-reader", config, false);
+                        scannerRef.current = html5QrcodeScanner;
+                    }
+                    
+                    if (scannerRef.current.getState() !== Html5QrcodeScannerState.SCANNING) {
+                         scannerRef.current.render(onScanSuccess, onScanError, {
+                            deviceId: { exact: selectedCameraId }
+                        });
+                        setActiveCameraId(selectedCameraId);
+                    }
+                } else {
+                     setPermissionError(true);
                 }
             } catch (err: any) {
                 console.error("Error getting cameras", err);
-                if (err.name === "NotAllowedError") {
+                if (err.name === "NotAllowedError" || err.name === "NotFoundError") {
                     setPermissionError(true);
                 }
             }
@@ -77,7 +81,7 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
             }
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeCameraId]); // Re-run when camera changes
+    }, []); 
 
     const switchCamera = () => {
         if (cameras.length > 1 && activeCameraId) {
@@ -88,12 +92,12 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
             if (scannerRef.current) {
                  scannerRef.current.clear().then(() => {
                     setActiveCameraId(nextCameraId);
+                     scannerRef.current?.render(onScanSuccess, onScanError, {
+                        deviceId: { exact: nextCameraId }
+                    });
                 }).catch(err => {
                     console.error("Failed to clear scanner for camera switch", err);
-                     setActiveCameraId(nextCameraId);
                 });
-            } else {
-                 setActiveCameraId(nextCameraId);
             }
         }
     };
@@ -116,15 +120,14 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
         }
     };
 
-
     return (
         <div className="relative space-y-4">
              {permissionError && (
                 <Alert variant="destructive">
                     <AlertTriangle className="h-4 w-4" />
-                    <AlertTitle>Permiso de Cámara Denegado</AlertTitle>
+                    <AlertTitle>No se pudo acceder a la cámara</AlertTitle>
                     <AlertDescription>
-                        Para usar el escáner, debes permitir el acceso a la cámara en la configuración de tu navegador.
+                        Asegúrate de tener una cámara conectada y de haber otorgado los permisos necesarios en tu navegador.
                     </AlertDescription>
                 </Alert>
             )}
