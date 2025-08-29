@@ -2,13 +2,9 @@
 "use client";
 
 import { useEffect, useRef, memo, useState, useCallback } from 'react';
-import { Html5Qrcode, Html5QrcodeScannerState, QrcodeErrorCallback, QrcodeSuccessCallback } from 'html5-qrcode';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from '@/components/ui/button';
-import { Camera, FileUp, AlertTriangle, Loader2, Play, Video } from 'lucide-react';
-import { useIsMobile } from '@/hooks/use-mobile';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Camera, AlertTriangle, Loader2, Video } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface QrScannerProps {
@@ -16,129 +12,100 @@ interface QrScannerProps {
     onScanError: (errorMessage: string) => void;
 }
 
-interface CameraDevice {
-    id: string;
-    label: string;
-}
-
-type ScannerStatus = 'idle' | 'initializing' | 'scanning' | 'paused' | 'permissionDenied' | 'noCameras' | 'error';
+type ScannerStatus = 'idle' | 'initializing' | 'scanning' | 'permissionDenied' | 'noCamera' | 'error' | 'unsupported';
 
 function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
     const { toast } = useToast();
-    const scannerRef = useRef<Html5Qrcode | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [cameras, setCameras] = useState<CameraDevice[]>([]);
-    const [activeCameraId, setActiveCameraId] = useState<string | null>(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const streamRef = useRef<MediaStream | null>(null);
     const [status, setStatus] = useState<ScannerStatus>('idle');
-    const isMobile = useIsMobile();
-    const qrReaderId = "qr-reader";
+    const [isBarcodeDetectorSupported, setIsBarcodeDetectorSupported] = useState(true);
 
-    const startScannerWithCamera = useCallback(async (cameraId: string) => {
-        if (!scannerRef.current) return;
-        
-        try {
-            await scannerRef.current.start(
-                cameraId,
-                {
-                    fps: 10,
-                    qrbox: (viewfinderWidth, viewfinderHeight) => {
-                        const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-                        const qrboxSize = Math.floor(minEdge * 0.7);
-                        return { width: qrboxSize, height: qrboxSize };
-                    },
-                },
-                onScanSuccess as QrcodeSuccessCallback,
-                onScanError as QrcodeErrorCallback
-            );
-            setStatus('scanning');
-        } catch (err) {
-            console.error("Failed to start scanner with camera:", err);
-            onScanError("Failed to start camera");
-            setStatus('error');
+    const stopCamera = useCallback(() => {
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+            if (videoRef.current) {
+                videoRef.current.srcObject = null;
+            }
         }
-    }, [onScanError, onScanSuccess]);
+    }, []);
+
+    const startScan = useCallback(async (stream: MediaStream) => {
+        if (!('BarcodeDetector' in window)) {
+            setStatus('unsupported');
+            setIsBarcodeDetectorSupported(false);
+            return;
+        }
+
+        const barcodeDetector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
+        const video = videoRef.current;
+        if (!video) return;
+
+        const checkQRCode = async () => {
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                try {
+                    const barcodes = await barcodeDetector.detect(video);
+                    if (barcodes.length > 0) {
+                        onScanSuccess(barcodes[0].rawValue);
+                        stopCamera();
+                        setStatus('idle'); 
+                    }
+                } catch (error) {
+                    console.error('Barcode detection failed:', error);
+                    onScanError('Barcode detection failed');
+                }
+            }
+            if (streamRef.current) {
+                requestAnimationFrame(checkQRCode);
+            }
+        };
+        
+        checkQRCode();
+
+    }, [onScanSuccess, onScanError, stopCamera]);
+
 
     const handleActivateCamera = useCallback(async () => {
         setStatus('initializing');
-        try {
-            const devices = await Html5Qrcode.getCameras();
-            if (devices && devices.length > 0) {
-                setCameras(devices);
-                
-                let selectedCameraId = devices[0].id;
-                if (isMobile) {
-                    const rearCamera = devices.find(device => device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('rear'));
-                    if (rearCamera) {
-                        selectedCameraId = rearCamera.id;
-                    }
-                }
-                
-                setActiveCameraId(selectedCameraId);
-                await startScannerWithCamera(selectedCameraId);
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            setStatus('error');
+            return;
+        }
 
-            } else {
-                setStatus('noCameras');
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'environment' }
+            });
+            streamRef.current = stream;
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                await videoRef.current.play();
+                setStatus('scanning');
+                startScan(stream);
             }
         } catch (err: any) {
-            console.error("Error getting cameras", err);
+            console.error("Error accessing camera", err);
             if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
                 setStatus('permissionDenied');
+            } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+                setStatus('noCamera');
             } else {
                 setStatus('error');
             }
         }
-    }, [isMobile, startScannerWithCamera]);
+    }, [startScan]);
 
     useEffect(() => {
-        // Initialize the scanner object only once
-        if (typeof window !== 'undefined' && !scannerRef.current) {
-            scannerRef.current = new Html5Qrcode(qrReaderId, false);
+        if (!('BarcodeDetector' in window)) {
+            setIsBarcodeDetectorSupported(false);
+            setStatus('unsupported');
         }
-
-        // Cleanup function
         return () => {
-            if (scannerRef.current && scannerRef.current.isScanning) {
-                scannerRef.current.stop().catch(error => {
-                    console.warn("QR Scanner stop failed on unmount:", error);
-                });
-            }
+            stopCamera();
         };
-    }, []);
+    }, [stopCamera]);
 
-    const switchCamera = async () => {
-        if (cameras.length > 1 && activeCameraId && scannerRef.current && scannerRef.current.isScanning) {
-            const currentIndex = cameras.findIndex(c => c.id === activeCameraId);
-            const nextIndex = (currentIndex + 1) % cameras.length;
-            const nextCameraId = cameras[nextIndex].id;
-
-            try {
-                await scannerRef.current.stop();
-                setActiveCameraId(nextCameraId);
-                await startScannerWithCamera(nextCameraId);
-            } catch (err) {
-                console.error("Failed to switch camera", err);
-                setStatus('error');
-            }
-        }
-    };
-    
-    const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        if (event.target.files && event.target.files.length > 0) {
-            const file = event.target.files[0];
-            const fileScanner = new Html5Qrcode(qrReaderId, false);
-            try {
-                const decodedText = await fileScanner.scanFile(file, false);
-                onScanSuccess(decodedText);
-            } catch (err) {
-                 toast({
-                    title: "Error de Escaneo",
-                    description: "No se pudo encontrar un código QR en la imagen seleccionada.",
-                    variant: "destructive",
-                });
-                onScanError(String(err));
-            }
-        }
-    };
 
     const renderOverlayContent = () => {
         switch (status) {
@@ -167,14 +134,24 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
                         </AlertDescription>
                     </Alert>
                 );
-            case 'noCameras':
+             case 'unsupported':
+                return (
+                    <Alert variant="destructive" className="m-4">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertTitle>Navegador no compatible</AlertTitle>
+                        <AlertDescription>
+                            Tu navegador no es compatible con la función de escaneo de QR. Por favor, intenta con Chrome, Edge o Safari en un dispositivo móvil.
+                        </AlertDescription>
+                    </Alert>
+                );
+            case 'noCamera':
                 return (
                     <div className="m-4">
                         <Alert>
                             <Camera className="h-4 w-4" />
-                            <AlertTitle>No se encontraron cámaras</AlertTitle>
+                            <AlertTitle>No se encontró la cámara trasera</AlertTitle>
                             <AlertDescription>
-                                No se detectó ninguna cámara. Puedes escanear un código QR subiendo una imagen.
+                                No se pudo acceder a la cámara trasera. Asegúrate de que no esté en uso por otra aplicación.
                             </AlertDescription>
                         </Alert>
                     </div>
@@ -198,41 +175,17 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
     return (
         <div className="space-y-4">
             <div className="relative w-full aspect-square overflow-hidden rounded-md border bg-slate-100 dark:bg-slate-800">
-                <div id={qrReaderId} className="w-full h-full" />
+                 <video
+                    ref={videoRef}
+                    className="w-full h-full object-cover"
+                    playsInline
+                    muted
+                />
                 {status !== 'scanning' && (
                     <div className="absolute inset-0 z-10 flex items-center justify-center">
                         {renderOverlayContent()}
                     </div>
                 )}
-            </div>
-            
-            <div className="flex flex-col sm:flex-row gap-2 justify-center">
-                 {status === 'scanning' && cameras.length > 1 && (
-                    <Button 
-                        onClick={switchCamera} 
-                        variant="outline"
-                        className="w-full"
-                    >
-                        <Camera className="mr-2 h-5 w-5" />
-                        Cambiar Cámara
-                    </Button>
-                )}
-                <Input 
-                    type="file" 
-                    id="qr-file-input" 
-                    className="hidden" 
-                    accept="image/*"
-                    ref={fileInputRef}
-                    onChange={handleFileChange}
-                />
-                 <Label htmlFor="qr-file-input" className="w-full">
-                    <Button asChild variant="outline" className="w-full cursor-pointer">
-                        <div>
-                            <FileUp className="mr-2 h-5 w-5" />
-                            Escanear desde Archivo
-                        </div>
-                    </Button>
-                </Label>
             </div>
         </div>
     );
