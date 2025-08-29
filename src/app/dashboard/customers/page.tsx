@@ -27,7 +27,7 @@ import {
 import { PageHeader } from "@/components/page-header";
 import type { Customer } from "@/lib/types";
 import { CustomerForm } from "@/components/customer-form";
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/use-user-role";
 import { useData } from "@/context/data-context";
@@ -185,6 +185,9 @@ export default function CustomersPage() {
         <DialogContent>
             <DialogHeader>
                 <DialogTitle>{selectedCustomer ? "Editar Cliente" : "Crear Nuevo Cliente"}</DialogTitle>
+                <DialogDescription>
+                    {selectedCustomer ? "Modifica los detalles del cliente existente." : "Completa el formulario para añadir un nuevo cliente."}
+                </DialogDescription>
             </DialogHeader>
             <CustomerForm
               defaultValues={selectedCustomer}

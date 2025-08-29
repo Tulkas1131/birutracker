@@ -19,7 +19,7 @@ import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { movementSchema, type MovementFormData, type Asset, type Customer } from "@/lib/types";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { useData } from "@/context/data-context";
 
 // Dynamically import the QrScanner component
@@ -292,6 +292,9 @@ export default function MovementsPage() {
         <DialogContent>
             <DialogHeader>
                 <DialogTitle>Escanear Código QR</DialogTitle>
+                <DialogDescription>
+                    Apunta la cámara al código QR del activo o selecciona una imagen desde tu dispositivo.
+                </DialogDescription>
             </DialogHeader>
             <Suspense fallback={<div className="flex justify-center items-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
               {isScannerOpen && (
