@@ -108,43 +108,42 @@ export default function AssetsPage() {
                 margin: 0.5in;
               }
               body {
+                margin: 0;
                 -webkit-print-color-adjust: exact; 
                 print-color-adjust: exact;
               }
+              .print-container {
+                display: grid;
+                grid-template-columns: repeat(5, 1fr);
+                grid-template-rows: repeat(8, 1.25in);
+                gap: 0;
+                width: 100%;
+                height: 10in; /* 8 rows * 1.25in */
+              }
+              .qr-item {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+                box-sizing: border-box;
+                border: 1px dashed #ccc;
+                overflow: hidden;
+                page-break-inside: avoid;
+              }
+              .qr-item h1 {
+                font-family: sans-serif;
+                font-size: 0.6rem;
+                margin: 4px 0 0 0;
+                font-weight: bold;
+                word-break: break-all;
+              }
+              .qr-item svg {
+                width: 70% !important;
+                height: auto !important;
+              }
             }
-            body {
-              font-family: sans-serif; 
-              margin: 0;
-            }
-            .print-container {
-              display: grid;
-              grid-template-columns: repeat(5, 1fr);
-              grid-auto-rows: min-content;
-              gap: 0;
-              width: 100%;
-            }
-            .qr-item {
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              text-align: center;
-              padding: 8px;
-              box-sizing: border-box;
-              border: 1px dashed #ccc;
-              overflow: hidden;
-              page-break-inside: avoid;
-            }
-            .qr-item h1 {
-              font-size: 0.7rem;
-              margin: 4px 0 0 0;
-              font-weight: bold;
-              word-break: break-all;
-            }
-            .qr-item svg {
-              width: 90% !important;
-              height: auto !important;
-            }
+            /* Styles for single QR print (non-batch) */
             .single-qr-container {
               display: flex;
               flex-direction: column;
@@ -152,9 +151,19 @@ export default function AssetsPage() {
               justify-content: center;
               gap: 1rem;
               padding: 1rem;
+              font-family: sans-serif;
             }
             .single-qr-container h1 { font-size: 2rem; }
             .single-qr-container p { font-size: 1.25rem; }
+
+            /* Hide print-container styles when printing single */
+            @media screen {
+                .print-container {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+                    gap: 1rem;
+                }
+            }
           </style>
         `);
         printWindow.document.write('</head><body>');
@@ -164,7 +173,7 @@ export default function AssetsPage() {
         printWindow.focus();
         setTimeout(() => {
             printWindow.print();
-        }, 500); // Wait for content to render
+        }, 500);
     }
   };
   
@@ -570,6 +579,8 @@ export default function AssetsPage() {
       </Dialog>
     </div>
   );
+
+    
 
     
 
