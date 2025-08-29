@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { collection, query, where, getDocs, setDoc, doc } from 'firebase/firestore/lite';
+import { collection, query, where, getDocs, setDoc, doc, getDoc } from 'firebase/firestore/lite';
 import { auth, db } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -44,17 +44,22 @@ export default function SignupPage() {
         return;
       }
       
-      const role = "Operador";
+      const roleDoc = querySnapshot.docs[0];
+      const role = roleDoc.data().role || "Operador";
 
       // 2. If allowed, create user
       const userCredential = await createUserWithEmailAndPassword(authInstance, email, password);
       const user = userCredential.user;
 
       // 3. Create user profile in 'users' collection with the determined role
-      await setDoc(doc(firestore, "users", user.uid), {
-        email: user.email,
-        role: role,
-      });
+      const userDocRef = doc(firestore, "users", user.uid);
+      const userDoc = await getDoc(userDocRef);
+      if (!userDoc.exists()) {
+        await setDoc(userDocRef, {
+            email: user.email,
+            role: role,
+        });
+      }
 
       toast({
         title: "¡Cuenta Creada!",
@@ -126,7 +131,7 @@ export default function SignupPage() {
               Inicia Sesión
             </Link>
           </div>
-        </CardContent>
+        </Content>
       </Card>
     </div>
   );

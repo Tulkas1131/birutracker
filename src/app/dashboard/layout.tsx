@@ -118,7 +118,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
                 {userRole ? (
                   <span className="font-semibold">{userRole}</span>
                 ) : (
-                  <Skeleton className="h-5 w-16" />
+                  <span className="font-semibold text-muted-foreground">Cargando...</span>
                 )}
                 <span className="text-muted-foreground truncate">{user.email}</span>
               </div>
