@@ -1,69 +1,50 @@
 
+"use client";
+
 import * as React from "react";
-import { redirect } from 'next/navigation';
-import { cookies } from 'next/headers';
-import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
-import { adminApp } from "@/lib/firebase/admin";
+import { useAuthState } from "react-firebase-hooks/auth";
+import { auth } from "@/lib/firebase";
+import { useRouter } from "next/navigation";
 import { DashboardLayoutContent } from "./layout-client";
+import { useUserRole } from "@/hooks/use-user-role";
+import { Skeleton } from "@/components/ui/skeleton";
 
-async function getUserData(uid: string) {
-  try {
-    const auth = getAuth(adminApp);
-    const firestore = getFirestore(adminApp);
-    
-    const [userRecord, userDoc] = await Promise.all([
-      auth.getUser(uid),
-      firestore.collection('users').doc(uid).get()
-    ]);
-    
-    let role = 'Operador';
-    if (userDoc.exists) {
-      role = userDoc.data()?.role || 'Operador';
-    }
-
-    return {
-      email: userRecord.email,
-      photoURL: userRecord.photoURL,
-      role: role,
-    };
-  } catch (error) {
-    console.error("Error fetching user data:", error);
-    // Return null or default values if user data can't be fetched
-    // This might happen if the user was deleted from Auth but the cookie remains
-    return null;
-  }
-}
-
-
-export default async function DashboardLayout({
+export default function DashboardLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: React.React.Node;
 }) {
-  const cookieStore = cookies();
-  const sessionCookie = cookieStore.get('__session')?.value;
+  const [user, loading] = useAuthState(auth());
+  const userRole = useUserRole();
+  const router = useRouter();
 
-  if (!sessionCookie) {
-    // Redirect if no session cookie is found
-    redirect('/');
-  }
-
-  try {
-    const decodedIdToken = await getAuth(adminApp).verifySessionCookie(sessionCookie, true);
-    const userData = await getUserData(decodedIdToken.uid);
-
-    if (!userData) {
-        // If user data is null (e.g., user deleted), treat as unauthenticated
-        redirect('/');
+  React.useEffect(() => {
+    if (!loading && !user) {
+      router.push('/');
     }
+  }, [user, loading, router]);
 
+  if (loading || !user || !userRole) {
     return (
-        <DashboardLayoutContent user={userData}>{children}</DashboardLayoutContent>
+        <div className="flex h-screen w-full items-center justify-center">
+            <div className="flex flex-col items-center gap-4">
+                <Skeleton className="h-12 w-12 rounded-full" />
+                <div className="space-y-2">
+                    <Skeleton className="h-4 w-[250px]" />
+                    <Skeleton className="h-4 w-[200px]" />
+                </div>
+            </div>
+        </div>
     );
-  } catch (error) {
-    console.error("Session cookie verification failed:", error);
-    // Redirect if the cookie is invalid
-    redirect('/');
   }
+
+  const userData = {
+    email: user.email || undefined,
+    photoURL: user.photoURL || undefined,
+    role: userRole,
+  };
+
+  return (
+      <DashboardLayoutContent user={userData}>{children}</DashboardLayoutContent>
+  );
 }

@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import {
@@ -37,8 +37,7 @@ interface UserData {
     role: string;
 }
 
-export function DashboardLayoutContent({ children, user }: { children: React.ReactNode, user: UserData }) {
-  const router = useRouter();
+export function DashboardLayoutContent({ children, user }: { children: React.React.Node, user: UserData }) {
   const pathname = usePathname();
 
   const navItems = [
@@ -50,22 +49,10 @@ export function DashboardLayoutContent({ children, user }: { children: React.Rea
   ];
 
   const handleSignOut = async () => {
-    // Client-side sign out
     const authInstance = auth();
     await signOut(authInstance);
-
-    // Call server action to clear cookie
-    const response = await fetch('/api/auth/signout', {
-        method: 'POST',
-    });
-
-    if(response.ok) {
-        // Force a full page reload to clear all state and redirect
-        window.location.href = '/';
-    } else {
-        console.error("Failed to sign out on server");
-        // Handle error case if necessary
-    }
+    // The redirect logic in the layout will handle pushing the user to the login page.
+    window.location.href = '/';
   };
   
   return (
