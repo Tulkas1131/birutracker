@@ -17,9 +17,10 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/hooks/use-toast";
-import { movementSchema, type MovementFormData, type Asset, type Customer, type Event } from "@/lib/types";
+import { movementSchema, type MovementFormData, type Asset, type Customer, type Event, type MovementEventType } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 const QrScanner = dynamic(() => import('@/components/qr-scanner').then(mod => mod.QrScanner), {
   ssr: false,
@@ -53,7 +54,10 @@ export default function MovementsPage() {
         const firestore = db();
         const assetsQuery = query(collection(firestore, "assets"), orderBy("code"));
         const customersQuery = query(collection(firestore, "customers"), orderBy("name"));
-        const pendingEventsQuery = query(collection(firestore, "events"), where("event_type", "in", ["SALIDA_A_REPARTO", "RECOLECCION_DE_CLIENTE"]));
+        const pendingEventsQuery = query(
+          collection(firestore, "events"), 
+          where("event_type", "in", ["SALIDA_A_REPARTO", "RECOLECCION_DE_CLIENTE"])
+        );
 
         const [assetsSnapshot, customersSnapshot, pendingEventsSnapshot] = await Promise.all([
           getDocs(assetsQuery),
@@ -108,12 +112,14 @@ export default function MovementsPage() {
     const isSecondStepEvent = watchEventType === 'ENTREGA_A_CLIENTE' || watchEventType === 'RECEPCION_EN_PLANTA';
     
     if (isSecondStepEvent && watchAssetId) {
-      const pendingEvent = pendingEvents.find(e => e.asset_id === watchAssetId);
+      const expectedInitialEventType = watchEventType === 'ENTREGA_A_CLIENTE' ? 'SALIDA_A_REPARTO' : 'RECOLECCION_DE_CLIENTE';
+      const pendingEvent = pendingEvents.find(e => e.asset_id === watchAssetId && e.event_type === expectedInitialEventType);
+
       if (pendingEvent) {
         form.setValue('customer_id', pendingEvent.customer_id);
       }
     } else {
-        if (!isSecondStepEvent) {
+        if (!form.formState.isDirty) { // Evita resetear si el usuario ya interactuó
              form.resetField('customer_id');
         }
     }
@@ -284,12 +290,27 @@ export default function MovementsPage() {
     }
   }
 
+  const handleEventTypeChange = (value: MovementEventType) => {
+    form.setValue('event_type', value);
+    form.resetField('asset_id');
+    form.resetField('customer_id');
+  };
+
+  const eventTypeDetails: Record<MovementEventType, { title: string; description: string }> = {
+    SALIDA_A_REPARTO: { title: "Salida a Reparto (Cargar Camión)", description: "Registra los activos que salen de la planta hacia un cliente." },
+    ENTREGA_A_CLIENTE: { title: "Entrega a Cliente", description: "Confirma la entrega de un activo que ya está en reparto." },
+    RECOLECCION_DE_CLIENTE: { title: "Recolección de Cliente", description: "Registra un activo vacío que se retira de un cliente." },
+    RECEPCION_EN_PLANTA: { title: "Recepción en Planta (Descargar Camión)", description: "Confirma la llegada a planta de un activo recolectado." },
+    SALIDA_VACIO: { title: "Préstamo (Salida Vacío)", description: "Registra la salida de un activo vacío hacia un cliente." },
+    DEVOLUCION: { title: "Devolución (Lleno)", description: "Registra un activo lleno que un cliente devuelve a planta." },
+  };
+
   return (
     <div className="flex flex-1 flex-col">
       <Dialog open={isScannerOpen} onOpenChange={setScannerOpen}>
         <PageHeader
             title="Registrar un Movimiento"
-            description="Registra la salida o entrada de un activo a un cliente."
+            description="Elige una acción y completa los detalles."
             action={
                 <DialogTrigger asChild>
                     <Button size="lg" variant="outline" onClick={() => setScannerOpen(true)}>
@@ -302,8 +323,8 @@ export default function MovementsPage() {
         <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
             <Card className="mx-auto w-full max-w-2xl">
             <CardHeader>
-                <CardTitle>Detalles del Nuevo Movimiento</CardTitle>
-                <CardDescription>Selecciona un activo (manualmente o con QR), tipo de evento y cliente.</CardDescription>
+                <CardTitle>{eventTypeDetails[watchEventType].title}</CardTitle>
+                <CardDescription>{eventTypeDetails[watchEventType].description}</CardDescription>
             </CardHeader>
             <CardContent>
               {isLoading ? (
@@ -313,103 +334,114 @@ export default function MovementsPage() {
               ) : (
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-                     <FormField
+                    <FormField
                       control={form.control}
                       name="event_type"
                       render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Tipo de Evento</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecciona un tipo de evento" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="SALIDA_A_REPARTO">SALIDA A REPARTO (Lleno)</SelectItem>
-                              <SelectItem value="ENTREGA_A_CLIENTE">ENTREGA A CLIENTE (Lleno)</SelectItem>
-                              <SelectItem value="RECOLECCION_DE_CLIENTE">RECOLECCIÓN DE CLIENTE (Vacío)</SelectItem>
-                              <SelectItem value="RECEPCION_EN_PLANTA">RECEPCIÓN EN PLANTA (Vacío)</SelectItem>
-                              <SelectItem value="SALIDA_VACIO">SALIDA VACIO (Préstamo)</SelectItem>
-                              <SelectItem value="DEVOLUCION">DEVOLUCION (Lleno)</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="asset_id"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Activo</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecciona un activo para mover" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {filteredAssets.length === 0 ? (
-                                <div className="p-4 text-sm text-muted-foreground">No hay activos disponibles para esta operación.</div>
-                              ) : (
-                                filteredAssets.map(asset => (
-                                  <SelectItem key={asset.id} value={asset.id}>
-                                    {asset.code} ({asset.type} - {asset.format}) - <span className="text-muted-foreground">{asset.state}</span>
-                                  </SelectItem>
-                                ))
-                              )}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    {showVarietyField && (
-                      <FormField
-                        control={form.control}
-                        name="variety"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Variedad de Cerveza</FormLabel>
-                            <FormControl>
-                              <Input placeholder="ej., IPA, Stout, Lager" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
-                    <FormField
-                      control={form.control}
-                      name="customer_id"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Cliente</FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value}
-                            defaultValue={field.value}
-                            disabled={watchEventType === 'ENTREGA_A_CLIENTE' || watchEventType === 'RECEPCION_EN_PLANTA'}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecciona el cliente asociado" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {customers.map(customer => (
-                                <SelectItem key={customer.id} value={customer.id}>
-                                  {customer.name}
-                                </SelectItem>
+                        <FormItem className="space-y-3">
+                          <FormLabel>Elige una acción</FormLabel>
+                          <FormControl>
+                            <RadioGroup
+                              onValueChange={(value: MovementEventType) => handleEventTypeChange(value)}
+                              defaultValue={field.value}
+                              className="grid grid-cols-2 md:grid-cols-3 gap-4"
+                            >
+                              {(Object.keys(eventTypeDetails) as MovementEventType[]).map((type) => (
+                                <FormItem key={type}>
+                                  <FormControl>
+                                    <RadioGroupItem value={type} id={type} className="sr-only" />
+                                  </FormControl>
+                                  <Label
+                                    htmlFor={type}
+                                    className={`flex flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground cursor-pointer
+                                      ${field.value === type ? 'border-primary' : ''}`}
+                                  >
+                                    <span className="text-center font-semibold">{eventTypeDetails[type].title.split('(')[0].trim()}</span>
+                                  </Label>
+                                </FormItem>
                               ))}
-                            </SelectContent>
-                          </Select>
+                            </RadioGroup>
+                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
+                    
+                    <div className="space-y-4 rounded-md border p-4">
+                        <FormField
+                        control={form.control}
+                        name="asset_id"
+                        render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Activo</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                                <FormControl>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecciona un activo para mover" />
+                                </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                {filteredAssets.length === 0 ? (
+                                    <div className="p-4 text-sm text-muted-foreground">No hay activos disponibles para esta operación.</div>
+                                ) : (
+                                    filteredAssets.map(asset => (
+                                    <SelectItem key={asset.id} value={asset.id}>
+                                        {asset.code} ({asset.type} - {asset.format}) - <span className="text-muted-foreground">{asset.state}</span>
+                                    </SelectItem>
+                                    ))
+                                )}
+                                </SelectContent>
+                            </Select>
+                            <FormMessage />
+                            </FormItem>
+                        )}
+                        />
+                        {showVarietyField && (
+                        <FormField
+                            control={form.control}
+                            name="variety"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Variedad de Cerveza</FormLabel>
+                                <FormControl>
+                                <Input placeholder="ej., IPA, Stout, Lager" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                        )}
+                        <FormField
+                        control={form.control}
+                        name="customer_id"
+                        render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Cliente</FormLabel>
+                            <Select
+                                onValueChange={field.onChange}
+                                value={field.value}
+                                defaultValue={field.value}
+                                disabled={watchEventType === 'ENTREGA_A_CLIENTE' || watchEventType === 'RECEPCION_EN_PLANTA'}
+                            >
+                                <FormControl>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecciona el cliente asociado" />
+                                </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                {customers.map(customer => (
+                                    <SelectItem key={customer.id} value={customer.id}>
+                                    {customer.name}
+                                    </SelectItem>
+                                ))}
+                                </SelectContent>
+                            </Select>
+                            <FormMessage />
+                            </FormItem>
+                        )}
+                        />
+                    </div>
+                    
                     <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
                       {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                       Guardar Movimiento
