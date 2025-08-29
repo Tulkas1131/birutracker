@@ -107,22 +107,21 @@ export default function AssetsPage() {
                 size: letter;
                 margin: 0.5in;
               }
-              body { 
+              body {
                 -webkit-print-color-adjust: exact; 
                 print-color-adjust: exact;
               }
             }
-            body { 
+            body {
               font-family: sans-serif; 
               margin: 0;
             }
             .print-container {
               display: grid;
               grid-template-columns: repeat(5, 1fr);
-              grid-template-rows: repeat(8, 1fr);
+              grid-auto-rows: 2in;
               gap: 0;
-              width: 7.5in;
-              height: 10in;
+              width: 100%;
               box-sizing: border-box;
             }
             .qr-item {
@@ -138,10 +137,11 @@ export default function AssetsPage() {
             }
             .qr-item h1 {
               font-size: 0.6rem;
-              margin: 2px 0 0 0;
+              margin: 4px 0 0 0;
               font-weight: bold;
+              word-break: break-all;
             }
-            .qr-item canvas, .qr-item svg {
+            .qr-item svg {
               width: 80% !important;
               height: auto !important;
             }
@@ -152,7 +152,6 @@ export default function AssetsPage() {
               justify-content: center;
               gap: 1rem;
               padding: 1rem;
-              height: 100vh;
             }
              .single-qr-container h1 { font-size: 2rem; }
              .single-qr-container p { font-size: 1.25rem; }
@@ -571,6 +570,8 @@ export default function AssetsPage() {
       </Dialog>
     </div>
   );
+
+    
 
     
 
