@@ -285,7 +285,7 @@ export default function AssetsPage() {
         return "outline";
       case "EN_PLANTA":
         return "secondary";
-      case "EN_PROVEEDOR":
+      case "EN_REPARTO":
         return "default";
       default:
         return "default";
@@ -296,7 +296,7 @@ export default function AssetsPage() {
     switch (location) {
         case "EN_CLIENTE": return "En Cliente";
         case "EN_PLANTA": return "En Planta";
-        case "EN_PROVEEDOR": return "En Proveedor";
+        case "EN_REPARTO": return "En Reparto";
         default: return location;
     }
   };
@@ -308,15 +308,17 @@ export default function AssetsPage() {
     const calculateCounts = (assetList: Asset[]) => {
       return assetList.reduce((acc, asset) => {
         if (!acc[asset.format]) {
-          acc[asset.format] = { inPlant: 0, inCustomer: 0 };
+          acc[asset.format] = { inPlant: 0, inCustomer: 0, inDelivery: 0 };
         }
         if (asset.location === 'EN_PLANTA') {
           acc[asset.format].inPlant++;
         } else if (asset.location === 'EN_CLIENTE') {
           acc[asset.format].inCustomer++;
+        } else if (asset.location === 'EN_REPARTO') {
+            acc[asset.format].inDelivery++;
         }
         return acc;
-      }, {} as Record<string, { inPlant: number; inCustomer: number }>);
+      }, {} as Record<string, { inPlant: number; inCustomer: number; inDelivery: number }>);
     };
 
     return {
@@ -411,13 +413,14 @@ export default function AssetsPage() {
       </Card>
   );
 
-  const CountsDisplay = ({ counts }: { counts: Record<string, { inPlant: number; inCustomer: number }> }) => (
+  const CountsDisplay = ({ counts }: { counts: Record<string, { inPlant: number; inCustomer: number; inDelivery: number }> }) => (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
       {Object.entries(counts).map(([format, data]) => (
         <div key={format} className="flex items-center gap-2">
           <span className="font-semibold">{format}:</span>
           <span>En Planta: <Badge variant="secondary">{data.inPlant}</Badge></span>
           <span>En Cliente: <Badge variant="outline">{data.inCustomer}</Badge></span>
+          <span>En Reparto: <Badge variant="default">{data.inDelivery}</Badge></span>
         </div>
       ))}
     </div>
@@ -548,5 +551,3 @@ export default function AssetsPage() {
     </div>
   );
 }
-
-    

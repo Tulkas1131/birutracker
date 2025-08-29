@@ -115,7 +115,7 @@ export function AssetForm({ defaultValues, onSubmit, onCancel }: AssetFormProps)
                 <SelectContent>
                   <SelectItem value="EN_PLANTA">EN PLANTA</SelectItem>
                   <SelectItem value="EN_CLIENTE">EN CLIENTE</SelectItem>
-                  <SelectItem value="EN_PROVEEDOR">EN PROVEEDOR</SelectItem>
+                  <SelectItem value="EN_REPARTO">EN REPARTO</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />
