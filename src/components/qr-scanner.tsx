@@ -1,11 +1,11 @@
 
 "use client";
 
-import { useEffect, useRef, memo, useState } from 'react';
-import { Html5QrcodeScanner, Html5Qrcode, Html5QrcodeScannerState, QrcodeErrorCallback, QrcodeSuccessCallback } from 'html5-qrcode';
+import { useEffect, useRef, memo, useState, useCallback } from 'react';
+import { Html5Qrcode, Html5QrcodeScannerState, QrcodeErrorCallback, QrcodeSuccessCallback } from 'html5-qrcode';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from '@/components/ui/button';
-import { Camera, FileUp, AlertTriangle, Loader2, Play } from 'lucide-react';
+import { Camera, FileUp, AlertTriangle, Loader2, Play, Video } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,7 +21,7 @@ interface CameraDevice {
     label: string;
 }
 
-type ScannerStatus = 'initializing' | 'scanning' | 'paused' | 'permissionDenied' | 'noCameras' | 'error';
+type ScannerStatus = 'idle' | 'initializing' | 'scanning' | 'paused' | 'permissionDenied' | 'noCameras' | 'error';
 
 function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
     const { toast } = useToast();
@@ -29,11 +29,11 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [cameras, setCameras] = useState<CameraDevice[]>([]);
     const [activeCameraId, setActiveCameraId] = useState<string | null>(null);
-    const [status, setStatus] = useState<ScannerStatus>('initializing');
+    const [status, setStatus] = useState<ScannerStatus>('idle');
     const isMobile = useIsMobile();
     const qrReaderId = "qr-reader";
 
-    const startScannerWithCamera = async (cameraId: string) => {
+    const startScannerWithCamera = useCallback(async (cameraId: string) => {
         if (!scannerRef.current) return;
         
         try {
@@ -56,66 +56,53 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
             onScanError("Failed to start camera");
             setStatus('error');
         }
-    };
+    }, [onScanError, onScanSuccess]);
 
-    const resumeScanner = () => {
-        if (scannerRef.current && scannerRef.current.getState() === Html5QrcodeScannerState.PAUSED) {
-            scannerRef.current.resume();
-            setStatus('scanning');
+    const handleActivateCamera = useCallback(async () => {
+        setStatus('initializing');
+        try {
+            const devices = await Html5Qrcode.getCameras();
+            if (devices && devices.length > 0) {
+                setCameras(devices);
+                
+                let selectedCameraId = devices[0].id;
+                if (isMobile) {
+                    const rearCamera = devices.find(device => device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('rear'));
+                    if (rearCamera) {
+                        selectedCameraId = rearCamera.id;
+                    }
+                }
+                
+                setActiveCameraId(selectedCameraId);
+                await startScannerWithCamera(selectedCameraId);
+
+            } else {
+                setStatus('noCameras');
+            }
+        } catch (err: any) {
+            console.error("Error getting cameras", err);
+            if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+                setStatus('permissionDenied');
+            } else {
+                setStatus('error');
+            }
         }
-    };
+    }, [isMobile, startScannerWithCamera]);
 
     useEffect(() => {
-        if (typeof window === 'undefined') return;
-
-        // Initialize the scanner only once
-        if (!scannerRef.current) {
+        // Initialize the scanner object only once
+        if (typeof window !== 'undefined' && !scannerRef.current) {
             scannerRef.current = new Html5Qrcode(qrReaderId, false);
         }
 
-        const setupScanner = async () => {
-            try {
-                const devices = await Html5Qrcode.getCameras();
-                if (devices && devices.length > 0) {
-                    setCameras(devices);
-                    
-                    let selectedCameraId = devices[0].id;
-                    if (isMobile) {
-                        const rearCamera = devices.find(device => device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('rear'));
-                        if (rearCamera) {
-                            selectedCameraId = rearCamera.id;
-                        }
-                    }
-                    
-                    setActiveCameraId(selectedCameraId);
-                    await startScannerWithCamera(selectedCameraId);
-
-                } else {
-                    setStatus('noCameras');
-                }
-            } catch (err: any) {
-                console.error("Error getting cameras", err);
-                if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-                    setStatus('permissionDenied');
-                } else {
-                    setStatus('error');
-                }
-            }
-        };
-
-        setupScanner();
-
+        // Cleanup function
         return () => {
             if (scannerRef.current && scannerRef.current.isScanning) {
-                // Stop the camera completely on component unmount
-                scannerRef.current.stop().then(() => {
-                    scannerRef.current?.clear();
-                }).catch(error => {
-                    console.warn("QR Scanner stop/clear failed on unmount:", error);
+                scannerRef.current.stop().catch(error => {
+                    console.warn("QR Scanner stop failed on unmount:", error);
                 });
             }
         };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const switchCamera = async () => {
@@ -155,19 +142,19 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
 
     const renderOverlayContent = () => {
         switch (status) {
+            case 'idle':
+                return (
+                     <div className="flex flex-col items-center justify-center space-y-4 h-full bg-slate-100 dark:bg-slate-800">
+                        <Button onClick={handleActivateCamera} size="lg">
+                            <Video className="mr-2 h-6 w-6" /> Activar Cámara
+                        </Button>
+                    </div>
+                );
             case 'initializing':
                 return (
                     <div className="flex flex-col items-center justify-center space-y-2 h-full">
                         <Loader2 className="h-8 w-8 animate-spin text-primary" />
                         <p className="text-muted-foreground">Iniciando cámara...</p>
-                    </div>
-                );
-            case 'paused':
-                return (
-                    <div className="flex flex-col items-center justify-center space-y-4 h-full bg-black/50">
-                       <Button onClick={resumeScanner} size="lg" variant="secondary">
-                           <Play className="mr-2 h-6 w-6" /> Reanudar Escaneo
-                       </Button>
                     </div>
                 );
             case 'permissionDenied':
@@ -176,7 +163,7 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
                         <AlertTriangle className="h-4 w-4" />
                         <AlertTitle>Permiso de Cámara Denegado</AlertTitle>
                         <AlertDescription>
-                            Necesitas otorgar permiso para usar la cámara. Por favor, habilítalo en la configuración de tu navegador y recarga la página.
+                            Necesitas otorgar permiso para usar la cámara. Por favor, habilítalo en la configuración de tu navegador y vuelve a intentarlo.
                         </AlertDescription>
                     </Alert>
                 );
@@ -213,7 +200,7 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
             <div className="relative w-full aspect-square overflow-hidden rounded-md border bg-slate-100 dark:bg-slate-800">
                 <div id={qrReaderId} className="w-full h-full" />
                 {status !== 'scanning' && (
-                    <div className="absolute inset-0 z-10">
+                    <div className="absolute inset-0 z-10 flex items-center justify-center">
                         {renderOverlayContent()}
                     </div>
                 )}
