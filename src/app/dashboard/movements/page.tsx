@@ -56,7 +56,6 @@ export default function MovementsPage() {
         const assetsQuery = query(collection(firestore, "assets"), orderBy("code"));
         const customersQuery = query(collection(firestore, "customers"), orderBy("name"));
         
-        // Fetch all events that might be "pending" or contain necessary lookup info
         const pendingEventsQuery = query(
           collection(firestore, "events"), 
           where("event_type", "in", ["SALIDA_A_REPARTO", "RECOLECCION_DE_CLIENTE", "ENTREGA_A_CLIENTE"]),
@@ -123,7 +122,7 @@ export default function MovementsPage() {
         form.setValue('customer_id', pendingEvent.customer_id);
       }
     } else {
-        if (!form.formState.isDirty) { // Evita resetear si el usuario ya interactuó
+        if (!form.formState.isDirty) { 
              form.resetField('customer_id');
         }
     }
@@ -131,7 +130,6 @@ export default function MovementsPage() {
 
 
   useEffect(() => {
-    // Reset asset_id if it's no longer in the filtered list
     if (watchAssetId && !filteredAssets.find(a => a.id === watchAssetId)) {
       form.setValue('asset_id', '');
     }
@@ -153,10 +151,8 @@ export default function MovementsPage() {
       const scannedAsset = assets.find(a => a.id === decodedText);
 
       if (scannedAsset) {
-        // Set asset in form
         form.setValue('asset_id', scannedAsset.id);
         
-        // If the action is a pickup, find the customer automatically
         if (watchEventType === 'RECOLECCION_DE_CLIENTE') {
           const lastDeliveryEvent = pendingEvents.find(e => e.asset_id === scannedAsset.id && e.event_type === 'ENTREGA_A_CLIENTE');
           
@@ -265,7 +261,6 @@ export default function MovementsPage() {
         if (isUpdateEvent) {
           const expectedInitialEventType = data.event_type === 'ENTREGA_A_CLIENTE' ? 'SALIDA_A_REPARTO' : 'RECOLECCION_DE_CLIENTE';
           
-          // Find the most recent pending event for this asset
           const pendingEvent = pendingEvents
             .filter(e => e.asset_id === currentSelectedAsset.id && e.event_type === expectedInitialEventType)
             .sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis())[0];
@@ -499,3 +494,5 @@ export default function MovementsPage() {
     </div>
   );
 }
+
+    
