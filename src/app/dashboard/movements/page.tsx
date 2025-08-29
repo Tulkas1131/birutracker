@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, Suspense, useEffect } from "react";
+import { useState, Suspense, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
@@ -83,6 +83,26 @@ export default function MovementsPage() {
   const selectedAsset = assets.find(asset => asset.id === watchAssetId);
   const showVarietyField = selectedAsset?.type === 'BARRIL' && (watchEventType === 'SALIDA_LLENO' || watchEventType === 'DEVOLUCION_LLENO');
 
+  const filteredAssets = useMemo(() => {
+    switch (watchEventType) {
+      case 'SALIDA_LLENO':
+      case 'SALIDA_VACIO':
+        return assets.filter(a => a.location === 'EN_PLANTA');
+      case 'RETORNO_VACIO':
+      case 'DEVOLUCION_LLENO':
+        return assets.filter(a => a.location === 'EN_CLIENTE');
+      default:
+        return assets;
+    }
+  }, [assets, watchEventType]);
+
+  useEffect(() => {
+    // Reset asset_id if it's no longer in the filtered list
+    if (watchAssetId && !filteredAssets.find(a => a.id === watchAssetId)) {
+      form.setValue('asset_id', '');
+    }
+  }, [filteredAssets, watchAssetId, form]);
+
   const handleScanSuccess = async (decodedText: string) => {
     setScannerOpen(false);
     
@@ -124,6 +144,8 @@ export default function MovementsPage() {
   };
 
   const handleScanError = (errorMessage: string) => {
+    // This function is called frequently by the scanner library.
+    // We only want to log significant errors, not "QR code not found" messages.
     if (typeof errorMessage === 'string' && (errorMessage.toLowerCase().includes("not found") || errorMessage.toLowerCase().includes("insufficient"))) {
         return;
     }
@@ -141,11 +163,13 @@ export default function MovementsPage() {
        return;
     }
 
-    if (!selectedAsset) {
-      toast({ title: "Error", description: "Activo no encontrado.", variant: "destructive" });
+    const currentSelectedAsset = assets.find(a => a.id === data.asset_id);
+    if (!currentSelectedAsset) {
+      toast({ title: "Error", description: "Activo no encontrado o inválido para esta operación.", variant: "destructive" });
       setIsSubmitting(false);
       return;
     }
+
     const selectedCustomer = customers.find(c => c.id === data.customer_id);
      if (!selectedCustomer) {
       toast({ title: "Error", description: "Cliente no encontrado.", variant: "destructive" });
@@ -153,8 +177,8 @@ export default function MovementsPage() {
       return;
     }
     
-    let newLocation: Asset['location'] = selectedAsset.location;
-    let newState: Asset['state'] = selectedAsset.state;
+    let newLocation: Asset['location'] = currentSelectedAsset.location;
+    let newState: Asset['state'] = currentSelectedAsset.state;
 
     switch (data.event_type) {
       case 'SALIDA_LLENO':
@@ -178,8 +202,8 @@ export default function MovementsPage() {
     try {
       await runTransaction(firestore, async (transaction) => {
         const eventData = {
-          asset_id: selectedAsset.id,
-          asset_code: selectedAsset.code,
+          asset_id: currentSelectedAsset.id,
+          asset_code: currentSelectedAsset.code,
           customer_id: selectedCustomer.id,
           customer_name: selectedCustomer.name,
           event_type: data.event_type,
@@ -190,13 +214,13 @@ export default function MovementsPage() {
         const newEventRef = doc(collection(firestore, "events"));
         transaction.set(newEventRef, eventData);
 
-        const assetRef = doc(firestore, "assets", selectedAsset.id);
+        const assetRef = doc(firestore, "assets", currentSelectedAsset.id);
         transaction.update(assetRef, { location: newLocation, state: newState });
       });
 
       toast({
         title: "Movimiento Registrado",
-        description: `El movimiento del activo ${selectedAsset.code} ha sido registrado.`,
+        description: `El movimiento del activo ${currentSelectedAsset.code} ha sido registrado.`,
       });
       
       form.reset();
@@ -242,6 +266,29 @@ export default function MovementsPage() {
               ) : (
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+                     <FormField
+                      control={form.control}
+                      name="event_type"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Tipo de Evento</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecciona un tipo de evento" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="SALIDA_LLENO">SALIDA LLENO (Entrega)</SelectItem>
+                              <SelectItem value="RETORNO_VACIO">RETORNO VACIO (Retiro)</SelectItem>
+                              <SelectItem value="SALIDA_VACIO">SALIDA VACIO (Préstamo)</SelectItem>
+                              <SelectItem value="DEVOLUCION_LLENO">DEVOLUCION LLENO (Devolución)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                     <FormField
                       control={form.control}
                       name="asset_id"
@@ -255,34 +302,15 @@ export default function MovementsPage() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {assets.map(asset => (
-                                <SelectItem key={asset.id} value={asset.id}>
-                                  {asset.code} ({asset.type} - {asset.format}) - <span className="text-muted-foreground">{asset.location}</span>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="event_type"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Tipo de Evento</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecciona un tipo de evento" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="SALIDA_LLENO">SALIDA_LLENO (Entrega)</SelectItem>
-                              <SelectItem value="RETORNO_VACIO">RETORNO_VACIO (Retorno)</SelectItem>
-                              <SelectItem value="SALIDA_VACIO">SALIDA_VACIO (Caso Especial)</SelectItem>
-                              <SelectItem value="DEVOLUCION_LLENO">DEVOLUCION_LLENO (Caso Especial)</SelectItem>
+                              {filteredAssets.length === 0 ? (
+                                <div className="p-4 text-sm text-muted-foreground">No hay activos disponibles para esta operación.</div>
+                              ) : (
+                                filteredAssets.map(asset => (
+                                  <SelectItem key={asset.id} value={asset.id}>
+                                    {asset.code} ({asset.type} - {asset.format}) - <span className="text-muted-foreground">{asset.state}</span>
+                                  </SelectItem>
+                                ))
+                              )}
                             </SelectContent>
                           </Select>
                           <FormMessage />

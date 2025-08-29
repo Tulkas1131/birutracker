@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { assetSchema, type AssetFormData } from "@/lib/types";
-import { useEffect } from "react";
 
 interface AssetFormProps {
   defaultValues?: AssetFormData;
@@ -27,20 +26,6 @@ export function AssetForm({ defaultValues, onSubmit, onCancel }: AssetFormProps)
       location: "EN_PLANTA",
     },
   });
-
-  useEffect(() => {
-    if (defaultValues) {
-      form.reset(defaultValues);
-    } else {
-       form.reset({
-        code: "Será autogenerado",
-        type: "BARRIL",
-        format: "",
-        state: "VACIO",
-        location: "EN_PLANTA",
-      });
-    }
-  }, [defaultValues, form]);
 
   const isEditing = !!defaultValues;
 
