@@ -55,9 +55,12 @@ export default function MovementsPage() {
         const firestore = db();
         const assetsQuery = query(collection(firestore, "assets"), orderBy("code"));
         const customersQuery = query(collection(firestore, "customers"), orderBy("name"));
+        
+        // Fetch all events that might be "pending" or contain necessary lookup info
         const pendingEventsQuery = query(
           collection(firestore, "events"), 
-          where("event_type", "in", ["SALIDA_A_REPARTO", "RECOLECCION_DE_CLIENTE"])
+          where("event_type", "in", ["SALIDA_A_REPARTO", "RECOLECCION_DE_CLIENTE", "ENTREGA_A_CLIENTE"]),
+          orderBy("timestamp", "desc")
         );
 
         const [assetsSnapshot, customersSnapshot, pendingEventsSnapshot] = await Promise.all([
@@ -146,17 +149,36 @@ export default function MovementsPage() {
         return;
     }
 
-    const firestore = db();
     try {
-      const assetRef = doc(firestore, 'assets', decodedText);
-      const assetSnap = await getDoc(assetRef);
-      if (assetSnap.exists()) {
-        const scannedAsset = { id: assetSnap.id, ...assetSnap.data() } as Asset;
+      const scannedAsset = assets.find(a => a.id === decodedText);
+
+      if (scannedAsset) {
+        // Set asset in form
         form.setValue('asset_id', scannedAsset.id);
-        toast({
-            title: "Activo Encontrado",
-            description: `Se ha seleccionado el activo: ${scannedAsset.code}.`
-        });
+        
+        // If the action is a pickup, find the customer automatically
+        if (watchEventType === 'RECOLECCION_DE_CLIENTE') {
+          const lastDeliveryEvent = pendingEvents.find(e => e.asset_id === scannedAsset.id && e.event_type === 'ENTREGA_A_CLIENTE');
+          
+          if (lastDeliveryEvent) {
+            form.setValue('customer_id', lastDeliveryEvent.customer_id);
+            toast({
+              title: "Activo y Cliente Encontrados",
+              description: `Activo: ${scannedAsset.code}. Cliente: ${lastDeliveryEvent.customer_name}.`
+            });
+          } else {
+            toast({
+              title: "Activo Encontrado, Cliente Desconocido",
+              description: `Se ha seleccionado el activo: ${scannedAsset.code}. Por favor, selecciona el cliente manualmente.`,
+              variant: "default"
+            });
+          }
+        } else {
+          toast({
+              title: "Activo Encontrado",
+              description: `Se ha seleccionado el activo: ${scannedAsset.code}.`
+          });
+        }
       } else {
         toast({
             title: "Error",
@@ -165,7 +187,7 @@ export default function MovementsPage() {
         });
       }
     } catch (error) {
-        console.error("Error fetching asset by ID: ", error);
+        console.error("Error processing scan: ", error);
         toast({
             title: "Error de Búsqueda",
             description: "No se pudo verificar el código QR.",
@@ -242,7 +264,11 @@ export default function MovementsPage() {
 
         if (isUpdateEvent) {
           const expectedInitialEventType = data.event_type === 'ENTREGA_A_CLIENTE' ? 'SALIDA_A_REPARTO' : 'RECOLECCION_DE_CLIENTE';
-          const pendingEvent = pendingEvents.find(e => e.asset_id === currentSelectedAsset.id && e.event_type === expectedInitialEventType);
+          
+          // Find the most recent pending event for this asset
+          const pendingEvent = pendingEvents
+            .filter(e => e.asset_id === currentSelectedAsset.id && e.event_type === expectedInitialEventType)
+            .sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis())[0];
 
           if (!pendingEvent) {
             throw new Error(`No se encontró el evento inicial de '${expectedInitialEventType}' para el activo ${currentSelectedAsset.code}. No se puede completar la operación.`);
@@ -473,5 +499,3 @@ export default function MovementsPage() {
     </div>
   );
 }
-
-    
