@@ -47,11 +47,6 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
                 scanner.clear().catch(error => {
                     console.error("Failed to clear html5QrcodeScanner.", error);
                 }).finally(() => {
-                    // Force DOM cleanup
-                    const scannerElement = document.getElementById(scannerRegionId);
-                    if (scannerElement) {
-                        scannerElement.innerHTML = '';
-                    }
                     scannerRef.current = null;
                 });
             }
