@@ -32,8 +32,9 @@ import {
 } from "@/components/ui/sidebar";
 import { PageHeader } from "@/components/page-header";
 import { useUserRole } from "@/hooks/use-user-role";
+import { Logo } from "@/components/logo";
 
-export function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
+export function DashboardLayoutContent({ children }: { children: React.React.Node }) {
   const authInstance = auth();
   const [user, loading, error] = useAuthState(authInstance);
   const userRole = useUserRole();
