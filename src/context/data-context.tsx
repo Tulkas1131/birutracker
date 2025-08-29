@@ -1,10 +1,12 @@
 
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { collection, query, orderBy, getDocs } from 'firebase/firestore/lite';
+import { onSnapshot, doc, getDoc, setDoc } from 'firebase/firestore'; // Full SDK for real-time updates
 import { db } from '@/lib/firebase';
 import type { Asset, Customer } from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
 
 interface DataContextType {
   assets: Asset[];
@@ -18,36 +20,38 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
+
+  const fetchData = useCallback(async () => {
+    const firestore = db();
+    try {
+      // Fetch assets
+      const assetsQuery = query(collection(firestore, "assets"), orderBy("code"));
+      const assetsSnapshot = await getDocs(assetsQuery);
+      const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
+      setAssets(assetsData);
+
+      // Fetch customers
+      const customersQuery = query(collection(firestore, "customers"), orderBy("name"));
+      const customersSnapshot = await getDocs(customersQuery);
+      const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
+      setCustomers(customersData);
+
+    } catch (error) {
+      console.error("Error fetching initial data: ", error);
+      toast({
+        title: "Error de Carga",
+        description: "No se pudieron cargar los datos iniciales.",
+        variant: "destructive"
+      });
+    } finally {
+        setIsLoading(false);
+    }
+  }, [toast]);
 
   useEffect(() => {
-    const firestore = db();
-    
-    // Subscribe to assets
-    const assetsQuery = query(collection(firestore, "assets"), orderBy("code"));
-    const unsubscribeAssets = onSnapshot(assetsQuery, (snapshot) => {
-      const assetsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
-      setAssets(assetsData);
-      if (isLoading) setIsLoading(false); // Set loading to false after first fetch
-    }, (error) => {
-      console.error("Error fetching assets: ", error);
-      setIsLoading(false);
-    });
-
-    // Subscribe to customers
-    const customersQuery = query(collection(firestore, "customers"), orderBy("name"));
-    const unsubscribeCustomers = onSnapshot(customersQuery, (snapshot) => {
-      const customersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
-      setCustomers(customersData);
-    }, (error) => {
-      console.error("Error fetching customers: ", error);
-    });
-
-    // Cleanup subscriptions on unmount
-    return () => {
-      unsubscribeAssets();
-      unsubscribeCustomers();
-    };
-  }, [isLoading]);
+    fetchData();
+  }, [fetchData]);
 
   const value = { assets, customers, isLoading };
 

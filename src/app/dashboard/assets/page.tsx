@@ -3,7 +3,7 @@
 
 import { useState, useRef, useMemo, Suspense } from "react";
 import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus } from "lucide-react";
-import { addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, orderBy, limit, writeBatch, collection } from "firebase/firestore";
+import { addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, orderBy, limit, writeBatch, collection } from "firebase/firestore/lite";
 import { db } from "@/lib/firebase";
 import dynamic from "next/dynamic";
 

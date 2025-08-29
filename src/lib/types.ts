@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from 'firebase/firestore/lite';
 
 // Data types
 export type Asset = {

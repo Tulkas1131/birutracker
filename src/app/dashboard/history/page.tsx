@@ -115,14 +115,29 @@ export default function HistoryPage() {
 
   useEffect(() => {
     const firestore = db();
+    // NOTE: onSnapshot is not available in the Firestore lite SDK.
+    // This component will show historical data but won't update in real-time.
+    // To enable real-time updates, the full Firestore SDK would be needed,
+    // which would impact the performance gains from using the lite version.
     const q = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
-      setEvents(eventsData);
-      setIsEventsLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
+    const getEvents = async () => {
+        try {
+            const snapshot = await getDocs(q);
+            const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
+            setEvents(eventsData);
+        } catch(error) {
+            console.error("Error fetching events: ", error);
+             toast({
+                title: "Error al Cargar Historial",
+                description: "No se pudo cargar el historial de movimientos.",
+                variant: "destructive",
+            });
+        } finally {
+            setIsEventsLoading(false);
+        }
+    }
+    getEvents();
+  }, [toast]);
 
   const [filters, setFilters] = useState({
     customer: '',
@@ -147,6 +162,7 @@ export default function HistoryPage() {
     const firestore = db();
     try {
       await deleteDoc(doc(firestore, "events", id));
+      setEvents(prevEvents => prevEvents.filter(event => event.id !== id));
       toast({
         title: "Evento Eliminado",
         description: "El evento ha sido eliminado del historial.",

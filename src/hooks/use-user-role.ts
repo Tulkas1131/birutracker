@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore/lite';
 import { auth, db } from '@/lib/firebase';
 
 export function useUserRole() {
@@ -11,12 +11,10 @@ export function useUserRole() {
   const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
-
     if (user) {
       const firestore = db();
       const userDocRef = doc(firestore, "users", user.uid);
-      unsubscribe = onSnapshot(userDocRef, (doc) => {
+      getDoc(userDocRef).then((doc) => {
         if (doc.exists()) {
           setUserRole(doc.data().role || "Operador");
         }
@@ -24,12 +22,6 @@ export function useUserRole() {
     } else {
       setUserRole(null);
     }
-
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
-    };
   }, [user]);
 
   return userRole;

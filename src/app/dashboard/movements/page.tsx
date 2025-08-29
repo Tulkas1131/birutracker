@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { Timestamp, collection, doc, runTransaction, getDoc } from "firebase/firestore";
+import { Timestamp, collection, doc, runTransaction, getDoc, setDoc } from "firebase/firestore/lite";
 import { db, auth } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { Loader2, QrCode } from "lucide-react";
@@ -159,7 +159,8 @@ export default function MovementsPage() {
           user_id: user.uid,
           variety: data.variety || "",
         };
-        transaction.set(doc(collection(firestore, "events")), eventData);
+        const newEventRef = doc(collection(firestore, "events"));
+        transaction.set(newEventRef, eventData);
 
         const assetRef = doc(firestore, "assets", selectedAsset.id);
         transaction.update(assetRef, { location: newLocation, state: newState });

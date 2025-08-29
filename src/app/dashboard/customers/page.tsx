@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { MoreHorizontal, PlusCircle, Loader2 } from "lucide-react";
-import { addDoc, updateDoc, deleteDoc, doc, collection } from "firebase/firestore";
+import { addDoc, updateDoc, deleteDoc, doc, collection } from "firebase/firestore/lite";
 import { db } from "@/lib/firebase";
 
 import { Badge } from "@/components/ui/badge";
