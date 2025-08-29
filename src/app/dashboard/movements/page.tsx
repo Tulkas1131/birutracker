@@ -6,8 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { Timestamp, collection, doc, runTransaction, getDoc, setDoc, query, orderBy, getDocs, where, limit, updateDoc } from "firebase/firestore/lite";
-import { db, auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { Loader2, QrCode } from "lucide-react";
 
@@ -52,6 +51,7 @@ export default function MovementsPage() {
     const fetchData = async () => {
       setIsLoading(true);
       try {
+        const { collection, query, where, orderBy, getDocs } = await import("firebase/firestore/lite");
         const firestore = db();
         const assetsQuery = query(collection(firestore, "assets"), orderBy("code"));
         const customersQuery = query(collection(firestore, "customers"), orderBy("name"));
@@ -202,6 +202,7 @@ export default function MovementsPage() {
 
   async function onSubmit(data: MovementFormData) {
     setIsSubmitting(true);
+    const { Timestamp, doc, runTransaction, collection } = await import("firebase/firestore/lite");
     const firestore = db();
 
     if (!user) {

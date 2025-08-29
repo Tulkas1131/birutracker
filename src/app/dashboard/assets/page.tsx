@@ -3,7 +3,6 @@
 
 import { useState, useRef, useMemo, Suspense, useEffect } from "react";
 import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus } from "lucide-react";
-import { addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, orderBy, limit, writeBatch, collection } from "firebase/firestore/lite";
 import { db } from "@/lib/firebase";
 import dynamic from "next/dynamic";
 
@@ -58,6 +57,7 @@ export default function AssetsPage() {
     const fetchAssets = async () => {
       setIsLoading(true);
       try {
+        const { collection, query, orderBy, getDocs } = await import("firebase/firestore/lite");
         const firestore = db();
         const assetsQuery = query(collection(firestore, "assets"), orderBy("code"));
         const assetsSnapshot = await getDocs(assetsQuery);
@@ -161,6 +161,7 @@ export default function AssetsPage() {
       });
       return;
     }
+    const { doc, deleteDoc } = await import("firebase/firestore/lite");
     const firestore = db();
     try {
       await deleteDoc(doc(firestore, "assets", id));
@@ -180,6 +181,7 @@ export default function AssetsPage() {
   };
 
   const generateNextCode = async (type: 'BARRIL' | 'CO2'): Promise<{prefix: string, nextNumber: number}> => {
+    const { collection, query, where, orderBy, limit, getDocs } = await import("firebase/firestore/lite");
     const firestore = db();
     const prefix = type === 'BARRIL' ? 'KEG' : 'CO2';
     const q = query(
@@ -200,6 +202,7 @@ export default function AssetsPage() {
   };
   
   const handleFormSubmit = async (data: Omit<Asset, 'id' | 'code'>) => {
+    const { doc, updateDoc, addDoc, collection } = await import("firebase/firestore/lite");
     const firestore = db();
     try {
       if (selectedAsset) {
@@ -240,6 +243,7 @@ export default function AssetsPage() {
   };
 
   const handleBatchFormSubmit = async (data: AssetBatchFormData) => {
+    const { collection, writeBatch, doc } = await import("firebase/firestore/lite");
     const firestore = db();
     try {
       const { prefix, nextNumber } = await generateNextCode(data.type);

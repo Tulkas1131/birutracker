@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
-import { Timestamp, collection, query, orderBy, deleteDoc, doc, getDocs } from "firebase/firestore/lite";
+import type { Timestamp } from "firebase/firestore/lite";
 import { db } from "@/lib/firebase";
 import { Loader2, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -126,9 +126,11 @@ export default function HistoryPage() {
 
   useEffect(() => {
     const firestore = db();
-    const q = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
+    
     const getEvents = async () => {
         try {
+            const { collection, query, orderBy, getDocs } = await import("firebase/firestore/lite");
+            const q = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
             const snapshot = await getDocs(q);
             const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
             setEvents(eventsData);
@@ -146,6 +148,7 @@ export default function HistoryPage() {
 
     const getAssets = async () => {
       try {
+        const { collection, query, getDocs } = await import("firebase/firestore/lite");
         const assetsQuery = query(collection(firestore, "assets"));
         const assetsSnapshot = await getDocs(assetsQuery);
         const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
@@ -181,6 +184,7 @@ export default function HistoryPage() {
       });
       return;
     }
+    const { doc, deleteDoc } = await import("firebase/firestore/lite");
     const firestore = db();
     try {
       await deleteDoc(doc(firestore, "events", id));
@@ -260,3 +264,5 @@ export default function HistoryPage() {
     </div>
   );
 }
+
+    

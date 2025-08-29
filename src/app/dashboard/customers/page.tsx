@@ -3,7 +3,6 @@
 
 import { useState, useEffect } from "react";
 import { MoreHorizontal, PlusCircle, Loader2 } from "lucide-react";
-import { addDoc, updateDoc, deleteDoc, doc, collection, query, orderBy, getDocs } from "firebase/firestore/lite";
 import { db } from "@/lib/firebase";
 
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +42,7 @@ export default function CustomersPage() {
     const fetchCustomers = async () => {
       setIsLoading(true);
       try {
+        const { collection, query, orderBy, getDocs } = await import("firebase/firestore/lite");
         const firestore = db();
         const customersQuery = query(collection(firestore, "customers"), orderBy("name"));
         const customersSnapshot = await getDocs(customersQuery);
@@ -81,6 +81,7 @@ export default function CustomersPage() {
       });
       return;
     }
+    const { doc, deleteDoc } = await import("firebase/firestore/lite");
     const firestore = db();
     try {
       await deleteDoc(doc(firestore, "customers", id));
@@ -100,6 +101,7 @@ export default function CustomersPage() {
   };
   
   const handleFormSubmit = async (data: Omit<Customer, 'id'>) => {
+    const { doc, updateDoc, addDoc, collection } = await import("firebase/firestore/lite");
     const firestore = db();
     try {
       if (selectedCustomer) {
@@ -228,3 +230,5 @@ export default function CustomersPage() {
     </div>
   );
 }
+
+    

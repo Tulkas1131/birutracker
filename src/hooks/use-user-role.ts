@@ -3,7 +3,6 @@
 
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore/lite';
 import { auth, db } from '@/lib/firebase';
 
 export function useUserRole() {
@@ -18,20 +17,30 @@ export function useUserRole() {
   }, []);
 
   useEffect(() => {
-    if (user) {
-      const firestore = db();
-      const userDocRef = doc(firestore, "users", user.uid);
-      getDoc(userDocRef).then((doc) => {
-        if (doc.exists()) {
-          setUserRole(doc.data().role || "Operador");
-        } else {
+    const fetchUserRole = async () => {
+      if (user) {
+        const { doc, getDoc } = await import('firebase/firestore/lite');
+        const firestore = db();
+        const userDocRef = doc(firestore, "users", user.uid);
+        try {
+          const docSnap = await getDoc(userDocRef);
+          if (docSnap.exists()) {
+            setUserRole(docSnap.data().role || "Operador");
+          } else {
             setUserRole("Operador"); // Default role if doc doesn't exist
+          }
+        } catch (error) {
+          console.error("Error fetching user role:", error);
+          setUserRole("Operador"); // Default on error
         }
-      }).catch(() => setUserRole("Operador")); // Default on error
-    } else {
-      setUserRole(null);
-    }
+      } else {
+        setUserRole(null);
+      }
+    };
+    fetchUserRole();
   }, [user]);
 
   return userRole;
 }
+
+    
