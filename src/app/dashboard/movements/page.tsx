@@ -51,7 +51,20 @@ export default function MovementsPage() {
   const showVarietyField = selectedAsset?.type === 'BARRIL' && (watchEventType === 'SALIDA_LLENO' || watchEventType === 'DEVOLUCION_LLENO');
 
   const handleScanSuccess = async (decodedText: string) => {
+    // We close the scanner on success
     setScannerOpen(false);
+    
+    // Check if the scanned text is a valid Firestore ID.
+    // This is a basic check; more robust validation might be needed.
+    if (!/^[a-zA-Z0-9]{20}$/.test(decodedText)) {
+        toast({
+            title: "Código QR Inválido",
+            description: "El QR escaneado no parece ser un identificador de activo válido.",
+            variant: "destructive"
+        });
+        return;
+    }
+
     const firestore = db();
     try {
       const assetRef = doc(firestore, 'assets', decodedText);
@@ -83,8 +96,8 @@ export default function MovementsPage() {
   const handleScanError = (errorMessage: string) => {
     // The QR scanner library frequently sends "errors" that are just part of the scanning process
     // (e.g., "QR code not found in image"). We only want to log actual, critical errors.
-    if (typeof errorMessage === 'string' && errorMessage.includes("not found")) {
-        return; // Ignore non-critical "not found" messages
+    if (typeof errorMessage === 'string' && (errorMessage.toLowerCase().includes("not found") || errorMessage.toLowerCase().includes("insufficient"))) {
+        return; // Ignore non-critical "not found" or "insufficient features" messages
     }
     console.error("QR Scan Error:", errorMessage);
   };
@@ -294,7 +307,7 @@ export default function MovementsPage() {
             <DialogHeader>
                 <DialogTitle>Escanear Código QR</DialogTitle>
                 <DialogDescription>
-                    Apunta la cámara al código QR del activo o selecciona una imagen desde tu dispositivo.
+                    Apunta la cámara al código QR del activo. La cámara permanecerá activa para escaneos rápidos.
                 </DialogDescription>
             </DialogHeader>
             <Suspense fallback={<div className="flex justify-center items-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
