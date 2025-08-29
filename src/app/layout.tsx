@@ -12,6 +12,7 @@ const ptSans = PT_Sans({
 export const metadata: Metadata = {
   title: 'BiruTracker',
   description: 'Asset tracking for breweries',
+  manifest: '/manifest.json',
 };
 
 export default function RootLayout({

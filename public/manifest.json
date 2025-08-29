@@ -4,12 +4,17 @@
   "description": "Asset tracking for breweries",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#EBF4FA",
+  "background_color": "#EBF8FF",
   "theme_color": "#00BFFF",
   "icons": [
     {
-      "src": "/icons/icon-192x192.png",
+      "src": "/icon-192x192.png",
       "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
       "type": "image/png"
     }
   ]
