@@ -29,7 +29,7 @@ function EventTable({ events, assets, isLoading, onDelete }: { events: Event[], 
   const getDaysAtCustomer = (event: Event) => {
     const asset = assetsMap.get(event.asset_id);
     // Only calculate for departure events of assets that are currently with a customer
-    if (event.event_type === 'SALIDA_LLENO' && asset && asset.location === 'EN_CLIENTE') {
+    if (event.event_type === 'ENTREGA_A_CLIENTE' && asset && asset.location === 'EN_CLIENTE') {
       const days = differenceInDays(new Date(), event.timestamp.toDate());
       return days;
     }
@@ -232,11 +232,12 @@ export default function HistoryPage() {
                   <SelectValue placeholder="Tipo de Evento" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ALL">Todos los Eventos</SelectItem>
-                  <SelectItem value="SALIDA_LLENO">SALIDA_LLENO</SelectItem>
-                  <SelectItem value="RETORNO_VACIO">RETORNO_VACIO</SelectItem>
-                  <SelectItem value="SALIDA_VACIO">SALIDA_VACIO</SelectItem>
-                  <SelectItem value="DEVOLUCION_LLENO">DEVOLUCION_LLENO</SelectItem>
+                    <SelectItem value="ALL">Todos los Eventos</SelectItem>
+                    <SelectItem value="SALIDA_A_REPARTO">SALIDA A REPARTO</SelectItem>
+                    <SelectItem value="ENTREGA_A_CLIENTE">ENTREGA A CLIENTE</SelectItem>
+                    <SelectItem value="RETORNO_VACIO">RETORNO VACIO</SelectItem>
+                    <SelectItem value="SALIDA_VACIO">SALIDA VACIO</SelectItem>
+                    <SelectItem value="DEVOLUCION">DEVOLUCION</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -40,7 +40,7 @@ export default function MovementsPage() {
   const form = useForm<MovementFormData>({
     resolver: zodResolver(movementSchema),
     defaultValues: {
-      event_type: "SALIDA_LLENO",
+      event_type: "SALIDA_A_REPARTO",
       variety: "",
     },
   });
@@ -81,15 +81,17 @@ export default function MovementsPage() {
   const watchEventType = form.watch("event_type");
 
   const selectedAsset = assets.find(asset => asset.id === watchAssetId);
-  const showVarietyField = selectedAsset?.type === 'BARRIL' && (watchEventType === 'SALIDA_LLENO' || watchEventType === 'DEVOLUCION_LLENO');
+  const showVarietyField = selectedAsset?.type === 'BARRIL' && (watchEventType === 'SALIDA_A_REPARTO' || watchEventType === 'DEVOLUCION');
 
   const filteredAssets = useMemo(() => {
     switch (watchEventType) {
-      case 'SALIDA_LLENO':
+      case 'SALIDA_A_REPARTO':
       case 'SALIDA_VACIO':
         return assets.filter(a => a.location === 'EN_PLANTA');
+      case 'ENTREGA_A_CLIENTE':
+        return assets.filter(a => a.location === 'EN_REPARTO');
       case 'RETORNO_VACIO':
-      case 'DEVOLUCION_LLENO':
+      case 'DEVOLUCION':
         return assets.filter(a => a.location === 'EN_CLIENTE');
       default:
         return assets;
@@ -181,9 +183,13 @@ export default function MovementsPage() {
     let newState: Asset['state'] = currentSelectedAsset.state;
 
     switch (data.event_type) {
-      case 'SALIDA_LLENO':
-        newLocation = 'EN_CLIENTE';
+      case 'SALIDA_A_REPARTO':
+        newLocation = 'EN_REPARTO';
         newState = 'LLENO';
+        break;
+      case 'ENTREGA_A_CLIENTE':
+        newLocation = 'EN_CLIENTE';
+        newState = 'LLENO'; // It should be full when delivered
         break;
       case 'SALIDA_VACIO':
         newLocation = 'EN_CLIENTE';
@@ -193,7 +199,7 @@ export default function MovementsPage() {
         newLocation = 'EN_PLANTA';
         newState = 'VACIO';
         break;
-      case 'DEVOLUCION_LLENO':
+      case 'DEVOLUCION':
         newLocation = 'EN_PLANTA';
         newState = 'LLENO';
         break;
@@ -279,10 +285,11 @@ export default function MovementsPage() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              <SelectItem value="SALIDA_LLENO">SALIDA LLENO (Entrega)</SelectItem>
+                              <SelectItem value="SALIDA_A_REPARTO">SALIDA A REPARTO</SelectItem>
+                              <SelectItem value="ENTREGA_A_CLIENTE">ENTREGA A CLIENTE</SelectItem>
                               <SelectItem value="RETORNO_VACIO">RETORNO VACIO (Retiro)</SelectItem>
                               <SelectItem value="SALIDA_VACIO">SALIDA VACIO (Préstamo)</SelectItem>
-                              <SelectItem value="DEVOLUCION_LLENO">DEVOLUCION LLENO (Devolución)</SelectItem>
+                              <SelectItem value="DEVOLUCION">DEVOLUCION</SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />
@@ -386,5 +393,3 @@ export default function MovementsPage() {
     </div>
   );
 }
-
-    
