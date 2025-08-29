@@ -6,7 +6,7 @@
 
 BiruTracker es una aplicación web diseñada para cervecerías y distribuidores que permite llevar un control preciso de activos retornables, como barriles de cerveza (Kegs) y cilindros de CO₂. La aplicación permite registrar activos (individualmente o por lotes), clientes y los movimientos de entrada y salida de los activos, manteniendo un historial completo de cada operación.
 
-Una de sus características clave es el uso de **códigos QR** para agilizar el registro de movimientos, permitiendo a los operadores escanear activos directamente con la cámara de su dispositivo móvil.
+Una de sus características clave es el uso de **códigos QR** para agilizar el registro de movimientos, permitiendo a los operadores escanear activos directamente con la cámara de su dispositivo móvil o subiendo una imagen del QR en un ordenador.
 
 ---
 
@@ -65,8 +65,8 @@ La estructura de archivos clave se encuentra dentro de la carpeta `src/`.
 ### 4.2. Registro de Movimientos (`src/app/dashboard/movements/page.tsx`)
 
 - **Flujo de Movimiento en Pasos:** La aplicación gestiona un ciclo de vida para los activos. Por ejemplo, un activo primero se marca como "Salida a Reparto" y luego, en un segundo paso, se confirma su "Entrega a Cliente". Esto proporciona un control más granular.
-- **Escaneo de QR:** La funcionalidad principal de esta página es el botón "Escanear QR". Al activarlo, se abre un diálogo que utiliza la cámara del dispositivo para escanear el QR de un activo y seleccionarlo automáticamente en el formulario.
-- **Optimización de Rendimiento:** El componente del escáner (`src/components/qr-scanner.tsx`) se carga de forma dinámica (`dynamic import`) para no afectar el rendimiento inicial de la página.
+- **Escaneo de QR Universal:** La funcionalidad principal es el botón "Escanear QR". En dispositivos móviles, activa la cámara para un escaneo en tiempo real. En ordenadores de escritorio, ofrece automáticamente la opción de subir un archivo de imagen, garantizando compatibilidad total.
+- **Optimización de Rendimiento:** El componente del escáner (`src/components/qr-scanner.tsx`) se carga de forma dinámica (`dynamic import`) para no afectar el rendimiento de carga inicial de la página.
 
 ### 4.3. Historial y Alertas (`src/app/dashboard/history/page.tsx`)
 
@@ -75,8 +75,8 @@ La estructura de archivos clave se encuentra dentro de la carpeta `src/`.
 
 ### 4.4. Autenticación y Layout (`src/app/dashboard/layout.tsx`)
 
-- **Protección de Rutas:** El layout del panel de control utiliza un hook (`useUserRole`) para verificar la sesión del usuario. Si no está autenticado, es redirigido a la página de inicio de sesión.
-- **Gestión de Roles:** El hook también obtiene el rol del usuario ("Admin" u "Operador") desde la colección `users` de Firestore, lo que permite mostrar u ocultar funcionalidades específicas (como los botones de eliminación).
+- **Protección de Rutas:** El layout del panel de control utiliza un `AuthProvider` y el hook `useAuthState` para verificar la sesión del usuario. Si no está autenticado, es redirigido a la página de inicio de sesión.
+- **Gestión de Roles:** El hook `useUserRole` obtiene el rol del usuario ("Admin" u "Operador") desde la colección `users` de Firestore, permitiendo mostrar u ocultar funcionalidades específicas (como los botones de eliminación).
 
 ### 4.5. Tipos y Esquemas (`src/lib/types.ts`)
 
@@ -86,4 +86,7 @@ La estructura de archivos clave se encuentra dentro de la carpeta `src/`.
 
 ## 5. Despliegue
 
-El despliegue de esta aplicación se realiza a través de **Firebase App Hosting**. Dentro de Firebase Studio, puedes usar el botón "Deploy" para publicar la versión más reciente de tu código a la URL de producción. El proceso es automático y se encarga de optimizar la aplicación para el mejor rendimiento.
+El despliegue de esta aplicación se realiza a través de **Firebase App Hosting**.
+
+- **Plan Gratuito:** La configuración actual del proyecto en el archivo `apphosting.yaml` está optimizada para mantenerse dentro de los límites del plan gratuito ("Spark") de Firebase.
+- **Proceso:** Dentro de Firebase Studio, puedes usar el botón "Deploy" para publicar la versión más reciente de tu código a la URL de producción. El proceso es automático y se encarga de construir y optimizar la aplicación para el mejor rendimiento.
