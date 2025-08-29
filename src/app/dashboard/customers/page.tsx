@@ -1,9 +1,9 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MoreHorizontal, PlusCircle, Loader2 } from "lucide-react";
-import { addDoc, updateDoc, deleteDoc, doc, collection } from "firebase/firestore/lite";
+import { addDoc, updateDoc, deleteDoc, doc, collection, query, orderBy, getDocs } from "firebase/firestore/lite";
 import { db } from "@/lib/firebase";
 
 import { Badge } from "@/components/ui/badge";
@@ -30,14 +30,37 @@ import { CustomerForm } from "@/components/customer-form";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/use-user-role";
-import { useData } from "@/context/data-context";
 
 export default function CustomersPage() {
-  const { customers, isLoading } = useData();
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setFormOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | undefined>(undefined);
   const { toast } = useToast();
   const userRole = useUserRole();
+
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      setIsLoading(true);
+      try {
+        const firestore = db();
+        const customersQuery = query(collection(firestore, "customers"), orderBy("name"));
+        const customersSnapshot = await getDocs(customersQuery);
+        const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
+        setCustomers(customersData);
+      } catch (error) {
+        console.error("Error fetching customers: ", error);
+        toast({
+          title: "Error de Carga",
+          description: "No se pudieron cargar los clientes.",
+          variant: "destructive"
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchCustomers();
+  }, [toast]);
 
   const handleEdit = (customer: Customer) => {
     setSelectedCustomer(customer);
@@ -61,6 +84,7 @@ export default function CustomersPage() {
     const firestore = db();
     try {
       await deleteDoc(doc(firestore, "customers", id));
+      setCustomers(prev => prev.filter(customer => customer.id !== id));
       toast({
         title: "Cliente Eliminado",
         description: "El cliente ha sido eliminado de la base de datos.",
@@ -80,12 +104,14 @@ export default function CustomersPage() {
     try {
       if (selectedCustomer) {
         await updateDoc(doc(firestore, "customers", selectedCustomer.id), data);
+        setCustomers(prev => prev.map(c => c.id === selectedCustomer.id ? { ...c, ...data } : c));
         toast({
           title: "Cliente Actualizado",
           description: "Los cambios han sido guardados.",
         });
       } else {
-        await addDoc(collection(firestore, "customers"), data);
+        const newDocRef = await addDoc(collection(firestore, "customers"), data);
+        setCustomers(prev => [...prev, { id: newDocRef.id, ...data }]);
         toast({
           title: "Cliente Creado",
           description: "El nuevo cliente ha sido añadido.",

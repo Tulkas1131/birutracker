@@ -1,12 +1,12 @@
 
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, Suspense, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { Timestamp, collection, doc, runTransaction, getDoc, setDoc } from "firebase/firestore/lite";
+import { Timestamp, collection, doc, runTransaction, getDoc, setDoc, query, orderBy, getDocs } from "firebase/firestore/lite";
 import { db, auth } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { Loader2, QrCode } from "lucide-react";
@@ -20,7 +20,6 @@ import { useToast } from "@/hooks/use-toast";
 import { movementSchema, type MovementFormData, type Asset, type Customer } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
-import { useData } from "@/context/data-context";
 
 const QrScanner = dynamic(() => import('@/components/qr-scanner').then(mod => mod.QrScanner), {
   ssr: false,
@@ -32,7 +31,9 @@ export default function MovementsPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [user] = useAuthState(auth());
-  const { assets, customers } = useData();
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isScannerOpen, setScannerOpen] = useState(false);
   
@@ -44,6 +45,38 @@ export default function MovementsPage() {
     },
   });
 
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        const firestore = db();
+        const assetsQuery = query(collection(firestore, "assets"), orderBy("code"));
+        const customersQuery = query(collection(firestore, "customers"), orderBy("name"));
+
+        const [assetsSnapshot, customersSnapshot] = await Promise.all([
+          getDocs(assetsQuery),
+          getDocs(customersQuery),
+        ]);
+
+        const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
+        const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
+
+        setAssets(assetsData);
+        setCustomers(customersData);
+      } catch (error) {
+        console.error("Error fetching data for movements page: ", error);
+        toast({
+          title: "Error de Carga",
+          description: "No se pudieron cargar los activos y clientes.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchData();
+  }, [toast]);
+
   const watchAssetId = form.watch("asset_id");
   const watchEventType = form.watch("event_type");
 
@@ -51,11 +84,8 @@ export default function MovementsPage() {
   const showVarietyField = selectedAsset?.type === 'BARRIL' && (watchEventType === 'SALIDA_LLENO' || watchEventType === 'DEVOLUCION_LLENO');
 
   const handleScanSuccess = async (decodedText: string) => {
-    // We close the scanner on success
     setScannerOpen(false);
     
-    // Check if the scanned text is a valid Firestore ID.
-    // This is a basic check; more robust validation might be needed.
     if (!/^[a-zA-Z0-9]{20}$/.test(decodedText)) {
         toast({
             title: "Código QR Inválido",
@@ -94,10 +124,8 @@ export default function MovementsPage() {
   };
 
   const handleScanError = (errorMessage: string) => {
-    // The QR scanner library frequently sends "errors" that are just part of the scanning process
-    // (e.g., "QR code not found in image"). We only want to log actual, critical errors.
     if (typeof errorMessage === 'string' && (errorMessage.toLowerCase().includes("not found") || errorMessage.toLowerCase().includes("insufficient"))) {
-        return; // Ignore non-critical "not found" or "insufficient features" messages
+        return;
     }
     console.error("QR Scan Error:", errorMessage);
   };
@@ -207,100 +235,106 @@ export default function MovementsPage() {
                 <CardDescription>Selecciona un activo (manualmente o con QR), tipo de evento y cliente.</CardDescription>
             </CardHeader>
             <CardContent>
+              {isLoading ? (
+                <div className="flex justify-center items-center py-10">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : (
                 <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
                     <FormField
-                    control={form.control}
-                    name="asset_id"
-                    render={({ field }) => (
+                      control={form.control}
+                      name="asset_id"
+                      render={({ field }) => (
                         <FormItem>
-                        <FormLabel>Activo</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                          <FormLabel>Activo</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                             <FormControl>
-                            <SelectTrigger>
+                              <SelectTrigger>
                                 <SelectValue placeholder="Selecciona un activo para mover" />
-                            </SelectTrigger>
+                              </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                            {assets.map(asset => (
+                              {assets.map(asset => (
                                 <SelectItem key={asset.id} value={asset.id}>
-                                {asset.code} ({asset.type} - {asset.format}) - <span className="text-muted-foreground">{asset.location}</span>
+                                  {asset.code} ({asset.type} - {asset.format}) - <span className="text-muted-foreground">{asset.location}</span>
                                 </SelectItem>
-                            ))}
+                              ))}
                             </SelectContent>
-                        </Select>
-                        <FormMessage />
+                          </Select>
+                          <FormMessage />
                         </FormItem>
-                    )}
+                      )}
                     />
                     <FormField
-                    control={form.control}
-                    name="event_type"
-                    render={({ field }) => (
+                      control={form.control}
+                      name="event_type"
+                      render={({ field }) => (
                         <FormItem>
-                        <FormLabel>Tipo de Evento</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormLabel>Tipo de Evento</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
-                            <SelectTrigger>
+                              <SelectTrigger>
                                 <SelectValue placeholder="Selecciona un tipo de evento" />
-                            </SelectTrigger>
+                              </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                            <SelectItem value="SALIDA_LLENO">SALIDA_LLENO (Entrega)</SelectItem>
-                            <SelectItem value="RETORNO_VACIO">RETORNO_VACIO (Retorno)</SelectItem>
-                            <SelectItem value="SALIDA_VACIO">SALIDA_VACIO (Caso Especial)</SelectItem>
-                            <SelectItem value="DEVOLUCION_LLENO">DEVOLUCION_LLENO (Caso Especial)</SelectItem>
+                              <SelectItem value="SALIDA_LLENO">SALIDA_LLENO (Entrega)</SelectItem>
+                              <SelectItem value="RETORNO_VACIO">RETORNO_VACIO (Retorno)</SelectItem>
+                              <SelectItem value="SALIDA_VACIO">SALIDA_VACIO (Caso Especial)</SelectItem>
+                              <SelectItem value="DEVOLUCION_LLENO">DEVOLUCION_LLENO (Caso Especial)</SelectItem>
                             </SelectContent>
-                        </Select>
-                        <FormMessage />
+                          </Select>
+                          <FormMessage />
                         </FormItem>
-                    )}
+                      )}
                     />
                     {showVarietyField && (
-                    <FormField
+                      <FormField
                         control={form.control}
                         name="variety"
                         render={({ field }) => (
-                        <FormItem>
+                          <FormItem>
                             <FormLabel>Variedad de Cerveza</FormLabel>
                             <FormControl>
-                            <Input placeholder="ej., IPA, Stout, Lager" {...field} />
+                              <Input placeholder="ej., IPA, Stout, Lager" {...field} />
                             </FormControl>
                             <FormMessage />
-                        </FormItem>
+                          </FormItem>
                         )}
-                    />
+                      />
                     )}
                     <FormField
-                    control={form.control}
-                    name="customer_id"
-                    render={({ field }) => (
+                      control={form.control}
+                      name="customer_id"
+                      render={({ field }) => (
                         <FormItem>
-                        <FormLabel>Cliente</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormLabel>Cliente</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
-                            <SelectTrigger>
+                              <SelectTrigger>
                                 <SelectValue placeholder="Selecciona el cliente asociado" />
-                            </SelectTrigger>
+                              </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                            {customers.map(customer => (
+                              {customers.map(customer => (
                                 <SelectItem key={customer.id} value={customer.id}>
-                                {customer.name}
+                                  {customer.name}
                                 </SelectItem>
-                            ))}
+                              ))}
                             </SelectContent>
-                        </Select>
-                        <FormMessage />
+                          </Select>
+                          <FormMessage />
                         </FormItem>
-                    )}
+                      )}
                     />
                     <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
-                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Guardar Movimiento
+                      {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Guardar Movimiento
                     </Button>
-                </form>
+                  </form>
                 </Form>
+              )}
             </CardContent>
             </Card>
         </main>

@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
-import { Timestamp, collection, onSnapshot, query, orderBy, deleteDoc, doc } from "firebase/firestore";
+import { Timestamp, collection, query, orderBy, deleteDoc, doc, getDocs } from "firebase/firestore/lite";
 import { db } from "@/lib/firebase";
 import { Loader2, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,7 +14,6 @@ import type { Event, Asset } from "@/lib/types";
 import { useUserRole } from '@/hooks/use-user-role';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { useData } from '@/context/data-context';
 import { differenceInDays } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 
@@ -108,17 +107,14 @@ function EventTable({ events, assets, isLoading, onDelete }: { events: Event[], 
 
 export default function HistoryPage() {
   const [events, setEvents] = useState<Event[]>([]);
-  const { assets, isLoading: isAssetsLoading } = useData();
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [isAssetsLoading, setIsAssetsLoading] = useState(true);
   const [isEventsLoading, setIsEventsLoading] = useState(true);
   const { toast } = useToast();
   const userRole = useUserRole();
 
   useEffect(() => {
     const firestore = db();
-    // NOTE: onSnapshot is not available in the Firestore lite SDK.
-    // This component will show historical data but won't update in real-time.
-    // To enable real-time updates, the full Firestore SDK would be needed,
-    // which would impact the performance gains from using the lite version.
     const q = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
     const getEvents = async () => {
         try {
@@ -135,8 +131,23 @@ export default function HistoryPage() {
         } finally {
             setIsEventsLoading(false);
         }
-    }
+    };
+
+    const getAssets = async () => {
+      try {
+        const assetsQuery = query(collection(firestore, "assets"));
+        const assetsSnapshot = await getDocs(assetsQuery);
+        const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
+        setAssets(assetsData);
+      } catch (error) {
+        console.error("Error fetching assets for history: ", error);
+      } finally {
+        setIsAssetsLoading(false);
+      }
+    };
+    
     getEvents();
+    getAssets();
   }, [toast]);
 
   const [filters, setFilters] = useState({

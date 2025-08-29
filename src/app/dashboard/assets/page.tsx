@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useRef, useMemo, Suspense } from "react";
+import { useState, useRef, useMemo, Suspense, useEffect } from "react";
 import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus } from "lucide-react";
 import { addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, orderBy, limit, writeBatch, collection } from "firebase/firestore/lite";
 import { db } from "@/lib/firebase";
@@ -34,7 +34,6 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, Dialog
 import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/use-user-role";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useData } from "@/context/data-context";
 
 const QRCode = dynamic(() => import("qrcode.react"), {
   loading: () => <div className="flex h-[256px] w-[256px] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>,
@@ -42,7 +41,8 @@ const QRCode = dynamic(() => import("qrcode.react"), {
 });
 
 export default function AssetsPage() {
-  const { assets, isLoading } = useData();
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setFormOpen] = useState(false);
   const [isBatchFormOpen, setBatchFormOpen] = useState(false);
   const [isQrCodeOpen, setQrCodeOpen] = useState(false);
@@ -53,6 +53,29 @@ export default function AssetsPage() {
   const userRole = useUserRole();
   const qrCodeRef = useRef<HTMLDivElement>(null);
   const batchQrRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const fetchAssets = async () => {
+      setIsLoading(true);
+      try {
+        const firestore = db();
+        const assetsQuery = query(collection(firestore, "assets"), orderBy("code"));
+        const assetsSnapshot = await getDocs(assetsQuery);
+        const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
+        setAssets(assetsData);
+      } catch (error) {
+        console.error("Error fetching assets: ", error);
+        toast({
+          title: "Error de Carga",
+          description: "No se pudieron cargar los activos.",
+          variant: "destructive"
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchAssets();
+  }, [toast]);
 
   const handleEdit = (asset: Asset) => {
     setSelectedAsset(asset);
@@ -141,6 +164,7 @@ export default function AssetsPage() {
     const firestore = db();
     try {
       await deleteDoc(doc(firestore, "assets", id));
+      setAssets(prev => prev.filter(asset => asset.id !== id));
       toast({
         title: "Activo Eliminado",
         description: "El activo ha sido eliminado de la base de datos.",
@@ -186,6 +210,7 @@ export default function AssetsPage() {
           location: data.location,
         };
         await updateDoc(doc(firestore, "assets", selectedAsset.id), assetDataToUpdate);
+        setAssets(prev => prev.map(asset => asset.id === selectedAsset.id ? { ...asset, ...assetDataToUpdate } : asset));
         toast({
           title: "Activo Actualizado",
           description: "Los cambios han sido guardados.",
@@ -195,7 +220,8 @@ export default function AssetsPage() {
         const { prefix, nextNumber } = await generateNextCode(data.type);
         const newCode = `${prefix}-${String(nextNumber).padStart(3, '0')}`;
         const newAssetData = { ...data, code: newCode, state: 'VACIO' as const, location: 'EN_PLANTA' as const };
-        await addDoc(collection(firestore, "assets"), newAssetData);
+        const newDocRef = await addDoc(collection(firestore, "assets"), newAssetData);
+        setAssets(prev => [...prev, { id: newDocRef.id, ...newAssetData }]);
         toast({
           title: "Activo Creado",
           description: `El nuevo activo ha sido añadido con el código ${newCode}.`,
@@ -218,6 +244,7 @@ export default function AssetsPage() {
     try {
       const { prefix, nextNumber } = await generateNextCode(data.type);
       const batch = writeBatch(firestore);
+      const newAssets: Asset[] = [];
       
       for (let i = 0; i < data.quantity; i++) {
         const currentNumber = nextNumber + i;
@@ -231,10 +258,11 @@ export default function AssetsPage() {
         };
         const newAssetRef = doc(collection(firestore, "assets"));
         batch.set(newAssetRef, newAssetData);
+        newAssets.push({ id: newAssetRef.id, ...newAssetData });
       }
       
       await batch.commit();
-
+      setAssets(prev => [...prev, ...newAssets]);
       toast({
         title: "Lote Creado Exitosamente",
         description: `Se han creado ${data.quantity} nuevos activos de tipo ${data.type}.`,

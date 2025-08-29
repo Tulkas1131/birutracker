@@ -33,7 +33,6 @@ import {
 } from "@/components/ui/sidebar";
 import { Logo } from "@/components/logo";
 import { useUserRole } from "@/hooks/use-user-role";
-import { DataProvider } from "@/context/data-context";
 import { PageHeader } from "@/components/page-header";
 
 function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
@@ -145,9 +144,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
             className="h-14 justify-start px-4 md:px-6"
             action={<SidebarTrigger />}
          />
-        <DataProvider>
-          {children}
-        </DataProvider>
+        {children}
       </SidebarInset>
     </SidebarProvider>
   );
