@@ -81,7 +81,12 @@ export default function MovementsPage() {
   };
 
   const handleScanError = (errorMessage: string) => {
-    console.error(errorMessage);
+    // The QR scanner library frequently sends "errors" that are just part of the scanning process
+    // (e.g., "QR code not found in image"). We only want to log actual, critical errors.
+    if (typeof errorMessage === 'string' && errorMessage.includes("not found")) {
+        return; // Ignore non-critical "not found" messages
+    }
+    console.error("QR Scan Error:", errorMessage);
   };
 
 

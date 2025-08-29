@@ -61,7 +61,15 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
                     const html5QrcodeScanner = new Html5QrcodeScanner("qr-reader", config, false);
                     scannerRef.current = html5QrcodeScanner;
                     
-                    html5QrcodeScanner.render(onScanSuccess, onScanError, {
+                    // The library's error callback is very verbose. We handle filtering
+                    // of non-critical errors in the parent component (`movements/page.tsx`).
+                    html5QrcodeScanner.render((decodedText, decodedResult) => {
+                        // Pass successful scan results to the parent
+                        onScanSuccess(decodedText);
+                    }, (errorMessage) => {
+                        // Pass all error messages to the parent for handling
+                        onScanError(errorMessage);
+                    }, {
                         deviceId: { exact: selectedCameraId }
                     });
                     setStatus('scanning');
