@@ -1,11 +1,11 @@
 
 "use client";
 
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, Suspense } from "react";
 import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus } from "lucide-react";
 import { addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, orderBy, limit, writeBatch, collection } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import QRCode from "qrcode.react";
+import dynamic from "next/dynamic";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,11 @@ import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/use-user-role";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useData } from "@/context/data-context";
+
+const QRCode = dynamic(() => import("qrcode.react"), {
+  loading: () => <div className="flex h-[256px] w-[256px] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>,
+  ssr: false,
+});
 
 export default function AssetsPage() {
   const { assets, isLoading } = useData();
@@ -471,13 +476,15 @@ export default function AssetsPage() {
                     Escanea este código para registrar movimientos rápidos. Puedes imprimirlo y pegarlo en el activo físico.
                 </DialogDescription>
             </DialogHeader>
-            {selectedAsset && (
-                <div ref={qrCodeRef} className="single-qr-container">
-                    <QRCode value={selectedAsset.id} size={256} renderAs="svg" />
-                    <h1>{selectedAsset.code}</h1>
-                    <p>{selectedAsset.format} - {selectedAsset.type === 'BARRIL' ? 'Barril' : 'CO2'}</p>
-                </div>
-            )}
+            <Suspense fallback={<div className="flex h-[320px] w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+              {selectedAsset && (
+                  <div ref={qrCodeRef} className="single-qr-container">
+                      <QRCode value={selectedAsset.id} size={256} renderAs="svg" />
+                      <h1>{selectedAsset.code}</h1>
+                      <p>{selectedAsset.format} - {selectedAsset.type === 'BARRIL' ? 'Barril' : 'CO2'}</p>
+                  </div>
+              )}
+            </Suspense>
             <Button onClick={() => handlePrint(qrCodeRef)}>Imprimir QR</Button>
         </DialogContent>
       </Dialog>
@@ -490,14 +497,16 @@ export default function AssetsPage() {
                 </DialogDescription>
             </DialogHeader>
             <ScrollArea className="h-[60vh] p-4">
-              <div ref={batchQrRef} className="print-container">
-                {assetsToPrint.map(asset => (
-                  <div key={asset.id} className="qr-item">
-                    <QRCode value={asset.id} size={180} renderAs="svg" />
-                    <h1>{asset.code}</h1>
-                  </div>
-                ))}
-              </div>
+              <Suspense fallback={<div className="flex h-full w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+                <div ref={batchQrRef} className="print-container">
+                  {assetsToPrint.map(asset => (
+                    <div key={asset.id} className="qr-item">
+                      <QRCode value={asset.id} size={180} renderAs="svg" />
+                      <h1>{asset.code}</h1>
+                    </div>
+                  ))}
+                </div>
+              </Suspense>
             </ScrollArea>
             <Button onClick={() => handlePrint(batchQrRef)} className="mt-4">
               <Printer className="mr-2 h-5 w-5" />
