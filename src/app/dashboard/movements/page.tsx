@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { Timestamp, collection, doc, runTransaction, getDoc, setDoc, query, orderBy, getDocs } from "firebase/firestore/lite";
+import { Timestamp, collection, doc, runTransaction, getDoc, setDoc, query, orderBy, getDocs, where, limit, updateDoc } from "firebase/firestore/lite";
 import { db, auth } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { Loader2, QrCode } from "lucide-react";
@@ -17,7 +17,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/hooks/use-toast";
-import { movementSchema, type MovementFormData, type Asset, type Customer } from "@/lib/types";
+import { movementSchema, type MovementFormData, type Asset, type Customer, type Event } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 
@@ -33,6 +33,7 @@ export default function MovementsPage() {
   const [user] = useAuthState(auth());
   const [assets, setAssets] = useState<Asset[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [deliveryEvents, setDeliveryEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isScannerOpen, setScannerOpen] = useState(false);
@@ -52,17 +53,21 @@ export default function MovementsPage() {
         const firestore = db();
         const assetsQuery = query(collection(firestore, "assets"), orderBy("code"));
         const customersQuery = query(collection(firestore, "customers"), orderBy("name"));
+        const deliveryEventsQuery = query(collection(firestore, "events"), where("event_type", "==", "SALIDA_A_REPARTO"));
 
-        const [assetsSnapshot, customersSnapshot] = await Promise.all([
+        const [assetsSnapshot, customersSnapshot, deliveryEventsSnapshot] = await Promise.all([
           getDocs(assetsQuery),
           getDocs(customersQuery),
+          getDocs(deliveryEventsQuery),
         ]);
 
         const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
         const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
+        const deliveryEventsData = deliveryEventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
 
         setAssets(assetsData);
         setCustomers(customersData);
+        setDeliveryEvents(deliveryEventsData);
       } catch (error) {
         console.error("Error fetching data for movements page: ", error);
         toast({
@@ -97,6 +102,22 @@ export default function MovementsPage() {
         return assets;
     }
   }, [assets, watchEventType]);
+
+  // Effect to auto-select customer when delivering an asset
+  useEffect(() => {
+    if (watchEventType === 'ENTREGA_A_CLIENTE' && watchAssetId) {
+      const deliveryEvent = deliveryEvents.find(e => e.asset_id === watchAssetId);
+      if (deliveryEvent) {
+        form.setValue('customer_id', deliveryEvent.customer_id);
+      }
+    } else {
+        // Reset customer when event type changes, unless it's an edit of a delivery
+        if (watchEventType !== 'ENTREGA_A_CLIENTE') {
+             form.resetField('customer_id');
+        }
+    }
+  }, [watchAssetId, watchEventType, deliveryEvents, form]);
+
 
   useEffect(() => {
     // Reset asset_id if it's no longer in the filtered list
@@ -207,18 +228,33 @@ export default function MovementsPage() {
 
     try {
       await runTransaction(firestore, async (transaction) => {
-        const eventData = {
-          asset_id: currentSelectedAsset.id,
-          asset_code: currentSelectedAsset.code,
-          customer_id: selectedCustomer.id,
-          customer_name: selectedCustomer.name,
-          event_type: data.event_type,
-          timestamp: Timestamp.now(),
-          user_id: user.uid,
-          variety: data.variety || "",
-        };
-        const newEventRef = doc(collection(firestore, "events"));
-        transaction.set(newEventRef, eventData);
+        
+        // If it's a delivery, update the existing event. Otherwise, create a new one.
+        if (data.event_type === 'ENTREGA_A_CLIENTE') {
+          const deliveryEvent = deliveryEvents.find(e => e.asset_id === currentSelectedAsset.id);
+          if (!deliveryEvent) {
+            throw new Error(`No se encontró el evento de 'SALIDA_A_REPARTO' para el activo ${currentSelectedAsset.code}. No se puede completar la entrega.`);
+          }
+          const eventRef = doc(firestore, "events", deliveryEvent.id);
+          transaction.update(eventRef, {
+            event_type: 'ENTREGA_A_CLIENTE',
+            timestamp: Timestamp.now(), // Update timestamp to reflect delivery time
+          });
+
+        } else {
+            const eventData = {
+                asset_id: currentSelectedAsset.id,
+                asset_code: currentSelectedAsset.code,
+                customer_id: selectedCustomer.id,
+                customer_name: selectedCustomer.name,
+                event_type: data.event_type,
+                timestamp: Timestamp.now(),
+                user_id: user.uid,
+                variety: data.variety || "",
+            };
+            const newEventRef = doc(collection(firestore, "events"));
+            transaction.set(newEventRef, eventData);
+        }
 
         const assetRef = doc(firestore, "assets", currentSelectedAsset.id);
         transaction.update(assetRef, { location: newLocation, state: newState });
@@ -231,11 +267,11 @@ export default function MovementsPage() {
       
       form.reset();
       router.push("/dashboard/history");
-    } catch (e) {
+    } catch (e: any) {
       console.error("La transacción falló: ", e);
       toast({
         title: "Error",
-        description: "No se pudo completar la transacción. Por favor, inténtalo de nuevo.",
+        description: e.message || "No se pudo completar la transacción. Por favor, inténtalo de nuevo.",
         variant: "destructive"
       });
     } finally {
@@ -345,7 +381,12 @@ export default function MovementsPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Cliente</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                            defaultValue={field.value}
+                            disabled={watchEventType === 'ENTREGA_A_CLIENTE'}
+                          >
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Selecciona el cliente asociado" />
