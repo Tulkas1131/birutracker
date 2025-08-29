@@ -572,7 +572,3 @@ export default function AssetsPage() {
   );
 
     
-
-    
-
-    
