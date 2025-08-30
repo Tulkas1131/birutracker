@@ -1,11 +1,11 @@
 {
   "name": "BiruTracker",
   "short_name": "BiruTracker",
-  "description": "Asset tracking for breweries",
-  "start_url": "/",
+  "start_url": "/dashboard",
   "display": "standalone",
-  "background_color": "#EBF4FA",
+  "background_color": "#EBF8FF",
   "theme_color": "#00BFFF",
+  "description": "Asset tracking for breweries.",
   "icons": [
     {
       "src": "/icon-192x192.png",
