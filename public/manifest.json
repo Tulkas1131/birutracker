@@ -1,19 +1,19 @@
 {
   "name": "BiruTracker",
   "short_name": "BiruTracker",
-  "start_url": "/dashboard",
+  "description": "Asset tracking for breweries",
+  "start_url": "/",
   "display": "standalone",
-  "background_color": "#EBF8FF",
+  "background_color": "#ffffff",
   "theme_color": "#00BFFF",
-  "description": "Asset tracking for breweries.",
   "icons": [
     {
-      "src": "/icon-192x192.png",
+      "src": "https://placehold.co/192x192/00BFFF/FFFFFF.png?text=B",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/icon-512x512.png",
+      "src": "https://placehold.co/512x512/00BFFF/FFFFFF.png?text=B",
       "sizes": "512x512",
       "type": "image/png"
     }
