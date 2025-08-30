@@ -34,7 +34,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/use-user-role";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-const QRCode = dynamic(() => import('qrcode.react').then((mod) => mod.default), {
+const QRCode = dynamic(() => import('qrcode.react'), {
   loading: () => <div className="flex h-[256px] w-[256px] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>,
   ssr: false,
 });
@@ -555,7 +555,3 @@ export default function AssetsPage() {
     </div>
   );
 }
-
-    
-
-    
