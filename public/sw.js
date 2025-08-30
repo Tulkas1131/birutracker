@@ -1,29 +1,11 @@
-// A simple, basic service worker for PWA installation prompt
-const CACHE_NAME = 'birutracker-cache-v1';
-const urlsToCache = [
-  '/',
-  '/dashboard',
-];
+// This is a basic service worker to enable PWA installation.
+// It doesn't do any caching yet, but its presence is required.
 
-self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('Opened cache');
-        return cache.addAll(urlsToCache);
-      })
-  );
+self.addEventListener('install', (event) => {
+  console.log('Service Worker installing.');
 });
 
-self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        if (response) {
-          return response;
-        }
-        return fetch(event.request);
-      }
-    )
-  );
+self.addEventListener('fetch', (event) => {
+  // We are not intercepting fetch requests for now.
+  // This allows the app to work online-first.
 });
