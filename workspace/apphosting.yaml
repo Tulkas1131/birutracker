@@ -1,3 +1,7 @@
 # Specifies the Node.js version to use.
 # For a list of supported versions, see https://firebase.google.com/docs/app-hosting/reference/supported-runtimes
 runtime: nodejs20
+build:
+  command: npm run build
+start:
+  command: npm run start
