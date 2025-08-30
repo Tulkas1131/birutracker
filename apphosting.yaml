@@ -1,16 +1,30 @@
-# Settings to manage and configure a Firebase App Hosting backend.
-# https://firebase.google.com/docs/app-hosting/configure
-
-# Specifies the node.js version to use when running your application.
-# https://firebase.google.com/docs/app-hosting/configure#build_and_run
-runtime: nodejs20
-
-# Settings that control the scaling of your backend.
-# https://firebase.google.com/docs/app-hosting/configure#scaling
+# Settings for Cloud Run
 runConfig:
-  # This is the lowest setting to ensure it stays within the free tier.
-  minInstances: 0
-  maxInstances: 1
-  cpu: 0.125
-  memoryMiB: 256
-  concurrency: 80
+  minInstances: 2
+  maxInstances: 100
+  concurrency: 100
+  cpu: 2
+  memoryMiB: 1024
+
+# Environment variables and secrets
+env:
+  - variable: STORAGE_BUCKET
+    value: mybucket.firebasestorage.app
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: API_KEY
+    secret: myApiKeySecret
+
+    # Same as API_KEY above but with a pinned version.
+  - variable: PINNED_API_KEY
+    secret: myApiKeySecret@5
+
+    # Same as API_KEY above but with the long form secret reference as defined by Cloud Secret Manager.
+  - variable: VERBOSE_API_KEY
+    secret: projects/test-project/secrets/secretID
+
+    # Same as API_KEY above but with the long form secret reference with pinned version.
+  - variable: PINNED_VERBOSE_API_KEY
+    secret: projects/test-project/secrets/secretID/versions/5
