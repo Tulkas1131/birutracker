@@ -1,13 +1,13 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
-import { MoreHorizontal, PlusCircle, Loader2 } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { MoreHorizontal, PlusCircle, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { db } from "@/lib/firebase";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,11 +30,14 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, Dialog
 import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/use-user-role";
 
+const ITEMS_PER_PAGE = 10;
+
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setFormOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | undefined>(undefined);
+  const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast();
   const userRole = useUserRole();
 
@@ -61,6 +64,13 @@ export default function CustomersPage() {
     };
     fetchCustomers();
   }, [toast]);
+  
+  const totalPages = Math.ceil(customers.length / ITEMS_PER_PAGE);
+  const paginatedCustomers = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return customers.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [customers, currentPage]);
+
 
   const handleEdit = (customer: Customer) => {
     setSelectedCustomer(customer);
@@ -106,14 +116,14 @@ export default function CustomersPage() {
     try {
       if (selectedCustomer) {
         await updateDoc(doc(firestore, "customers", selectedCustomer.id), data);
-        setCustomers(prev => prev.map(c => c.id === selectedCustomer.id ? { ...c, ...data } : c));
+        setCustomers(prev => prev.map(c => c.id === selectedCustomer.id ? { ...c, ...data } : c).sort((a, b) => a.name.localeCompare(b.name)));
         toast({
           title: "Cliente Actualizado",
           description: "Los cambios han sido guardados.",
         });
       } else {
         const newDocRef = await addDoc(collection(firestore, "customers"), data);
-        setCustomers(prev => [...prev, { id: newDocRef.id, ...data }]);
+        setCustomers(prev => [...prev, { id: newDocRef.id, ...data }].sort((a, b) => a.name.localeCompare(b.name)));
         toast({
           title: "Cliente Creado",
           description: "El nuevo cliente ha sido añadido.",
@@ -168,14 +178,14 @@ export default function CustomersPage() {
                           <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                         </TableCell>
                       </TableRow>
-                    ) : customers.length === 0 ? (
+                    ) : paginatedCustomers.length === 0 ? (
                        <TableRow>
                           <TableCell colSpan={5} className="h-24 text-center">
                             No hay clientes. ¡Añade uno para empezar!
                           </TableCell>
                         </TableRow>
                     ) : (
-                      customers.map((customer) => (
+                      paginatedCustomers.map((customer) => (
                         <TableRow key={customer.id}>
                           <TableCell className="font-medium">{customer.name}</TableCell>
                           <TableCell>
@@ -208,6 +218,33 @@ export default function CustomersPage() {
                   </TableBody>
                 </Table>
             </CardContent>
+             {totalPages > 1 && (
+                <CardFooter className="flex items-center justify-between py-4">
+                    <span className="text-sm text-muted-foreground">
+                        Página {currentPage} de {totalPages}
+                    </span>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                            disabled={currentPage === 1}
+                        >
+                             <ChevronLeft className="h-4 w-4" />
+                            Anterior
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                            disabled={currentPage === totalPages}
+                        >
+                            Siguiente
+                            <ChevronRight className="h-4 w-4" />
+                        </Button>
+                    </div>
+                </CardFooter>
+            )}
           </Card>
         </main>
         <DialogContent>

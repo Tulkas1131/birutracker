@@ -4,8 +4,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import type { Timestamp } from "firebase/firestore/lite";
 import { db } from "@/lib/firebase";
-import { Loader2, Trash2 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Loader2, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { differenceInDays } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
+
+const ITEMS_PER_PAGE = 10;
 
 function EventTable({ events, assets, isLoading, onDelete }: { events: Event[], assets: Asset[], isLoading: boolean, onDelete: (id: string) => void }) {
   const userRole = useUserRole();
@@ -57,56 +59,58 @@ function EventTable({ events, assets, isLoading, onDelete }: { events: Event[], 
 
   return (
     <>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Fecha</TableHead>
-            <TableHead>Código de Activo</TableHead>
-            <TableHead>Tipo de Evento</TableHead>
-            <TableHead>Cliente</TableHead>
-            <TableHead>Días en Cliente</TableHead>
-            <TableHead>Variedad</TableHead>
-            {userRole === 'Admin' && <TableHead>Acciones</TableHead>}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {events.map((event) => {
-            const daysAtCustomer = getDaysAtCustomer(event);
-            return (
-              <TableRow key={event.id}>
-                <TableCell>{formatDate(event.timestamp)}</TableCell>
-                <TableCell className="font-medium">{event.asset_code}</TableCell>
-                <TableCell>{formatEventType(event.event_type)}</TableCell>
-                <TableCell>{event.customer_name}</TableCell>
-                <TableCell>
-                  {daysAtCustomer !== null ? (
-                     daysAtCustomer > 30 ? (
-                       <Badge variant="destructive">{daysAtCustomer} días</Badge>
-                     ) : (
-                       <span>{daysAtCustomer} días</span>
-                     )
-                  ) : (
-                    '--'
-                  )}
-                </TableCell>
-                <TableCell>{event.variety || 'N/A'}</TableCell>
-                {userRole === 'Admin' && (
+      <div className="relative w-full overflow-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Fecha</TableHead>
+              <TableHead>Código de Activo</TableHead>
+              <TableHead>Tipo de Evento</TableHead>
+              <TableHead>Cliente</TableHead>
+              <TableHead>Días en Cliente</TableHead>
+              <TableHead>Variedad</TableHead>
+              {userRole === 'Admin' && <TableHead>Acciones</TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {events.map((event) => {
+              const daysAtCustomer = getDaysAtCustomer(event);
+              return (
+                <TableRow key={event.id}>
+                  <TableCell>{formatDate(event.timestamp)}</TableCell>
+                  <TableCell className="font-medium">{event.asset_code}</TableCell>
+                  <TableCell>{formatEventType(event.event_type)}</TableCell>
+                  <TableCell>{event.customer_name}</TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => onDelete(event.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {daysAtCustomer !== null ? (
+                      daysAtCustomer > 30 ? (
+                        <Badge variant="destructive">{daysAtCustomer} días</Badge>
+                      ) : (
+                        <span>{daysAtCustomer} días</span>
+                      )
+                    ) : (
+                      '--'
+                    )}
                   </TableCell>
-                )}
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+                  <TableCell>{event.variety || 'N/A'}</TableCell>
+                  {userRole === 'Admin' && (
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => onDelete(event.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  )}
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
       {events.length === 0 && !isLoading && (
         <div className="py-10 text-center text-muted-foreground">
           No se encontraron movimientos para los filtros seleccionados.
@@ -121,6 +125,7 @@ export default function HistoryPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [isAssetsLoading, setIsAssetsLoading] = useState(true);
   const [isEventsLoading, setIsEventsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast();
   const userRole = useUserRole();
 
@@ -173,6 +178,7 @@ export default function HistoryPage() {
 
   const handleFilterChange = (name: string, value: string) => {
     setFilters(prev => ({ ...prev, [name]: value }));
+    setCurrentPage(1);
   };
 
   const handleDelete = async (id: string) => {
@@ -213,6 +219,12 @@ export default function HistoryPage() {
         return customerMatch && assetTypeMatch && eventTypeMatch;
       });
   }, [events, filters]);
+  
+  const totalPages = Math.ceil(filteredEvents.length / ITEMS_PER_PAGE);
+  const paginatedEvents = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredEvents.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredEvents, currentPage]);
   
   const isLoading = isAssetsLoading || isEventsLoading;
 
@@ -257,8 +269,35 @@ export default function HistoryPage() {
                 </SelectContent>
               </Select>
             </div>
-            <EventTable events={filteredEvents} assets={assets} isLoading={isLoading} onDelete={handleDelete} />
+            <EventTable events={paginatedEvents} assets={assets} isLoading={isLoading} onDelete={handleDelete} />
           </CardContent>
+          {totalPages > 1 && (
+            <CardFooter className="flex items-center justify-between py-4">
+              <span className="text-sm text-muted-foreground">
+                Página {currentPage} de {totalPages}
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                >
+                   <ChevronLeft className="h-4 w-4" />
+                  Anterior
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                >
+                  Siguiente
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardFooter>
+          )}
         </Card>
       </main>
     </div>

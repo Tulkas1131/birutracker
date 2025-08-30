@@ -2,13 +2,13 @@
 "use client";
 
 import { useState, useRef, useMemo, Suspense, useEffect } from "react";
-import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus, ChevronLeft, ChevronRight } from "lucide-react";
 import { db } from "@/lib/firebase";
 import dynamic from "next/dynamic";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,6 +39,8 @@ const QRCode = dynamic(() => import('qrcode.react'), {
   ssr: false,
 });
 
+const ITEMS_PER_PAGE = 10;
+
 export default function AssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -47,6 +49,7 @@ export default function AssetsPage() {
   const [isQrCodeOpen, setQrCodeOpen] = useState(false);
   const [isBatchQrOpen, setBatchQrOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('barrels');
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedAsset, setSelectedAsset] = useState<Asset | undefined>(undefined);
   const { toast } = useToast();
   const userRole = useUserRole();
@@ -330,9 +333,17 @@ export default function AssetsPage() {
       co2: calculateCounts(co2Cylinders),
     };
   }, [barrels, co2Cylinders]);
-
-
+  
   const assetsToPrint = activeTab === 'barrels' ? barrels : co2Cylinders;
+
+  const currentAssetList = activeTab === 'barrels' ? barrels : co2Cylinders;
+  const totalPages = Math.ceil(currentAssetList.length / ITEMS_PER_PAGE);
+  const paginatedAssets = currentAssetList.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    setCurrentPage(1);
+  };
 
   const AssetTable = ({ assetList, type }: { assetList: Asset[], type: 'BARRIL' | 'CO2' }) => (
      <Card>
@@ -414,6 +425,33 @@ export default function AssetsPage() {
             </TableBody>
           </Table>
         </CardContent>
+        {totalPages > 1 && (
+          <CardFooter className="flex items-center justify-between py-4">
+              <span className="text-sm text-muted-foreground">
+                  Página {currentPage} de {totalPages}
+              </span>
+              <div className="flex gap-2">
+                  <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
+                  >
+                      <ChevronLeft className="h-4 w-4" />
+                      Anterior
+                  </Button>
+                  <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage === totalPages}
+                  >
+                      Siguiente
+                      <ChevronRight className="h-4 w-4" />
+                  </Button>
+              </div>
+          </CardFooter>
+        )}
       </Card>
   );
 
@@ -457,7 +495,7 @@ export default function AssetsPage() {
           }
         />
         <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
-            <Tabs defaultValue={activeTab} onValueChange={setActiveTab}>
+            <Tabs defaultValue={activeTab} onValueChange={handleTabChange}>
               <div className="flex flex-col sm:flex-row items-start justify-between gap-4 mb-4">
                 <TabsList>
                   <TabsTrigger value="barrels">Barriles ({barrels.length})</TabsTrigger>
@@ -467,10 +505,10 @@ export default function AssetsPage() {
                 {activeTab === 'co2' && <CountsDisplay counts={assetCountsByFormat.co2} />}
               </div>
               <TabsContent value="barrels">
-                 <AssetTable assetList={barrels} type="BARRIL" />
+                 <AssetTable assetList={paginatedAssets} type="BARRIL" />
               </TabsContent>
               <TabsContent value="co2">
-                 <AssetTable assetList={co2Cylinders} type="CO2" />
+                 <AssetTable assetList={paginatedAssets} type="CO2" />
               </TabsContent>
             </Tabs>
         </main>
@@ -555,3 +593,5 @@ export default function AssetsPage() {
     </div>
   );
 }
+
+    
