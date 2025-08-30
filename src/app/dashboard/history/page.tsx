@@ -19,15 +19,23 @@ import { Badge } from '@/components/ui/badge';
 
 const ITEMS_PER_PAGE = 10;
 
-function EventTable({ events, assets, isLoading, onDelete }: { events: Event[], assets: Asset[], isLoading: boolean, onDelete: (id: string) => void }) {
+function EventTableRow({ event, assetsMap, onDelete }: { event: Event, assetsMap: Map<string, Asset>, onDelete: (id: string) => void }) {
+  const [daysAtCustomer, setDaysAtCustomer] = useState<number | null>(null);
   const userRole = useUserRole();
-  const assetsMap = useMemo(() => new Map(assets.map(asset => [asset.id, asset])), [assets]);
+
+  useEffect(() => {
+    const asset = assetsMap.get(event.asset_id);
+    if (event.event_type === 'ENTREGA_A_CLIENTE' && asset && asset.location === 'EN_CLIENTE') {
+      const days = differenceInDays(new Date(), event.timestamp.toDate());
+      setDaysAtCustomer(days);
+    }
+  }, [event, assetsMap]);
 
   const formatDate = (timestamp: Timestamp) => {
     if (!timestamp || !timestamp.toDate) return 'Fecha inválida';
     return timestamp.toDate().toLocaleString();
   };
-  
+
   const formatEventType = (eventType: Event['event_type']) => {
     switch (eventType) {
       case 'SALIDA_A_REPARTO': return 'Salida a Reparto';
@@ -38,16 +46,46 @@ function EventTable({ events, assets, isLoading, onDelete }: { events: Event[], 
       case 'DEVOLUCION': return 'Devolución (Lleno)';
       default: return eventType;
     }
-  }
-
-  const getDaysAtCustomer = (event: Event) => {
-    const asset = assetsMap.get(event.asset_id);
-    if (event.event_type === 'ENTREGA_A_CLIENTE' && asset && asset.location === 'EN_CLIENTE') {
-      const days = differenceInDays(new Date(), event.timestamp.toDate());
-      return days;
-    }
-    return null;
   };
+
+  return (
+    <TableRow>
+      <TableCell>{formatDate(event.timestamp)}</TableCell>
+      <TableCell className="font-medium">{event.asset_code}</TableCell>
+      <TableCell>{formatEventType(event.event_type)}</TableCell>
+      <TableCell>{event.customer_name}</TableCell>
+      <TableCell>
+        {daysAtCustomer !== null ? (
+          daysAtCustomer > 30 ? (
+            <Badge variant="destructive">{daysAtCustomer} días</Badge>
+          ) : (
+            <span>{daysAtCustomer} días</span>
+          )
+        ) : (
+          '--'
+        )}
+      </TableCell>
+      <TableCell>{event.variety || 'N/A'}</TableCell>
+      {userRole === 'Admin' && (
+        <TableCell>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-destructive hover:text-destructive"
+            onClick={() => onDelete(event.id)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </TableCell>
+      )}
+    </TableRow>
+  );
+}
+
+
+function EventTable({ events, assets, isLoading, onDelete }: { events: Event[], assets: Asset[], isLoading: boolean, onDelete: (id: string) => void }) {
+  const userRole = useUserRole();
+  const assetsMap = useMemo(() => new Map(assets.map(asset => [asset.id, asset])), [assets]);
 
   if (isLoading) {
     return (
@@ -73,41 +111,9 @@ function EventTable({ events, assets, isLoading, onDelete }: { events: Event[], 
             </TableRow>
           </TableHeader>
           <TableBody>
-            {events.map((event) => {
-              const daysAtCustomer = getDaysAtCustomer(event);
-              return (
-                <TableRow key={event.id}>
-                  <TableCell>{formatDate(event.timestamp)}</TableCell>
-                  <TableCell className="font-medium">{event.asset_code}</TableCell>
-                  <TableCell>{formatEventType(event.event_type)}</TableCell>
-                  <TableCell>{event.customer_name}</TableCell>
-                  <TableCell>
-                    {daysAtCustomer !== null ? (
-                      daysAtCustomer > 30 ? (
-                        <Badge variant="destructive">{daysAtCustomer} días</Badge>
-                      ) : (
-                        <span>{daysAtCustomer} días</span>
-                      )
-                    ) : (
-                      '--'
-                    )}
-                  </TableCell>
-                  <TableCell>{event.variety || 'N/A'}</TableCell>
-                  {userRole === 'Admin' && (
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => onDelete(event.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  )}
-                </TableRow>
-              );
-            })}
+            {events.map((event) => (
+               <EventTableRow key={event.id} event={event} assetsMap={assetsMap} onDelete={onDelete} />
+            ))}
           </TableBody>
         </Table>
       </div>
@@ -303,5 +309,3 @@ export default function HistoryPage() {
     </div>
   );
 }
-
-    
