@@ -32,6 +32,7 @@ import {
 import { PageHeader } from "@/components/page-header";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { InstallPWA } from "@/components/install-pwa";
 
 interface UserData {
     email?: string;
@@ -108,7 +109,10 @@ export function DashboardLayoutContent({ children, user }: { children: React.Rea
          <PageHeader
             title=""
             className="h-14 justify-start px-4 md:px-6"
-            action={<SidebarTrigger />}
+            action={<div className="flex items-center gap-2">
+                <SidebarTrigger />
+                <InstallPWA />
+            </div>}
          />
         {children}
       </SidebarInset>
