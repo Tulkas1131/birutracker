@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   LogOut,
   Package,
+  SunMoon,
   Truck,
   Users,
 } from "lucide-react";
@@ -38,7 +39,7 @@ interface UserData {
     role: string;
 }
 
-export function DashboardLayoutContent({ children, user }: { children: React.React.Node, user: UserData }) {
+export function DashboardLayoutContent({ children, user }: { children: React.ReactNode, user: UserData }) {
   const pathname = usePathname();
 
   const navItems = [
@@ -80,6 +81,9 @@ export function DashboardLayoutContent({ children, user }: { children: React.Rea
                 </SidebarMenuButton>
               </SidebarMenuItem>
             ))}
+             <SidebarMenuItem>
+                <ThemeToggle />
+            </SidebarMenuItem>
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter>
@@ -93,7 +97,6 @@ export function DashboardLayoutContent({ children, user }: { children: React.Rea
                 <span className="text-muted-foreground truncate">{user.email}</span>
               </div>
             <div className="ml-auto flex items-center gap-2">
-              <ThemeToggle />
               <button onClick={handleSignOut} title="Cerrar Sesión">
                 <LogOut className="size-5" />
               </button>
