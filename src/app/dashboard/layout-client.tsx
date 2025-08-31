@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/sidebar";
 import { PageHeader } from "@/components/page-header";
 import { Logo } from "@/components/logo";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 interface UserData {
     email?: string;
@@ -91,9 +92,12 @@ export function DashboardLayoutContent({ children, user }: { children: React.Rea
                 <span className="font-semibold">{user.role}</span>
                 <span className="text-muted-foreground truncate">{user.email}</span>
               </div>
-            <button onClick={handleSignOut} className="ml-auto" title="Cerrar Sesión">
-              <LogOut className="size-5" />
-            </button>
+            <div className="ml-auto flex items-center gap-2">
+              <ThemeToggle />
+              <button onClick={handleSignOut} title="Cerrar Sesión">
+                <LogOut className="size-5" />
+              </button>
+            </div>
           </div>
         </SidebarFooter>
       </Sidebar>
@@ -108,5 +112,3 @@ export function DashboardLayoutContent({ children, user }: { children: React.Rea
     </SidebarProvider>
   );
 }
-
-    
