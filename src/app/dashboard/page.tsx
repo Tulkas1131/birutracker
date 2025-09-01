@@ -71,6 +71,7 @@ export default function DashboardPage() {
     events
         .filter(e => e.event_type === 'ENTREGA_A_CLIENTE')
         .forEach(e => {
+            // We only care about the latest delivery event for each asset
             if (!deliveryEventsMap.has(e.asset_id)) {
                 deliveryEventsMap.set(e.asset_id, e.timestamp.toDate());
             }
@@ -118,7 +119,7 @@ export default function DashboardPage() {
     
     if (isLoading) {
       return (
-        <Card>
+        <Card className="h-full">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{title}</CardTitle>
             {icon}
@@ -132,7 +133,7 @@ export default function DashboardPage() {
     }
     
     return (
-      <Card>
+      <Card className="h-full">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">{title}</CardTitle>
               {icon}
@@ -189,74 +190,73 @@ export default function DashboardPage() {
       <PageHeader title="Panel de Control" description="¡Bienvenido de nuevo! Aquí tienes un resumen rápido." />
       <main className="flex-1 p-4 md:p-6">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
-            <StatCard 
-                title="Movimientos (Últimas 24h)" 
-                value={metrics.movimientosUltimas24h} 
-                icon={<History className="h-4 w-4 text-muted-foreground" />} 
-                href="/dashboard/history"
+          <div className="lg:col-span-2">
+              <StatCard 
+                  title="Movimientos (Últimas 24h)" 
+                  value={metrics.movimientosUltimas24h} 
+                  icon={<History className="h-4 w-4 text-muted-foreground" />} 
+                  href="/dashboard/history"
+              />
+          </div>
+          <div className="lg:col-span-2">
+              <StatCard 
+                  title="Activos Críticos (>30 días)" 
+                  value={metrics.activosCriticos} 
+                  icon={<AlertTriangle className="h-4 w-4 text-destructive" />} 
+                  href="/dashboard/history"
+              />
+          </div>
+          
+          <div className="lg:col-span-2">
+             <GroupedStatCard 
+                title="Barriles en Reparto" 
+                data={metrics.assetsEnRepartoGrouped} 
+                icon={<PackageSearch className="h-4 w-4 text-muted-foreground" />} 
+                type="BARRIL"
             />
-            <StatCard 
-                title="Activos Críticos (>30 días)" 
-                value={metrics.activosCriticos} 
-                icon={<AlertTriangle className="h-4 w-4 text-destructive" />} 
-                href="/dashboard/history"
+          </div>
+          <div className="lg:col-span-2">
+             <GroupedStatCard 
+                title="CO2 en Reparto" 
+                data={metrics.assetsEnRepartoGrouped} 
+                icon={<PackageSearch className="h-4 w-4 text-muted-foreground" />} 
+                type="CO2"
             />
-        </div>
+          </div>
 
-        <div className="space-y-6">
-            <div>
-                <h2 className="text-xl font-bold tracking-tight mb-4">Activos en Reparto</h2>
-                <div className="grid gap-4 md:grid-cols-2">
-                     <GroupedStatCard 
-                        title="Barriles en Reparto" 
-                        data={metrics.assetsEnRepartoGrouped} 
-                        icon={<PackageSearch className="h-4 w-4 text-muted-foreground" />} 
-                        type="BARRIL"
-                    />
-                     <GroupedStatCard 
-                        title="CO2 en Reparto" 
-                        data={metrics.assetsEnRepartoGrouped} 
-                        icon={<PackageSearch className="h-4 w-4 text-muted-foreground" />} 
-                        type="CO2"
-                    />
-                </div>
-            </div>
+          <div className="lg:col-span-2">
+             <GroupedStatCard 
+                title="Barriles en Planta" 
+                data={metrics.assetsEnPlantaGrouped} 
+                icon={<Warehouse className="h-4 w-4 text-muted-foreground" />} 
+                type="BARRIL"
+            />
+          </div>
+           <div className="lg:col-span-2">
+             <GroupedStatCard 
+                title="CO2 en Planta" 
+                data={metrics.assetsEnPlantaGrouped} 
+                icon={<Warehouse className="h-4 w-4 text-muted-foreground" />} 
+                type="CO2"
+            />
+          </div>
 
-            <div>
-                <h2 className="text-xl font-bold tracking-tight mb-4">Activos en Planta</h2>
-                <div className="grid gap-4 md:grid-cols-2">
-                     <GroupedStatCard 
-                        title="Barriles en Planta" 
-                        data={metrics.assetsEnPlantaGrouped} 
-                        icon={<Warehouse className="h-4 w-4 text-muted-foreground" />} 
-                        type="BARRIL"
-                    />
-                     <GroupedStatCard 
-                        title="CO2 en Planta" 
-                        data={metrics.assetsEnPlantaGrouped} 
-                        icon={<Warehouse className="h-4 w-4 text-muted-foreground" />} 
-                        type="CO2"
-                    />
-                </div>
-            </div>
-
-            <div>
-                <h2 className="text-xl font-bold tracking-tight mb-4">Activos en Clientes</h2>
-                <div className="grid gap-4 md:grid-cols-2">
-                     <GroupedStatCard 
-                        title="Barriles en Clientes" 
-                        data={metrics.assetsEnClienteGrouped} 
-                        icon={<PackageCheck className="h-4 w-4 text-muted-foreground" />} 
-                        type="BARRIL"
-                    />
-                     <GroupedStatCard 
-                        title="CO2 en Clientes" 
-                        data={metrics.assetsEnClienteGrouped} 
-                        icon={<PackageCheck className="h-4 w-4 text-muted-foreground" />} 
-                        type="CO2"
-                    />
-                </div>
-            </div>
+          <div className="lg:col-span-2">
+             <GroupedStatCard 
+                title="Barriles en Clientes" 
+                data={metrics.assetsEnClienteGrouped} 
+                icon={<PackageCheck className="h-4 w-4 text-muted-foreground" />} 
+                type="BARRIL"
+            />
+          </div>
+          <div className="lg:col-span-2">
+             <GroupedStatCard 
+                title="CO2 en Clientes" 
+                data={metrics.assetsEnClienteGrouped} 
+                icon={<PackageCheck className="h-4 w-4 text-muted-foreground" />} 
+                type="CO2"
+            />
+          </div>
         </div>
         
         <Separator className="my-6" />
@@ -279,5 +279,6 @@ export default function DashboardPage() {
       </main>
     </div>
   );
+}
 
     
