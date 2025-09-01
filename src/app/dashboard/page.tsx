@@ -111,9 +111,7 @@ export default function DashboardPage() {
         </Card>
       )
     }
-
-    if (filteredData.length === 0) return null;
-
+    
     return (
       <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -121,12 +119,19 @@ export default function DashboardPage() {
               {icon}
           </CardHeader>
           <CardContent>
-            {filteredData.map(([key, value]) => (
-               <div key={key} className="text-lg font-bold">
-                  <span className="text-muted-foreground text-sm font-medium">{key.replace(type, '').trim()}: </span>
-                  {value}
-               </div>
-            ))}
+            {filteredData.length > 0 ? (
+                filteredData.map(([key, value]) => (
+                   <div key={key} className="text-lg font-bold">
+                      <span className="text-muted-foreground text-sm font-medium">{key.replace(type, '').trim()}: </span>
+                      {value}
+                   </div>
+                ))
+            ) : (
+                 <div className="text-lg font-bold">
+                    <span className="text-muted-foreground text-sm font-medium">Total: </span>
+                    0
+                 </div>
+            )}
           </CardContent>
       </Card>
     )
@@ -173,57 +178,59 @@ export default function DashboardPage() {
             />
         </div>
 
-        <div className="mb-6">
-            <h2 className="text-xl font-bold tracking-tight mb-4">Activos en Reparto</h2>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                 <GroupedStatCard 
-                    title="Barriles en Reparto" 
-                    data={metrics.assetsEnRepartoGrouped} 
-                    icon={<PackageSearch className="h-4 w-4 text-muted-foreground" />} 
-                    type="BARRIL"
-                />
-                 <GroupedStatCard 
-                    title="CO2 en Reparto" 
-                    data={metrics.assetsEnRepartoGrouped} 
-                    icon={<PackageSearch className="h-4 w-4 text-muted-foreground" />} 
-                    type="CO2"
-                />
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-xl font-bold tracking-tight mb-4">Activos en Reparto</h2>
+                <div className="grid gap-4 md:grid-cols-2">
+                     <GroupedStatCard 
+                        title="Barriles en Reparto" 
+                        data={metrics.assetsEnRepartoGrouped} 
+                        icon={<PackageSearch className="h-4 w-4 text-muted-foreground" />} 
+                        type="BARRIL"
+                    />
+                     <GroupedStatCard 
+                        title="CO2 en Reparto" 
+                        data={metrics.assetsEnRepartoGrouped} 
+                        icon={<PackageSearch className="h-4 w-4 text-muted-foreground" />} 
+                        type="CO2"
+                    />
+                </div>
             </div>
-        </div>
 
-        <div className="mb-6">
-            <h2 className="text-xl font-bold tracking-tight mb-4">Activos en Planta</h2>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                 <GroupedStatCard 
-                    title="Barriles en Planta" 
-                    data={metrics.assetsEnPlantaGrouped} 
-                    icon={<Warehouse className="h-4 w-4 text-muted-foreground" />} 
-                    type="BARRIL"
-                />
-                 <GroupedStatCard 
-                    title="CO2 en Planta" 
-                    data={metrics.assetsEnPlantaGrouped} 
-                    icon={<Warehouse className="h-4 w-4 text-muted-foreground" />} 
-                    type="CO2"
-                />
+            <div>
+                <h2 className="text-xl font-bold tracking-tight mb-4">Activos en Planta</h2>
+                <div className="grid gap-4 md:grid-cols-2">
+                     <GroupedStatCard 
+                        title="Barriles en Planta" 
+                        data={metrics.assetsEnPlantaGrouped} 
+                        icon={<Warehouse className="h-4 w-4 text-muted-foreground" />} 
+                        type="BARRIL"
+                    />
+                     <GroupedStatCard 
+                        title="CO2 en Planta" 
+                        data={metrics.assetsEnPlantaGrouped} 
+                        icon={<Warehouse className="h-4 w-4 text-muted-foreground" />} 
+                        type="CO2"
+                    />
+                </div>
             </div>
-        </div>
 
-        <div className="mb-6">
-            <h2 className="text-xl font-bold tracking-tight mb-4">Activos en Clientes</h2>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                 <GroupedStatCard 
-                    title="Barriles en Clientes" 
-                    data={metrics.assetsEnClienteGrouped} 
-                    icon={<PackageCheck className="h-4 w-4 text-muted-foreground" />} 
-                    type="BARRIL"
-                />
-                 <GroupedStatCard 
-                    title="CO2 en Clientes" 
-                    data={metrics.assetsEnClienteGrouped} 
-                    icon={<PackageCheck className="h-4 w-4 text-muted-foreground" />} 
-                    type="CO2"
-                />
+            <div>
+                <h2 className="text-xl font-bold tracking-tight mb-4">Activos en Clientes</h2>
+                <div className="grid gap-4 md:grid-cols-2">
+                     <GroupedStatCard 
+                        title="Barriles en Clientes" 
+                        data={metrics.assetsEnClienteGrouped} 
+                        icon={<PackageCheck className="h-4 w-4 text-muted-foreground" />} 
+                        type="BARRIL"
+                    />
+                     <GroupedStatCard 
+                        title="CO2 en Clientes" 
+                        data={metrics.assetsEnClienteGrouped} 
+                        icon={<PackageCheck className="h-4 w-4 text-muted-foreground" />} 
+                        type="CO2"
+                    />
+                </div>
             </div>
         </div>
         
@@ -248,5 +255,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    
