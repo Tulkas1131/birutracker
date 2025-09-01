@@ -60,7 +60,7 @@ export default function DashboardPage() {
 
     const assetsEnCliente = assets.filter(asset => asset.location === 'EN_CLIENTE');
     const assetsEnPlanta = assets.filter(asset => asset.location === 'EN_PLANTA');
-    const assetsEnReparto = assets.filter(asset => asset.location === 'EN_REPARTO').length;
+    const assetsEnReparto = assets.filter(asset => asset.location === 'EN_REPARTO');
     
     const now = new Date();
     const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
@@ -69,7 +69,7 @@ export default function DashboardPage() {
     return {
       assetsEnClienteGrouped: groupAssetsByFormat(assetsEnCliente),
       assetsEnPlantaGrouped: groupAssetsByFormat(assetsEnPlanta),
-      assetsEnReparto,
+      assetsEnRepartoGrouped: groupAssetsByFormat(assetsEnReparto),
       movimientosUltimas24h,
     };
   }, [assets, events]);
@@ -121,7 +121,7 @@ export default function DashboardPage() {
               {icon}
           </CardHeader>
           <CardContent>
-            {filteredData.map(([key, value], index) => (
+            {filteredData.map(([key, value]) => (
                <div key={key} className="text-lg font-bold">
                   <span className="text-muted-foreground text-sm font-medium">{key.replace(type, '').trim()}: </span>
                   {value}
@@ -166,16 +166,29 @@ export default function DashboardPage() {
       <main className="flex-1 p-4 md:p-6">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
             <StatCard 
-                title="Activos en Reparto" 
-                value={metrics.assetsEnReparto} 
-                icon={<PackageSearch className="h-4 w-4 text-muted-foreground" />} 
-            />
-            <StatCard 
                 title="Movimientos (Últimas 24h)" 
                 value={metrics.movimientosUltimas24h} 
                 icon={<History className="h-4 w-4 text-muted-foreground" />} 
                 href="/dashboard/history"
             />
+        </div>
+
+        <div className="mb-6">
+            <h2 className="text-xl font-bold tracking-tight mb-4">Activos en Reparto</h2>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                 <GroupedStatCard 
+                    title="Barriles en Reparto" 
+                    data={metrics.assetsEnRepartoGrouped} 
+                    icon={<PackageSearch className="h-4 w-4 text-muted-foreground" />} 
+                    type="BARRIL"
+                />
+                 <GroupedStatCard 
+                    title="CO2 en Reparto" 
+                    data={metrics.assetsEnRepartoGrouped} 
+                    icon={<PackageSearch className="h-4 w-4 text-muted-foreground" />} 
+                    type="CO2"
+                />
+            </div>
         </div>
 
         <div className="mb-6">
@@ -235,3 +248,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    
