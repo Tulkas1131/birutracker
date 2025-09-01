@@ -86,7 +86,7 @@ export default function MovementsPage() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [toast]);
 
   const watchAssetId = form.watch("asset_id");
   const watchEventType = form.watch("event_type");
@@ -94,20 +94,33 @@ export default function MovementsPage() {
   const selectedAsset = assets.find(asset => asset.id === watchAssetId);
   const showVarietyField = selectedAsset?.type === 'BARRIL' && (watchEventType === 'SALIDA_A_REPARTO' || watchEventType === 'DEVOLUCION');
 
-  const filteredAssets = useMemo(() => {
-    switch (watchEventType) {
-      case 'SALIDA_A_REPARTO':
-      case 'SALIDA_VACIO':
-        return assets.filter(a => a.location === 'EN_PLANTA');
-      case 'ENTREGA_A_CLIENTE':
-      case 'RECEPCION_EN_PLANTA':
-        return assets.filter(a => a.location === 'EN_REPARTO');
-      case 'RECOLECCION_DE_CLIENTE':
-      case 'DEVOLUCION':
-        return assets.filter(a => a.location === 'EN_CLIENTE');
-      default:
-        return assets;
+  const getLocationText = (location: Asset["location"]) => {
+    switch (location) {
+        case "EN_CLIENTE": return "En Cliente";
+        case "EN_PLANTA": return "En Planta";
+        case "EN_REPARTO": return "En Reparto";
+        default: return location;
     }
+  };
+  
+  const isAssetLocationValid = (asset: Asset, eventType: MovementEventType): { valid: boolean, expectedLocation?: Asset['location'] } => {
+    const rules: Record<MovementEventType, Asset['location']> = {
+      'SALIDA_A_REPARTO': 'EN_PLANTA',
+      'SALIDA_VACIO': 'EN_PLANTA',
+      'ENTREGA_A_CLIENTE': 'EN_REPARTO',
+      'RECEPCION_EN_PLANTA': 'EN_REPARTO',
+      'RECOLECCION_DE_CLIENTE': 'EN_CLIENTE',
+      'DEVOLUCION': 'EN_CLIENTE'
+    };
+    const expectedLocation = rules[eventType];
+    return {
+      valid: asset.location === expectedLocation,
+      expectedLocation: expectedLocation,
+    };
+  };
+
+  const filteredAssets = useMemo(() => {
+    return assets.filter(asset => isAssetLocationValid(asset, watchEventType).valid);
   }, [assets, watchEventType]);
 
   useEffect(() => {
@@ -145,49 +158,54 @@ export default function MovementsPage() {
         });
         return;
     }
+    
+    const scannedAsset = assets.find(a => a.id === decodedText);
 
-    try {
-      const scannedAsset = assets.find(a => a.id === decodedText);
+    if (!scannedAsset) {
+        toast({
+            title: "Activo No Encontrado",
+            description: "No se encontró ningún activo con el QR escaneado en la base de datos.",
+            variant: "destructive"
+        });
+        return;
+    }
+    
+    // **VALIDATION LOGIC**
+    const { valid, expectedLocation } = isAssetLocationValid(scannedAsset, watchEventType);
+    
+    if (!valid) {
+        toast({
+            title: "Movimiento Inválido",
+            description: `El activo ${scannedAsset.code} está "${getLocationText(scannedAsset.location)}". Para esta acción, debería estar "${getLocationText(expectedLocation!)}".`,
+            variant: "destructive",
+            duration: 6000,
+        });
+        return;
+    }
 
-      if (scannedAsset) {
-        form.setValue('asset_id', scannedAsset.id);
-        
-        if (watchEventType === 'RECOLECCION_DE_CLIENTE') {
-          const lastDeliveryEvent = pendingEvents.find(e => e.asset_id === scannedAsset.id && e.event_type === 'ENTREGA_A_CLIENTE');
-          
-          if (lastDeliveryEvent) {
-            form.setValue('customer_id', lastDeliveryEvent.customer_id);
-            toast({
-              title: "Activo y Cliente Encontrados",
-              description: `Activo: ${scannedAsset.code}. Cliente: ${lastDeliveryEvent.customer_name}.`
-            });
-          } else {
-            toast({
-              title: "Activo Encontrado, Cliente Desconocido",
-              description: `Se ha seleccionado el activo: ${scannedAsset.code}. Por favor, selecciona el cliente manualmente.`,
-              variant: "default"
-            });
-          }
-        } else {
-          toast({
-              title: "Activo Encontrado",
-              description: `Se ha seleccionado el activo: ${scannedAsset.code}.`
-          });
-        }
+    // If validation passes, proceed
+    form.setValue('asset_id', scannedAsset.id);
+
+    if (watchEventType === 'RECOLECCION_DE_CLIENTE') {
+      const lastDeliveryEvent = pendingEvents.find(e => e.asset_id === scannedAsset.id && e.event_type === 'ENTREGA_A_CLIENTE');
+      
+      if (lastDeliveryEvent) {
+        form.setValue('customer_id', lastDeliveryEvent.customer_id);
+        toast({
+          title: "Activo y Cliente Encontrados",
+          description: `Activo: ${scannedAsset.code}. Cliente: ${lastDeliveryEvent.customer_name}.`
+        });
       } else {
         toast({
-            title: "Error",
-            description: "No se encontró ningún activo con el QR escaneado.",
-            variant: "destructive"
+          title: "Activo Encontrado",
+          description: `Se ha seleccionado el activo: ${scannedAsset.code}. Por favor, selecciona el cliente manualmente.`,
         });
       }
-    } catch (error) {
-        console.error("Error processing scan: ", error);
-        toast({
-            title: "Error de Búsqueda",
-            description: "No se pudo verificar el código QR.",
-            variant: "destructive"
-        });
+    } else {
+      toast({
+          title: "Activo Seleccionado",
+          description: `Activo: ${scannedAsset.code}. Ubicación: ${getLocationText(scannedAsset.location)}.`,
+      });
     }
   };
 
