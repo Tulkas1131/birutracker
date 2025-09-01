@@ -95,7 +95,7 @@ export default function DashboardPage() {
   
   const StatCard = ({ title, value, icon, href }: { title: string, value: number, icon: React.ReactNode, href?: string }) => {
      const cardContent = (
-         <Card className="transition-transform hover:scale-105 hover:shadow-lg">
+         <Card className="transition-transform hover:scale-105 hover:shadow-lg h-full">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">{title}</CardTitle>
                 {icon}
