@@ -3,13 +3,13 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { History, Package, Truck, Users, AlertTriangle, PackageCheck, PackageSearch } from "lucide-react";
+import { History, Package, Truck, Users, PackageCheck, PackageSearch, Warehouse } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { db } from "@/lib/firebase";
 import { type Asset, type Event } from "@/lib/types";
-import { differenceInDays } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Separator } from "@/components/ui/separator";
 
 export default function DashboardPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -20,7 +20,7 @@ export default function DashboardPage() {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const { collection, query, getDocs, orderBy, where } = await import("firebase/firestore/lite");
+        const { collection, query, getDocs, orderBy } = await import("firebase/firestore/lite");
         const firestore = db();
         
         const assetsQuery = query(collection(firestore, "assets"));
@@ -47,43 +47,36 @@ export default function DashboardPage() {
   }, []);
 
   const metrics = useMemo(() => {
-    const assetsEnCliente = assets.filter(asset => asset.location === 'EN_CLIENTE').length;
+    const groupAssetsByFormat = (filteredAssets: Asset[]) => {
+      return filteredAssets.reduce((acc, asset) => {
+        const key = `${asset.type} ${asset.format}`;
+        if (!acc[key]) {
+          acc[key] = 0;
+        }
+        acc[key]++;
+        return acc;
+      }, {} as Record<string, number>);
+    };
+
+    const assetsEnCliente = assets.filter(asset => asset.location === 'EN_CLIENTE');
+    const assetsEnPlanta = assets.filter(asset => asset.location === 'EN_PLANTA');
     const assetsEnReparto = assets.filter(asset => asset.location === 'EN_REPARTO').length;
     
     const now = new Date();
     const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
     const movimientosUltimas24h = events.filter(event => event.timestamp.toDate() > twentyFourHoursAgo).length;
 
-    const deliveryEvents = events.filter(e => e.event_type === 'ENTREGA_A_CLIENTE');
-    const assetLastDeliveryMap = new Map<string, Date>();
-
-    deliveryEvents.forEach(event => {
-      if (!assetLastDeliveryMap.has(event.asset_id)) {
-        assetLastDeliveryMap.set(event.asset_id, event.timestamp.toDate());
-      }
-    });
-
-    const activosCriticos = assets.reduce((count, asset) => {
-      if (asset.location === 'EN_CLIENTE') {
-        const lastDeliveryDate = assetLastDeliveryMap.get(asset.id);
-        if (lastDeliveryDate && differenceInDays(now, lastDeliveryDate) > 30) {
-          return count + 1;
-        }
-      }
-      return count;
-    }, 0);
-
     return {
-      assetsEnCliente,
+      assetsEnClienteGrouped: groupAssetsByFormat(assetsEnCliente),
+      assetsEnPlantaGrouped: groupAssetsByFormat(assetsEnPlanta),
       assetsEnReparto,
       movimientosUltimas24h,
-      activosCriticos,
     };
   }, [assets, events]);
   
-  const StatCard = ({ title, value, icon, href, isAlert }: { title: string, value: number, icon: React.ReactNode, href?: string, isAlert?: boolean }) => {
+  const StatCard = ({ title, value, icon, href }: { title: string, value: number, icon: React.ReactNode, href?: string }) => {
      const cardContent = (
-         <Card className={`transition-transform hover:scale-105 hover:shadow-lg ${isAlert ? 'bg-destructive/10 border-destructive' : ''}`}>
+         <Card className="transition-transform hover:scale-105 hover:shadow-lg">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">{title}</CardTitle>
                 {icon}
@@ -100,6 +93,45 @@ export default function DashboardPage() {
 
      return href ? <Link href={href}>{cardContent}</Link> : cardContent;
   };
+  
+  const GroupedStatCard = ({ title, data, icon, type }: { title: string, data: Record<string, number>, icon: React.ReactNode, type: 'BARRIL' | 'CO2' }) => {
+    const filteredData = Object.entries(data).filter(([key]) => key.startsWith(type));
+    
+    if (isLoading) {
+      return (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{title}</CardTitle>
+            {icon}
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Skeleton className="h-6 w-3/4" />
+            <Skeleton className="h-6 w-1/2" />
+          </CardContent>
+        </Card>
+      )
+    }
+
+    if (filteredData.length === 0) return null;
+
+    return (
+      <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">{title}</CardTitle>
+              {icon}
+          </CardHeader>
+          <CardContent>
+            {filteredData.map(([key, value], index) => (
+               <div key={key} className="text-lg font-bold">
+                  <span className="text-muted-foreground text-sm font-medium">{key.replace(type, '').trim()}: </span>
+                  {value}
+               </div>
+            ))}
+          </CardContent>
+      </Card>
+    )
+  };
+
 
   const navLinks = [
       {
@@ -134,17 +166,6 @@ export default function DashboardPage() {
       <main className="flex-1 p-4 md:p-6">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
             <StatCard 
-                title="Activos Críticos (>30 días)" 
-                value={metrics.activosCriticos} 
-                icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />} 
-                isAlert={metrics.activosCriticos > 0}
-            />
-             <StatCard 
-                title="Activos en Clientes" 
-                value={metrics.assetsEnCliente} 
-                icon={<PackageCheck className="h-4 w-4 text-muted-foreground" />} 
-            />
-            <StatCard 
                 title="Activos en Reparto" 
                 value={metrics.assetsEnReparto} 
                 icon={<PackageSearch className="h-4 w-4 text-muted-foreground" />} 
@@ -156,6 +177,45 @@ export default function DashboardPage() {
                 href="/dashboard/history"
             />
         </div>
+
+        <div className="mb-6">
+            <h2 className="text-xl font-bold tracking-tight mb-4">Activos en Planta</h2>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                 <GroupedStatCard 
+                    title="Barriles en Planta" 
+                    data={metrics.assetsEnPlantaGrouped} 
+                    icon={<Warehouse className="h-4 w-4 text-muted-foreground" />} 
+                    type="BARRIL"
+                />
+                 <GroupedStatCard 
+                    title="CO2 en Planta" 
+                    data={metrics.assetsEnPlantaGrouped} 
+                    icon={<Warehouse className="h-4 w-4 text-muted-foreground" />} 
+                    type="CO2"
+                />
+            </div>
+        </div>
+
+        <div className="mb-6">
+            <h2 className="text-xl font-bold tracking-tight mb-4">Activos en Clientes</h2>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                 <GroupedStatCard 
+                    title="Barriles en Clientes" 
+                    data={metrics.assetsEnClienteGrouped} 
+                    icon={<PackageCheck className="h-4 w-4 text-muted-foreground" />} 
+                    type="BARRIL"
+                />
+                 <GroupedStatCard 
+                    title="CO2 en Clientes" 
+                    data={metrics.assetsEnClienteGrouped} 
+                    icon={<PackageCheck className="h-4 w-4 text-muted-foreground" />} 
+                    type="CO2"
+                />
+            </div>
+        </div>
+        
+        <Separator className="my-6" />
+
         <div className="grid gap-4 sm:grid-cols-2">
             {navLinks.map((link) => (
                 <Link href={link.href} key={link.title}>
@@ -175,5 +235,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    
