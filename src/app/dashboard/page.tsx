@@ -3,13 +3,14 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { History, Package, Truck, Users, PackageCheck, PackageSearch, Warehouse } from "lucide-react";
+import { History, Package, Truck, Users, PackageCheck, PackageSearch, Warehouse, AlertTriangle } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { db } from "@/lib/firebase";
 import { type Asset, type Event } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
+import { differenceInDays } from "date-fns";
 
 export default function DashboardPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -66,11 +67,29 @@ export default function DashboardPage() {
     const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
     const movimientosUltimas24h = events.filter(event => event.timestamp.toDate() > twentyFourHoursAgo).length;
 
+    const deliveryEventsMap = new Map<string, Date>();
+    events
+        .filter(e => e.event_type === 'ENTREGA_A_CLIENTE')
+        .forEach(e => {
+            if (!deliveryEventsMap.has(e.asset_id)) {
+                deliveryEventsMap.set(e.asset_id, e.timestamp.toDate());
+            }
+        });
+
+    const activosCriticos = assetsEnCliente.filter(asset => {
+        const deliveryDate = deliveryEventsMap.get(asset.id);
+        if (deliveryDate) {
+            return differenceInDays(now, deliveryDate) > 30;
+        }
+        return false;
+    }).length;
+
     return {
       assetsEnClienteGrouped: groupAssetsByFormat(assetsEnCliente),
       assetsEnPlantaGrouped: groupAssetsByFormat(assetsEnPlanta),
       assetsEnRepartoGrouped: groupAssetsByFormat(assetsEnReparto),
       movimientosUltimas24h,
+      activosCriticos,
     };
   }, [assets, events]);
   
@@ -104,7 +123,7 @@ export default function DashboardPage() {
             <CardTitle className="text-sm font-medium">{title}</CardTitle>
             {icon}
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-2 pt-6">
             <Skeleton className="h-6 w-3/4" />
             <Skeleton className="h-6 w-1/2" />
           </CardContent>
@@ -174,6 +193,12 @@ export default function DashboardPage() {
                 title="Movimientos (Últimas 24h)" 
                 value={metrics.movimientosUltimas24h} 
                 icon={<History className="h-4 w-4 text-muted-foreground" />} 
+                href="/dashboard/history"
+            />
+            <StatCard 
+                title="Activos Críticos (>30 días)" 
+                value={metrics.activosCriticos} 
+                icon={<AlertTriangle className="h-4 w-4 text-destructive" />} 
                 href="/dashboard/history"
             />
         </div>
@@ -254,4 +279,5 @@ export default function DashboardPage() {
       </main>
     </div>
   );
-}
+
+    
