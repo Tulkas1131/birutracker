@@ -4,7 +4,6 @@
 import { useState, Suspense, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { auth, db } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
@@ -30,7 +29,6 @@ const QrScanner = dynamic(() => import('@/components/qr-scanner').then(mod => mo
 
 export default function MovementsPage() {
   const { toast } = useToast();
-  const router = useRouter();
   const [user] = useAuthState(auth());
   const [assets, setAssets] = useState<Asset[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -46,48 +44,49 @@ export default function MovementsPage() {
       variety: "",
     },
   });
+  
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const { collection, query, where, orderBy, getDocs } = await import("firebase/firestore/lite");
+      const firestore = db();
+      const assetsQuery = query(collection(firestore, "assets"), orderBy("code"));
+      const customersQuery = query(collection(firestore, "customers"), orderBy("name"));
+      
+      const pendingEventsQuery = query(
+        collection(firestore, "events"), 
+        where("event_type", "in", ["SALIDA_A_REPARTO", "RECOLECCION_DE_CLIENTE", "ENTREGA_A_CLIENTE"]),
+        orderBy("timestamp", "desc")
+      );
+
+      const [assetsSnapshot, customersSnapshot, pendingEventsSnapshot] = await Promise.all([
+        getDocs(assetsQuery),
+        getDocs(customersQuery),
+        getDocs(pendingEventsQuery),
+      ]);
+
+      const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
+      const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
+      const pendingEventsData = pendingEventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
+
+      setAssets(assetsData);
+      setCustomers(customersData);
+      setPendingEvents(pendingEventsData);
+    } catch (error) {
+      console.error("Error fetching data for movements page: ", error);
+      toast({
+        title: "Error de Carga",
+        description: "No se pudieron cargar los activos y clientes.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        const { collection, query, where, orderBy, getDocs } = await import("firebase/firestore/lite");
-        const firestore = db();
-        const assetsQuery = query(collection(firestore, "assets"), orderBy("code"));
-        const customersQuery = query(collection(firestore, "customers"), orderBy("name"));
-        
-        const pendingEventsQuery = query(
-          collection(firestore, "events"), 
-          where("event_type", "in", ["SALIDA_A_REPARTO", "RECOLECCION_DE_CLIENTE", "ENTREGA_A_CLIENTE"]),
-          orderBy("timestamp", "desc")
-        );
-
-        const [assetsSnapshot, customersSnapshot, pendingEventsSnapshot] = await Promise.all([
-          getDocs(assetsQuery),
-          getDocs(customersQuery),
-          getDocs(pendingEventsQuery),
-        ]);
-
-        const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
-        const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
-        const pendingEventsData = pendingEventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
-
-        setAssets(assetsData);
-        setCustomers(customersData);
-        setPendingEvents(pendingEventsData);
-      } catch (error) {
-        console.error("Error fetching data for movements page: ", error);
-        toast({
-          title: "Error de Carga",
-          description: "No se pudieron cargar los activos y clientes.",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
     fetchData();
-  }, [toast]);
+  }, []);
 
   const watchAssetId = form.watch("asset_id");
   const watchEventType = form.watch("event_type");
@@ -299,8 +298,14 @@ export default function MovementsPage() {
         description: `El movimiento del activo ${currentSelectedAsset.code} ha sido registrado.`,
       });
       
-      form.reset();
-      router.push("/dashboard/history");
+      form.reset({
+        event_type: watchEventType, // Keep the selected event type
+        variety: "",
+      });
+
+      // Refresh data to reflect the latest changes
+      await fetchData();
+
     } catch (e: any) {
       console.error("La transacción falló: ", e);
       toast({
@@ -397,7 +402,7 @@ export default function MovementsPage() {
                         render={({ field }) => (
                             <FormItem>
                             <FormLabel>Activo</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value || ''}>
                                 <FormControl>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Selecciona un activo para mover" />
@@ -442,8 +447,7 @@ export default function MovementsPage() {
                             <FormLabel>Cliente</FormLabel>
                             <Select
                                 onValueChange={field.onChange}
-                                value={field.value}
-                                defaultValue={field.value}
+                                value={field.value || ''}
                                 disabled={watchEventType === 'ENTREGA_A_CLIENTE' || watchEventType === 'RECEPCION_EN_PLANTA'}
                             >
                                 <FormControl>
@@ -495,5 +499,3 @@ export default function MovementsPage() {
     </div>
   );
 }
-
-    
