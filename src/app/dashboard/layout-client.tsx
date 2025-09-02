@@ -14,9 +14,20 @@ import {
   Plus,
   Truck,
   Users,
+  Settings,
+  User,
+  MoreVertical
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
+
 import {
   Sidebar,
   SidebarContent,
@@ -27,7 +38,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
-  SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { PageHeader } from "@/components/page-header";
 import { Logo } from "@/components/logo";
@@ -59,7 +69,7 @@ function BottomNavBar() {
     return (
         <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur-sm md:hidden">
             <div className="grid h-16 grid-cols-5 items-center">
-                {navItems.map((item, index) => {
+                {navItems.map((item) => {
                     const isActive = pathname === item.href;
                     if (item.href === "/dashboard/movements") {
                         return (
@@ -82,6 +92,50 @@ function BottomNavBar() {
     )
 }
 
+function MobileUserMenu({ user, onSignOut }: { user: UserData, onSignOut: () => void }) {
+    const isMobile = useIsMobile();
+    if (!isMobile) return null;
+
+    return (
+        <Popover>
+            <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon">
+                    <Avatar className="size-8">
+                        {user.photoURL && <AvatarImage src={user.photoURL} alt="Avatar del usuario" />}
+                        <AvatarFallback>{user.email?.[0].toUpperCase() || 'U'}</AvatarFallback>
+                    </Avatar>
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 mr-4 p-0">
+                <div className="flex flex-col space-y-2 p-2">
+                    <div className="flex items-center gap-3 p-2">
+                        <Avatar className="size-10">
+                            {user.photoURL && <AvatarImage src={user.photoURL} alt="Avatar del usuario" />}
+                            <AvatarFallback>{user.email?.[0].toUpperCase() || 'U'}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col text-sm">
+                            <span className="font-semibold">{user.role}</span>
+                            <span className="text-muted-foreground truncate">{user.email}</span>
+                        </div>
+                    </div>
+                    <Separator />
+                    <div className="p-1">
+                        <ThemeToggle />
+                    </div>
+                    <div className="p-1">
+                        <InstallPWA />
+                    </div>
+                    <Separator />
+                    <Button variant="ghost" className="w-full justify-start gap-2 p-2 text-sm text-destructive hover:text-destructive" onClick={onSignOut}>
+                        <LogOut />
+                        <span>Cerrar Sesión</span>
+                    </Button>
+                </div>
+            </PopoverContent>
+        </Popover>
+    );
+}
+
 export function DashboardLayoutContent({ children, user }: { children: React.React.Node, user: UserData }) {
   const pathname = usePathname();
   const isMobile = useIsMobile();
@@ -99,9 +153,6 @@ export function DashboardLayoutContent({ children, user }: { children: React.Rea
           <div className="flex items-center gap-2">
             <Logo className="size-7" />
             <span className="text-lg font-semibold">BiruTracker</span>
-             <div className="ml-auto">
-                <div className="sr-only">Toggle Sidebar</div>
-             </div>
           </div>
         </SidebarHeader>
         <SidebarContent>
@@ -142,11 +193,10 @@ export function DashboardLayoutContent({ children, user }: { children: React.Rea
       <SidebarInset className={cn(isMobile ? "pb-16" : "")}>
          <PageHeader
             title=""
-            className="h-14 justify-start px-4 md:px-6"
-            action={<div className="flex items-center gap-2">
-                <SidebarTrigger className="md:hidden" />
-                <InstallPWA />
-            </div>}
+            className="h-14 justify-end px-4 md:px-6 md:hidden"
+            action={
+                <MobileUserMenu user={user} onSignOut={handleSignOut} />
+            }
          />
         {children}
       </SidebarInset>
@@ -154,3 +204,5 @@ export function DashboardLayoutContent({ children, user }: { children: React.Rea
     </SidebarProvider>
   );
 }
+
+    

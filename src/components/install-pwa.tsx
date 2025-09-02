@@ -1,7 +1,7 @@
 
 "use client";
 
-import { AlertCircle, ArrowDownToLine, Share } from "lucide-react";
+import { AlertCircle, ArrowDownToLine, Share, Download } from "lucide-react";
 import { usePWAInstall } from "@/hooks/use-pwa-install";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,16 +10,27 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export function InstallPWA() {
   const { canInstall, promptInstall, isIOS } = usePWAInstall();
+  const isMobile = useIsMobile();
+
+  const buttonContent = (
+    <>
+      <Download />
+      <span>Instalar App</span>
+    </>
+  );
 
   if (isIOS) {
+    if (!isMobile) return null; // Only show on mobile iOS
+
     return (
       <Popover>
         <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="hidden sm:inline-flex">
-            <Share className="mr-2 h-4 w-4" /> Instalar App
+          <Button variant="ghost" className="w-full justify-start gap-2 p-2 text-sm font-normal">
+            {buttonContent}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-80">
@@ -39,12 +50,17 @@ export function InstallPWA() {
   }
 
   if (canInstall) {
+    const Comp = isMobile ? Button : "button";
+    const props = isMobile ? { variant: "ghost", className: "w-full justify-start gap-2 p-2 text-sm font-normal" } : { variant: "outline", size: "sm" };
+    
     return (
-      <Button variant="outline" size="sm" onClick={promptInstall}>
-        <ArrowDownToLine className="mr-2 h-4 w-4" /> Instalar App
-      </Button>
+      <Comp {...props} onClick={promptInstall}>
+        {buttonContent}
+      </Comp>
     );
   }
 
   return null;
 }
+
+    

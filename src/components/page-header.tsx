@@ -1,3 +1,4 @@
+
 import { cn } from "@/lib/utils";
 
 interface PageHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -7,13 +8,18 @@ interface PageHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 export function PageHeader({ title, description, action, className, ...props }: PageHeaderProps) {
+  // Hide the title and description on mobile, as the bottom nav serves as context
+  const contentVisibleClass = "hidden md:block";
+
   return (
     <div className={cn("flex items-center justify-between p-4 md:p-6", className)} {...props}>
       <div className="grid gap-1">
-        <h1 className="text-2xl font-bold tracking-tight md:text-3xl">{title}</h1>
-        {description && <p className="text-muted-foreground">{description}</p>}
+        <h1 className={cn("text-2xl font-bold tracking-tight md:text-3xl", { [contentVisibleClass]: !title })}>{title}</h1>
+        {description && <p className={cn("text-muted-foreground", { [contentVisibleClass]: !description })}>{description}</p>}
       </div>
       {action && <div>{action}</div>}
     </div>
   );
 }
+
+    
