@@ -157,34 +157,6 @@ export default function DashboardPage() {
     )
   };
 
-
-  const navLinks = [
-      {
-        title: "Registrar Movimiento",
-        description: "Registra entregas y retornos de activos.",
-        href: "/dashboard/movements",
-        icon: <Truck className="h-6 w-6 text-muted-foreground" />,
-      },
-      {
-        title: "Gestionar Activos",
-        description: "Ver, crear y editar barriles y cilindros.",
-        href: "/dashboard/assets",
-        icon: <Package className="h-6 w-6 text-muted-foreground" />,
-      },
-      {
-        title: "Gestionar Clientes",
-        description: "Mantén un registro de tus clientes.",
-        href: "/dashboard/customers",
-        icon: <Users className="h-6 w-6 text-muted-foreground" />,
-      },
-      {
-        title: "Ver Historial Completo",
-        description: "Explora el historial de movimientos.",
-        href: "/dashboard/history",
-        icon: <History className="h-6 w-6 text-muted-foreground" />,
-      },
-  ];
-
   return (
     <div className="flex flex-1 flex-col">
       <PageHeader title="Panel de Control" description="¡Bienvenido de nuevo! Aquí tienes un resumen rápido." />
@@ -257,24 +229,6 @@ export default function DashboardPage() {
                 type="CO2"
             />
           </div>
-        </div>
-        
-        <Separator className="my-6" />
-
-        <div className="grid gap-4 sm:grid-cols-2">
-            {navLinks.map((link) => (
-                <Link href={link.href} key={link.title}>
-                    <Card className="flex items-center p-4 transition-transform hover:scale-105 hover:shadow-lg h-full">
-                        <div className="mr-4">
-                            {link.icon}
-                        </div>
-                        <div>
-                            <h3 className="font-semibold">{link.title}</h3>
-                            <p className="text-sm text-muted-foreground">{link.description}</p>
-                        </div>
-                    </Card>
-                </Link>
-            ))}
         </div>
       </main>
     </div>
