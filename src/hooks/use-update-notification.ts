@@ -12,13 +12,15 @@ export function useUpdateNotification() {
             navigator.serviceWorker.getRegistration().then(registration => {
                 if (!registration) return;
 
+                // This logic fires when a new service worker is found and installed
+                // but is waiting to activate.
                 const onUpdateFound = () => {
                     const newWorker = registration.installing;
                     if (newWorker) {
                         newWorker.onstatechange = () => {
                             if (newWorker.state === 'installed') {
+                                // A new SW is installed and waiting
                                 if (navigator.serviceWorker.controller) {
-                                    // A new SW is installed and waiting
                                     console.log('New content is available and will be used when all tabs for this page are closed.');
                                     setWaitingWorker(newWorker);
                                     setUpdateAvailable(true);
@@ -27,11 +29,12 @@ export function useUpdateNotification() {
                         };
                     }
                 };
-
+                
                 registration.onupdatefound = onUpdateFound;
 
-                // Also check if there's a waiting worker already
-                 if (registration.waiting) {
+                // This logic catches the case where a new SW is already waiting.
+                // This can happen if the user refreshes the page after a new SW was found.
+                if (registration.waiting) {
                     setWaitingWorker(registration.waiting);
                     setUpdateAvailable(true);
                 }

@@ -1,28 +1,30 @@
 
-// A simple, no-op service worker that exists only to meet the PWA requirements.
-// This makes the app installable.
+// This basic service worker is for PWA installation purposes.
+// It doesn't implement any caching strategies.
 
 self.addEventListener('install', (event) => {
   console.log('Service Worker: Installing...');
-  // Immediately move to the active state.
-  // This is required for the update notification system.
-  event.waitUntil(self.skipWaiting());
+  // The new service worker will not activate until all tabs are closed
+  // or until we manually call skipWaiting(). We will do the latter
+  // when the user clicks the "Update" button.
 });
 
 self.addEventListener('activate', (event) => {
   console.log('Service Worker: Activating...');
-  // Take control of all clients as soon as the service worker activates.
+  // This forces the SW to take control of the page immediately.
   event.waitUntil(self.clients.claim());
 });
 
 self.addEventListener('fetch', (event) => {
-  // This service worker does not intercept fetch requests.
-  // It's a no-op, allowing all requests to go directly to the network.
-  return;
+  // This service worker doesn't cache anything, so it just
+  // lets the network requests pass through.
+  event.respondWith(fetch(event.request));
 });
 
+// This listener waits for a message from the client (our React app)
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
+    console.log('Service Worker: Skipping waiting...');
     self.skipWaiting();
   }
 });
