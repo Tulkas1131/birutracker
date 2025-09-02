@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { differenceInDays } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
+import { logAppEvent } from '@/lib/logging';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -145,8 +146,14 @@ export default function HistoryPage() {
             const snapshot = await getDocs(q);
             const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
             setEvents(eventsData);
-        } catch(error) {
+        } catch(error: any) {
             console.error("Error fetching events: ", error);
+             logAppEvent({
+                level: 'ERROR',
+                message: 'Failed to fetch events',
+                component: 'HistoryPage',
+                stack: error.stack,
+             });
              toast({
                 title: "Error al Cargar Historial",
                 description: "No se pudo cargar el historial de movimientos.",
@@ -164,8 +171,14 @@ export default function HistoryPage() {
         const assetsSnapshot = await getDocs(assetsQuery);
         const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
         setAssets(assetsData);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error fetching assets for history: ", error);
+        logAppEvent({
+            level: 'ERROR',
+            message: 'Failed to fetch assets for history page',
+            component: 'HistoryPage',
+            stack: error.stack,
+        });
       } finally {
         setIsAssetsLoading(false);
       }
@@ -205,8 +218,14 @@ export default function HistoryPage() {
         title: "Evento Eliminado",
         description: "El evento ha sido eliminado del historial.",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error eliminando evento: ", error);
+       logAppEvent({
+        level: 'ERROR',
+        message: `Failed to delete event ${id}`,
+        component: 'HistoryPage',
+        stack: error.stack,
+      });
       toast({
         title: "Error",
         description: "No se pudo eliminar el evento.",

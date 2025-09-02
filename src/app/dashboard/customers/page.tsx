@@ -29,6 +29,7 @@ import { CustomerForm } from "@/components/customer-form";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/use-user-role";
+import { logAppEvent } from "@/lib/logging";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -51,8 +52,14 @@ export default function CustomersPage() {
         const customersSnapshot = await getDocs(customersQuery);
         const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
         setCustomers(customersData);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error fetching customers: ", error);
+        logAppEvent({
+            level: 'ERROR',
+            message: 'Failed to fetch customers',
+            component: 'CustomersPage',
+            stack: error.stack,
+        });
         toast({
           title: "Error de Carga",
           description: "No se pudieron cargar los clientes.",
@@ -100,8 +107,14 @@ export default function CustomersPage() {
         title: "Cliente Eliminado",
         description: "El cliente ha sido eliminado de la base de datos.",
       });
-    } catch (error) {
+    } catch (error: any) {
        console.error("Error eliminando cliente: ", error);
+       logAppEvent({
+        level: 'ERROR',
+        message: `Failed to delete customer ${id}`,
+        component: 'CustomersPage',
+        stack: error.stack,
+       });
       toast({
         title: "Error",
         description: "No se pudo eliminar el cliente.",
@@ -131,8 +144,14 @@ export default function CustomersPage() {
       }
       setFormOpen(false);
       setSelectedCustomer(undefined);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error guardando cliente: ", error);
+      logAppEvent({
+        level: 'ERROR',
+        message: `Failed to save customer (editing: ${!!selectedCustomer})`,
+        component: 'CustomerForm',
+        stack: error.stack,
+      });
       toast({
         title: "Error",
         description: "No se pudieron guardar los datos.",
@@ -267,5 +286,3 @@ export default function CustomersPage() {
     </div>
   );
 }
-
-    

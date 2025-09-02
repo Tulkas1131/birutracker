@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { logAppEvent } from "@/lib/logging";
 
 const QrScanner = dynamic(() => import('@/components/qr-scanner').then(mod => mod.QrScanner), {
   ssr: false,
@@ -72,8 +73,14 @@ export default function MovementsPage() {
       setAssets(assetsData);
       setCustomers(customersData);
       setPendingEvents(pendingEventsData);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching data for movements page: ", error);
+      logAppEvent({
+        level: 'ERROR',
+        message: 'Failed to fetch data for movements page',
+        component: 'MovementsPage',
+        stack: error.stack,
+      });
       toast({
         title: "Error de Carga",
         description: "No se pudieron cargar los activos y clientes.",
@@ -86,7 +93,8 @@ export default function MovementsPage() {
 
   useEffect(() => {
     fetchData();
-  }, [toast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const watchAssetId = form.watch("asset_id");
   const watchEventType = form.watch("event_type");
@@ -121,6 +129,7 @@ export default function MovementsPage() {
 
   const filteredAssets = useMemo(() => {
     return assets.filter(asset => isAssetLocationValid(asset, watchEventType).valid);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assets, watchEventType]);
 
   useEffect(() => {
@@ -326,6 +335,12 @@ export default function MovementsPage() {
 
     } catch (e: any) {
       console.error("La transacción falló: ", e);
+      logAppEvent({
+        level: 'ERROR',
+        message: 'Transaction failed',
+        component: 'MovementsPage-onSubmit',
+        stack: e.stack,
+      });
       toast({
         title: "Error",
         description: e.message || "No se pudo completar la transacción. Por favor, inténtalo de nuevo.",

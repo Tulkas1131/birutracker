@@ -43,6 +43,7 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, Dialog
 import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/use-user-role";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { logAppEvent } from "@/lib/logging";
 
 const QRCode = dynamic(() => import('qrcode.react'), {
   loading: () => <div className="flex h-[256px] w-[256px] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>,
@@ -78,8 +79,14 @@ export default function AssetsPage() {
         const assetsSnapshot = await getDocs(assetsQuery);
         const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
         setAssets(assetsData);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error fetching assets: ", error);
+        logAppEvent({
+            level: 'ERROR',
+            message: 'Failed to fetch assets',
+            component: 'AssetsPage',
+            stack: error.stack,
+        });
         toast({
           title: "Error de Carga",
           description: "No se pudieron cargar los activos.",
@@ -192,8 +199,14 @@ export default function AssetsPage() {
         title: "Activo Eliminado",
         description: `El activo ${assetToDelete.code} ha sido eliminado.`,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error eliminando activo: ", error);
+      logAppEvent({
+        level: 'ERROR',
+        message: `Failed to delete asset ${assetToDelete.id}`,
+        component: 'AssetsPage',
+        stack: error.stack,
+      });
       toast({
         title: "Error",
         description: "No se pudo eliminar el activo.",
@@ -257,8 +270,14 @@ export default function AssetsPage() {
       }
       setFormOpen(false);
       setSelectedAsset(undefined);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error guardando activo: ", error);
+      logAppEvent({
+        level: 'ERROR',
+        message: `Failed to save asset (editing: ${!!selectedAsset})`,
+        component: 'AssetForm',
+        stack: error.stack,
+      });
       toast({
         title: "Error",
         description: "No se pudieron guardar los datos.",
@@ -298,8 +317,14 @@ export default function AssetsPage() {
       });
 
       setBatchFormOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creando lote de activos: ", error);
+      logAppEvent({
+        level: 'ERROR',
+        message: 'Failed to create asset batch',
+        component: 'AssetBatchForm',
+        stack: error.stack,
+      });
       toast({
         title: "Error",
         description: "No se pudo crear el lote de activos.",

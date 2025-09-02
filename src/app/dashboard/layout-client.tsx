@@ -14,6 +14,7 @@ import {
   Plus,
   Truck,
   Users,
+  ShieldAlert,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -50,6 +51,10 @@ const navItems = [
     { href: "/dashboard/movements", icon: Truck, label: "Registrar" },
     { href: "/dashboard/customers", icon: Users, label: "Clientes" },
     { href: "/dashboard/history", icon: History, label: "Historial" },
+];
+
+const adminNavItems = [
+    { href: "/dashboard/logs", icon: ShieldAlert, label: "Logs" },
 ];
 
 function BottomNavBar() {
@@ -111,6 +116,17 @@ function MobileUserMenu({ user, onSignOut }: { user: UserData, onSignOut: () => 
                         </div>
                     </div>
                     <Separator />
+                     {user.role === 'Admin' && (
+                        <>
+                            <Link href="/dashboard/logs" className={cn(
+                                "flex items-center gap-2 rounded-md p-2 text-sm font-medium hover:bg-accent"
+                            )}>
+                                <ShieldAlert />
+                                <span>Logs del Sistema</span>
+                            </Link>
+                            <Separator />
+                        </>
+                    )}
                     <div className="p-1">
                         <ThemeToggle />
                     </div>
@@ -178,6 +194,21 @@ export function DashboardLayoutContent({ children, user }: { children: React.Rea
                 </SidebarMenuButton>
               </SidebarMenuItem>
             ))}
+            {user.role === 'Admin' && (
+                <>
+                    <SidebarSeparator />
+                    {adminNavItems.map((item) => (
+                    <SidebarMenuItem key={item.href}>
+                        <SidebarMenuButton asChild tooltip={item.label} isActive={pathname === item.href}>
+                        <Link href={item.href}>
+                            <item.icon />
+                            <span>{item.label}</span>
+                        </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    ))}
+                </>
+            )}
              <SidebarMenuItem>
                 <ThemeToggle />
             </SidebarMenuItem>
