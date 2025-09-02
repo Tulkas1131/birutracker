@@ -24,6 +24,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/page-header";
 import type { Asset, AssetBatchFormData } from "@/lib/types";
@@ -48,6 +58,8 @@ export default function AssetsPage() {
   const [isBatchFormOpen, setBatchFormOpen] = useState(false);
   const [isQrCodeOpen, setQrCodeOpen] = useState(false);
   const [isBatchQrOpen, setBatchQrOpen] = useState(false);
+  const [isConfirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [assetToDelete, setAssetToDelete] = useState<Asset | null>(null);
   const [activeTab, setActiveTab] = useState('barrels');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedAsset, setSelectedAsset] = useState<Asset | undefined>(undefined);
@@ -155,7 +167,14 @@ export default function AssetsPage() {
     }
   };
   
-  const handleDelete = async (id: string) => {
+  const confirmDelete = (asset: Asset) => {
+    setAssetToDelete(asset);
+    setConfirmDeleteOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!assetToDelete) return;
+
     if (userRole !== 'Admin') {
        toast({
         title: "Acceso Denegado",
@@ -167,11 +186,11 @@ export default function AssetsPage() {
     const { doc, deleteDoc } = await import("firebase/firestore/lite");
     const firestore = db();
     try {
-      await deleteDoc(doc(firestore, "assets", id));
-      setAssets(prev => prev.filter(asset => asset.id !== id));
+      await deleteDoc(doc(firestore, "assets", assetToDelete.id));
+      setAssets(prev => prev.filter(asset => asset.id !== assetToDelete.id));
       toast({
         title: "Activo Eliminado",
-        description: "El activo ha sido eliminado de la base de datos.",
+        description: `El activo ${assetToDelete.code} ha sido eliminado.`,
       });
     } catch (error) {
       console.error("Error eliminando activo: ", error);
@@ -180,6 +199,9 @@ export default function AssetsPage() {
         description: "No se pudo eliminar el activo.",
         variant: "destructive",
       });
+    } finally {
+      setConfirmDeleteOpen(false);
+      setAssetToDelete(null);
     }
   };
 
@@ -412,7 +434,7 @@ export default function AssetsPage() {
                           <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                           <DropdownMenuItem onSelect={() => handleEdit(asset)}>Editar</DropdownMenuItem>
                           {userRole === 'Admin' && (
-                              <DropdownMenuItem onSelect={() => handleDelete(asset.id)} className="text-destructive">
+                              <DropdownMenuItem onSelect={() => confirmDelete(asset)} className="text-destructive">
                                   Eliminar
                               </DropdownMenuItem>
                           )}
@@ -590,8 +612,23 @@ export default function AssetsPage() {
             </Button>
         </DialogContent>
       </Dialog>
+      <AlertDialog open={isConfirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción es permanente y no se puede deshacer. Se eliminará el activo con código
+              <span className="font-bold"> {assetToDelete?.code}</span> de la base de datos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setAssetToDelete(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
-
-    
