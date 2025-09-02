@@ -5,6 +5,8 @@ import { useUpdateNotification } from "@/hooks/use-update-notification";
 import { Button } from "./ui/button";
 import { Rocket } from "lucide-react";
 
+// This component is not used anymore since the update notification is now handled by the PwaInstallButton.
+// It is kept here for reference but can be safely deleted.
 export function UpdateNotification() {
     const { updateAvailable, refreshCacheAndReload } = useUpdateNotification();
 

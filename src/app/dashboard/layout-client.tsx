@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { InstallPWA } from "@/components/install-pwa";
+import { PwaInstallButton } from "@/components/install-pwa";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -91,9 +91,6 @@ function BottomNavBar() {
 }
 
 function MobileUserMenu({ user, onSignOut }: { user: UserData, onSignOut: () => void }) {
-    const isMobile = useIsMobile();
-    if (!isMobile) return null;
-
     return (
         <Sheet>
             <SheetTrigger asChild>
@@ -142,23 +139,28 @@ function MobileUserMenu({ user, onSignOut }: { user: UserData, onSignOut: () => 
     );
 }
 
-function MobileHeader({ user, onSignOut }: { user: UserData, onSignOut: () => void }) {
+function Header({ user, onSignOut }: { user: UserData, onSignOut: () => void }) {
     const isMobile = useIsMobile();
-    if (!isMobile) return null;
-
+    const pathname = usePathname();
+    const currentPage = navItems.find(item => item.href === pathname) || adminNavItems.find(item => item.href === pathname);
+    
     return (
-        <header className="sticky top-0 z-40 flex h-14 items-center justify-between gap-4 border-b bg-background/95 px-4 backdrop-blur-sm md:hidden">
-            <div className="flex items-center justify-start w-1/4">
-                <MobileUserMenu user={user} onSignOut={onSignOut} />
+        <header className="sticky top-0 z-40 flex h-14 items-center justify-between gap-4 border-b bg-background/95 px-4 backdrop-blur-sm">
+            <div className="flex items-center gap-2">
+                {isMobile ? (
+                    <MobileUserMenu user={user} onSignOut={onSignOut} />
+                ) : (
+                    <h1 className="text-xl font-semibold">{currentPage?.label}</h1>
+                )}
             </div>
-            <div className="flex items-center justify-center w-1/2">
-                 <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
+            {isMobile && (
+                <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
                     <Logo className="h-6 w-6" />
                     <span>BiruTracker</span>
                  </Link>
-            </div>
-            <div className="flex items-center justify-end w-1/4">
-                <InstallPWA />
+            )}
+            <div className="flex items-center justify-end">
+                <PwaInstallButton />
             </div>
         </header>
     )
@@ -234,7 +236,7 @@ export function DashboardLayoutContent({ children, user }: { children: React.Rea
         </SidebarFooter>
       </Sidebar>
       <SidebarInset className={cn(isMobile ? "pb-16" : "")}>
-         <MobileHeader user={user} onSignOut={handleSignOut} />
+         <Header user={user} onSignOut={handleSignOut} />
          {children}
       </SidebarInset>
       <BottomNavBar />

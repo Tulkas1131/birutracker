@@ -8,7 +8,6 @@ import { useRouter } from "next/navigation";
 import { DashboardLayoutContent } from "./layout-client";
 import { useUserRole } from "@/hooks/use-user-role";
 import { Skeleton } from "@/components/ui/skeleton";
-import { UpdateNotification } from "@/components/update-notification";
 
 export default function DashboardLayout({
   children,
@@ -56,7 +55,6 @@ export default function DashboardLayout({
   return (
       <>
         <DashboardLayoutContent user={userData}>{children}</DashboardLayoutContent>
-        <UpdateNotification />
       </>
   );
 }
