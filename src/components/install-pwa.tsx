@@ -1,7 +1,7 @@
 
 "use client";
 
-import { AlertCircle, ArrowDownToLine, Share, Download } from "lucide-react";
+import { AlertCircle, ArrowDownToLine, Download } from "lucide-react";
 import { usePWAInstall } from "@/hooks/use-pwa-install";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,8 +18,8 @@ export function InstallPWA() {
 
   const buttonContent = (
     <>
-      <Download />
-      <span>Instalar App</span>
+      <Download className="h-4 w-4" />
+      <span className="sr-only sm:not-sr-only sm:ml-2">Instalar App</span>
     </>
   );
 
@@ -29,7 +29,7 @@ export function InstallPWA() {
     return (
       <Popover>
         <PopoverTrigger asChild>
-          <Button variant="ghost" className="w-full justify-start gap-2 p-2 text-sm font-normal">
+          <Button variant="outline" size="sm" className="hidden sm:inline-flex">
             {buttonContent}
           </Button>
         </PopoverTrigger>
@@ -50,17 +50,12 @@ export function InstallPWA() {
   }
 
   if (canInstall) {
-    const Comp = isMobile ? Button : "button";
-    const props = isMobile ? { variant: "ghost", className: "w-full justify-start gap-2 p-2 text-sm font-normal" } : { variant: "outline", size: "sm" };
-    
     return (
-      <Comp {...props} onClick={promptInstall}>
-        {buttonContent}
-      </Comp>
+        <Button variant="outline" size={isMobile ? "icon" : "sm"} onClick={promptInstall}>
+            {buttonContent}
+        </Button>
     );
   }
 
   return null;
 }
-
-    

@@ -14,18 +14,11 @@ import {
   Plus,
   Truck,
   Users,
-  Settings,
-  User,
-  MoreVertical
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 
 import {
@@ -39,7 +32,6 @@ import {
   SidebarMenuItem,
   SidebarProvider,
 } from "@/components/ui/sidebar";
-import { PageHeader } from "@/components/page-header";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { InstallPWA } from "@/components/install-pwa";
@@ -97,19 +89,19 @@ function MobileUserMenu({ user, onSignOut }: { user: UserData, onSignOut: () => 
     if (!isMobile) return null;
 
     return (
-        <Popover>
-            <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon">
-                    <Avatar className="size-8">
+        <Sheet>
+            <SheetTrigger asChild>
+                 <Button variant="ghost" size="icon" className="size-9">
+                    <Avatar className="size-9">
                         {user.photoURL && <AvatarImage src={user.photoURL} alt="Avatar del usuario" />}
                         <AvatarFallback>{user.email?.[0].toUpperCase() || 'U'}</AvatarFallback>
                     </Avatar>
                 </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-64 mr-4 p-0">
-                <div className="flex flex-col space-y-2 p-2">
+            </SheetTrigger>
+            <SheetContent side="left" className="w-72 bg-background p-0">
+                <div className="flex flex-col space-y-2 p-4">
                     <div className="flex items-center gap-3 p-2">
-                        <Avatar className="size-10">
+                        <Avatar className="size-12">
                             {user.photoURL && <AvatarImage src={user.photoURL} alt="Avatar del usuario" />}
                             <AvatarFallback>{user.email?.[0].toUpperCase() || 'U'}</AvatarFallback>
                         </Avatar>
@@ -122,18 +114,37 @@ function MobileUserMenu({ user, onSignOut }: { user: UserData, onSignOut: () => 
                     <div className="p-1">
                         <ThemeToggle />
                     </div>
-                    <div className="p-1">
-                        <InstallPWA />
-                    </div>
                     <Separator />
                     <Button variant="ghost" className="w-full justify-start gap-2 p-2 text-sm text-destructive hover:text-destructive" onClick={onSignOut}>
                         <LogOut />
                         <span>Cerrar Sesión</span>
                     </Button>
                 </div>
-            </PopoverContent>
-        </Popover>
+            </SheetContent>
+        </Sheet>
     );
+}
+
+function MobileHeader({ user, onSignOut }: { user: UserData, onSignOut: () => void }) {
+    const isMobile = useIsMobile();
+    if (!isMobile) return null;
+
+    return (
+        <header className="sticky top-0 z-40 flex h-14 items-center justify-between gap-4 border-b bg-background/95 px-4 backdrop-blur-sm md:hidden">
+            <div className="flex items-center justify-start w-1/4">
+                <MobileUserMenu user={user} onSignOut={onSignOut} />
+            </div>
+            <div className="flex items-center justify-center w-1/2">
+                 <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
+                    <Logo className="h-6 w-6" />
+                    <span>BiruTracker</span>
+                 </Link>
+            </div>
+            <div className="flex items-center justify-end w-1/4">
+                <InstallPWA />
+            </div>
+        </header>
+    )
 }
 
 export function DashboardLayoutContent({ children, user }: { children: React.React.Node, user: UserData }) {
@@ -191,18 +202,10 @@ export function DashboardLayoutContent({ children, user }: { children: React.Rea
         </SidebarFooter>
       </Sidebar>
       <SidebarInset className={cn(isMobile ? "pb-16" : "")}>
-         <PageHeader
-            title=""
-            className="h-14 justify-end px-4 md:px-6 md:hidden"
-            action={
-                <MobileUserMenu user={user} onSignOut={handleSignOut} />
-            }
-         />
-        {children}
+         <MobileHeader user={user} onSignOut={handleSignOut} />
+         {children}
       </SidebarInset>
       <BottomNavBar />
     </SidebarProvider>
   );
 }
-
-    
