@@ -218,7 +218,7 @@ export default function MovementsPage() {
   };
 
   const handleScanError = (errorMessage: string) => {
-    if (typeof errorMessage === 'string' && (errorMessage.toLowerCase().includes("not found") || errorMessage.toLowerCase().includes("insufficient"))) return;
+    if (typeof errorMessage === 'string' && (errorMessage.toLowerCase().includes("notfoundexception") || errorMessage.toLowerCase().includes("insufficient"))) return;
     console.error("QR Scan Error:", errorMessage);
   };
   
@@ -441,5 +441,3 @@ export default function MovementsPage() {
     </div>
   );
 }
-
-    
