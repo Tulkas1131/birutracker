@@ -244,9 +244,8 @@ export default function AssetsPage() {
     const firestore = db();
     try {
       if (selectedAsset) {
-        // Editing existing asset
+        // Editing existing asset - only allow state and location changes
         const assetDataToUpdate: Partial<Asset> = {
-          format: data.format,
           state: data.state,
           location: data.location,
         };

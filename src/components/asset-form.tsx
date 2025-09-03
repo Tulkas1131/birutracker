@@ -73,7 +73,7 @@ export function AssetForm({ defaultValues, onSubmit, onCancel }: AssetFormProps)
             <FormItem>
               <FormLabel>Formato</FormLabel>
               <FormControl>
-                <Input placeholder="ej., 50L o 6kg" {...field} />
+                <Input placeholder="ej., 50L o 6kg" {...field} disabled={isEditing}/>
               </FormControl>
               <FormMessage />
             </FormItem>
