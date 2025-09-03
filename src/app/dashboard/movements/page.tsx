@@ -1,13 +1,13 @@
 
 "use client";
 
-import { useState, Suspense, useEffect, useMemo } from "react";
+import { useState, Suspense, useEffect, useMemo, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import dynamic from "next/dynamic";
 import { auth, db } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { Loader2, QrCode } from "lucide-react";
+import { Loader2, QrCode, ArrowRight } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,15 +17,86 @@ import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { movementSchema, type MovementFormData, type Asset, type Customer, type Event, type MovementEventType } from "@/lib/types";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { logAppEvent } from "@/lib/logging";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const QrScanner = dynamic(() => import('@/components/qr-scanner').then(mod => mod.QrScanner), {
   ssr: false,
   loading: () => <div className="flex justify-center items-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>,
 });
+
+// Helper types and data
+type ActionLogic = {
+    primary: MovementEventType;
+    manualOverrides: MovementEventType[];
+    description: string;
+    requiresCustomerSelection: boolean;
+    requiresVariety?: boolean;
+    autoFillsCustomer?: 'fromDelivery' | 'fromLastKnown';
+};
+
+const stateLogic: Record<Asset['location'], Partial<Record<Asset['state'], ActionLogic>>> = {
+    EN_PLANTA: {
+        LLENO: {
+            primary: 'SALIDA_A_REPARTO',
+            manualOverrides: ['DEVOLUCION'],
+            description: "El activo está lleno en planta, listo para ser despachado.",
+            requiresCustomerSelection: true,
+            requiresVariety: true,
+        },
+        VACIO: {
+            primary: 'SALIDA_VACIO',
+            manualOverrides: [],
+            description: "El activo está vacío en planta. Se registrará un préstamo.",
+            requiresCustomerSelection: true,
+        }
+    },
+    EN_REPARTO: {
+        LLENO: {
+            primary: 'ENTREGA_A_CLIENTE',
+            manualOverrides: ['RECEPCION_EN_PLANTA'],
+            description: "El activo está en camino. Confirma la entrega al cliente.",
+            requiresCustomerSelection: false,
+            autoFillsCustomer: 'fromDelivery'
+        },
+        VACIO: {
+            primary: 'RECEPCION_EN_PLANTA',
+            manualOverrides: ['ENTREGA_A_CLIENTE'],
+            description: "El activo vacío está volviendo. Confirma su recepción en planta.",
+            requiresCustomerSelection: false,
+            autoFillsCustomer: 'fromLastKnown'
+        }
+    },
+    EN_CLIENTE: {
+        LLENO: {
+            primary: 'RECOLECCION_DE_CLIENTE',
+            manualOverrides: ['DEVOLUCION'],
+            description: "El activo está en el cliente. Se registrará su recolección.",
+            requiresCustomerSelection: false,
+            autoFillsCustomer: 'fromLastKnown'
+        },
+        VACIO: {
+            primary: 'RECOLECCION_DE_CLIENTE',
+            manualOverrides: [],
+            description: "El activo vacío está en el cliente. Se registrará su recolección.",
+            requiresCustomerSelection: false,
+            autoFillsCustomer: 'fromLastKnown'
+        }
+    }
+};
+
+const getEventTypeTranslation = (eventType: MovementEventType): string => {
+    const translations: Record<MovementEventType, string> = {
+        SALIDA_A_REPARTO: "Salida a Reparto",
+        ENTREGA_A_CLIENTE: "Entrega a Cliente",
+        RECOLECCION_DE_CLIENTE: "Recolección de Cliente",
+        RECEPCION_EN_PLANTA: "Recepción en Planta",
+        SALIDA_VACIO: "Préstamo (Salida Vacío)",
+        DEVOLUCION: "Devolución (Lleno)",
+    };
+    return translations[eventType];
+};
 
 
 export default function MovementsPage() {
@@ -33,217 +104,139 @@ export default function MovementsPage() {
   const [user] = useAuthState(auth());
   const [assets, setAssets] = useState<Asset[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [pendingEvents, setPendingEvents] = useState<Event[]>([]);
+  const [pendingDeliveryEvents, setPendingDeliveryEvents] = useState<Event[]>([]);
+  const [lastEvents, setLastEvents] = useState<Map<string, Event>>(new Map());
+
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isScannerOpen, setScannerOpen] = useState(false);
   
+  const [scannedAsset, setScannedAsset] = useState<Asset | null>(null);
+  const [actionLogic, setActionLogic] = useState<ActionLogic | null>(null);
+  const [isManualOverride, setIsManualOverride] = useState(false);
+
   const form = useForm<MovementFormData>({
     resolver: zodResolver(movementSchema),
-    defaultValues: {
-      event_type: "SALIDA_A_REPARTO",
-      variety: "",
-    },
+    defaultValues: { variety: "" },
   });
   
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
       const { collection, query, where, orderBy, getDocs } = await import("firebase/firestore/lite");
       const firestore = db();
       const assetsQuery = query(collection(firestore, "assets"), orderBy("code"));
       const customersQuery = query(collection(firestore, "customers"), orderBy("name"));
-      
-      const pendingEventsQuery = query(
-        collection(firestore, "events"), 
-        where("event_type", "in", ["SALIDA_A_REPARTO", "RECOLECCION_DE_CLIENTE", "ENTREGA_A_CLIENTE"]),
-        orderBy("timestamp", "desc")
-      );
+      const eventsQuery = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
 
-      const [assetsSnapshot, customersSnapshot, pendingEventsSnapshot] = await Promise.all([
+      const [assetsSnapshot, customersSnapshot, eventsSnapshot] = await Promise.all([
         getDocs(assetsQuery),
         getDocs(customersQuery),
-        getDocs(pendingEventsQuery),
+        getDocs(eventsQuery),
       ]);
 
       const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
       const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
-      const pendingEventsData = pendingEventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
+      const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
+
+      // Events for assets currently on delivery
+      const deliveryEvents = eventsData.filter(e => e.event_type === "SALIDA_A_REPARTO");
+      
+      // A map of the last known event for every asset
+      const lastEventsMap = new Map<string, Event>();
+      eventsData.forEach(event => {
+        if (!lastEventsMap.has(event.asset_id)) {
+            lastEventsMap.set(event.asset_id, event);
+        }
+      });
 
       setAssets(assetsData);
       setCustomers(customersData);
-      setPendingEvents(pendingEventsData);
+      setPendingDeliveryEvents(deliveryEvents);
+      setLastEvents(lastEventsMap);
+
     } catch (error: any) {
       console.error("Error fetching data for movements page: ", error);
-      logAppEvent({
-        level: 'ERROR',
-        message: 'Failed to fetch data for movements page',
-        component: 'MovementsPage',
-        stack: error.stack,
-      });
-      toast({
-        title: "Error de Carga",
-        description: "No se pudieron cargar los activos y clientes.",
-        variant: "destructive",
-      });
+      logAppEvent({ level: 'ERROR', message: 'Failed to fetch data', component: 'MovementsPage', stack: error.stack });
+      toast({ title: "Error de Carga", description: "No se pudieron cargar los datos.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const watchAssetId = form.watch("asset_id");
-  const watchEventType = form.watch("event_type");
-
-  const selectedAsset = assets.find(asset => asset.id === watchAssetId);
-  const showVarietyField = selectedAsset?.type === 'BARRIL' && (watchEventType === 'SALIDA_A_REPARTO' || watchEventType === 'DEVOLUCION');
-
-  const getLocationText = (location: Asset["location"]) => {
-    switch (location) {
-        case "EN_CLIENTE": return "En Cliente";
-        case "EN_PLANTA": return "En Planta";
-        case "EN_REPARTO": return "En Reparto";
-        default: return location;
-    }
-  };
+  }, [fetchData]);
   
-  const isAssetLocationValid = (asset: Asset, eventType: MovementEventType): { valid: boolean, expectedLocation?: Asset['location'] } => {
-    const rules: Record<MovementEventType, Asset['location']> = {
-      'SALIDA_A_REPARTO': 'EN_PLANTA',
-      'SALIDA_VACIO': 'EN_PLANTA',
-      'ENTREGA_A_CLIENTE': 'EN_REPARTO',
-      'RECEPCION_EN_PLANTA': 'EN_REPARTO',
-      'RECOLECCION_DE_CLIENTE': 'EN_CLIENTE',
-      'DEVOLUCION': 'EN_CLIENTE'
-    };
-    const expectedLocation = rules[eventType];
-    return {
-      valid: asset.location === expectedLocation,
-      expectedLocation: expectedLocation,
-    };
+  const resetMovementState = () => {
+    setScannedAsset(null);
+    setActionLogic(null);
+    setIsManualOverride(false);
+    form.reset();
   };
-
-  const filteredAssets = useMemo(() => {
-    return assets.filter(asset => isAssetLocationValid(asset, watchEventType).valid);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assets, watchEventType]);
-
-  useEffect(() => {
-    const isSecondStepEvent = watchEventType === 'ENTREGA_A_CLIENTE' || watchEventType === 'RECEPCION_EN_PLANTA';
-    
-    if (isSecondStepEvent && watchAssetId) {
-      const expectedInitialEventType = watchEventType === 'ENTREGA_A_CLIENTE' ? 'SALIDA_A_REPARTO' : 'RECOLECCION_DE_CLIENTE';
-      const pendingEvent = pendingEvents.find(e => e.asset_id === watchAssetId && e.event_type === expectedInitialEventType);
-
-      if (pendingEvent) {
-        form.setValue('customer_id', pendingEvent.customer_id);
-      }
-    } else {
-        if (!form.formState.isDirty) { 
-             form.resetField('customer_id');
-        }
-    }
-  }, [watchAssetId, watchEventType, pendingEvents, form]);
-
-
-  useEffect(() => {
-    if (watchAssetId && !filteredAssets.find(a => a.id === watchAssetId)) {
-      form.setValue('asset_id', '');
-    }
-  }, [filteredAssets, watchAssetId, form]);
 
   const handleScanSuccess = async (decodedText: string) => {
     setScannerOpen(false);
     
     if (!/^[a-zA-Z0-9]{20}$/.test(decodedText)) {
-        toast({
-            title: "Código QR Inválido",
-            description: "El QR escaneado no parece ser un identificador de activo válido.",
-            variant: "destructive"
-        });
+        toast({ title: "Código QR Inválido", description: "El QR no parece ser un identificador válido.", variant: "destructive" });
         return;
     }
     
-    const scannedAsset = assets.find(a => a.id === decodedText);
+    const asset = assets.find(a => a.id === decodedText);
 
-    if (!scannedAsset) {
-        toast({
-            title: "Activo No Encontrado",
-            description: "No se encontró ningún activo con el QR escaneado en la base de datos.",
-            variant: "destructive"
-        });
-        return;
-    }
-    
-    // **VALIDATION LOGIC**
-    const { valid, expectedLocation } = isAssetLocationValid(scannedAsset, watchEventType);
-    
-    if (!valid) {
-        toast({
-            title: "Movimiento Inválido",
-            description: `El activo ${scannedAsset.code} está "${getLocationText(scannedAsset.location)}". Para esta acción, debería estar "${getLocationText(expectedLocation!)}".`,
-            variant: "destructive",
-            duration: 6000,
-        });
+    if (!asset) {
+        toast({ title: "Activo No Encontrado", description: "El activo escaneado no existe.", variant: "destructive" });
         return;
     }
 
-    // If validation passes, proceed
-    form.setValue('asset_id', scannedAsset.id);
+    const logic = stateLogic[asset.location]?.[asset.state];
 
-    if (watchEventType === 'RECOLECCION_DE_CLIENTE') {
-      const lastDeliveryEvent = pendingEvents.find(e => e.asset_id === scannedAsset.id && e.event_type === 'ENTREGA_A_CLIENTE');
-      
-      if (lastDeliveryEvent) {
-        form.setValue('customer_id', lastDeliveryEvent.customer_id);
-        toast({
-          title: "Activo y Cliente Encontrados",
-          description: `Activo: ${scannedAsset.code}. Cliente: ${lastDeliveryEvent.customer_name}.`
-        });
-      } else {
-        toast({
-          title: "Activo Encontrado",
-          description: `Se ha seleccionado el activo: ${scannedAsset.code}. Por favor, selecciona el cliente manualmente.`,
-        });
-      }
-    } else {
-      toast({
-          title: "Activo Seleccionado",
-          description: `Activo: ${scannedAsset.code}. Ubicación: ${getLocationText(scannedAsset.location)}.`,
-      });
+    if (!logic) {
+        toast({ title: "Movimiento No Definido", description: `No hay una acción lógica para un activo ${asset.state} que está ${asset.location}.`, variant: "destructive", duration: 6000 });
+        return;
+    }
+    
+    setScannedAsset(asset);
+    setActionLogic(logic);
+    form.setValue('asset_id', asset.id);
+    form.setValue('event_type', logic.primary);
+
+    // Autofill customer if logic dictates
+    if (logic.autoFillsCustomer) {
+        let eventToUse: Event | undefined;
+        if (logic.autoFillsCustomer === 'fromDelivery') {
+            eventToUse = pendingDeliveryEvents.find(e => e.asset_id === asset.id);
+        } else { // fromLastKnown
+            eventToUse = lastEvents.get(asset.id);
+        }
+        if (eventToUse) {
+            form.setValue('customer_id', eventToUse.customer_id);
+        }
     }
   };
 
   const handleScanError = (errorMessage: string) => {
-    if (typeof errorMessage === 'string' && (errorMessage.toLowerCase().includes("not found") || errorMessage.toLowerCase().includes("insufficient"))) {
-        return;
-    }
+    if (typeof errorMessage === 'string' && (errorMessage.toLowerCase().includes("not found") || errorMessage.toLowerCase().includes("insufficient"))) return;
     console.error("QR Scan Error:", errorMessage);
   };
-
+  
+  const customerForMovement = useMemo(() => {
+    const customerId = form.watch('customer_id');
+    return customers.find(c => c.id === customerId);
+  }, [form, customers]);
 
   async function onSubmit(data: MovementFormData) {
     setIsSubmitting(true);
     const { Timestamp, doc, runTransaction, collection } = await import("firebase/firestore/lite");
     const firestore = db();
 
-    if (!user) {
-       toast({ title: "Error", description: "Debes iniciar sesión para registrar un movimiento.", variant: "destructive" });
+    if (!user || !scannedAsset) {
+       toast({ title: "Error", description: "Falta información del usuario o del activo.", variant: "destructive" });
        setIsSubmitting(false);
        return;
     }
-
-    const currentSelectedAsset = assets.find(a => a.id === data.asset_id);
-    if (!currentSelectedAsset) {
-      toast({ title: "Error", description: "Activo no encontrado o inválido para esta operación.", variant: "destructive" });
-      setIsSubmitting(false);
-      return;
-    }
-
+    
     const selectedCustomer = customers.find(c => c.id === data.customer_id);
      if (!selectedCustomer) {
       toast({ title: "Error", description: "Cliente no encontrado.", variant: "destructive" });
@@ -251,34 +244,16 @@ export default function MovementsPage() {
       return;
     }
     
-    let newLocation: Asset['location'] = currentSelectedAsset.location;
-    let newState: Asset['state'] = currentSelectedAsset.state;
+    let newLocation: Asset['location'] = scannedAsset.location;
+    let newState: Asset['state'] = scannedAsset.state;
 
     switch (data.event_type) {
-      case 'SALIDA_A_REPARTO':
-        newLocation = 'EN_REPARTO';
-        newState = 'LLENO';
-        break;
-      case 'ENTREGA_A_CLIENTE':
-        newLocation = 'EN_CLIENTE';
-        newState = 'LLENO';
-        break;
-      case 'SALIDA_VACIO':
-        newLocation = 'EN_CLIENTE';
-        newState = 'VACIO';
-        break;
-      case 'RECOLECCION_DE_CLIENTE':
-        newLocation = 'EN_REPARTO';
-        newState = 'VACIO';
-        break;
-      case 'RECEPCION_EN_PLANTA':
-        newLocation = 'EN_PLANTA';
-        newState = 'VACIO';
-        break;
-      case 'DEVOLUCION':
-        newLocation = 'EN_PLANTA';
-        newState = 'LLENO';
-        break;
+      case 'SALIDA_A_REPARTO': newLocation = 'EN_REPARTO'; newState = 'LLENO'; break;
+      case 'ENTREGA_A_CLIENTE': newLocation = 'EN_CLIENTE'; newState = 'LLENO'; break;
+      case 'SALIDA_VACIO': newLocation = 'EN_CLIENTE'; newState = 'VACIO'; break;
+      case 'RECOLECCION_DE_CLIENTE': newLocation = 'EN_REPARTO'; newState = 'VACIO'; break;
+      case 'RECEPCION_EN_PLANTA': newLocation = 'EN_PLANTA'; newState = 'VACIO'; break;
+      case 'DEVOLUCION': newLocation = 'EN_PLANTA'; newState = 'LLENO'; break;
     }
 
     try {
@@ -287,248 +262,183 @@ export default function MovementsPage() {
 
         if (isUpdateEvent) {
           const expectedInitialEventType = data.event_type === 'ENTREGA_A_CLIENTE' ? 'SALIDA_A_REPARTO' : 'RECOLECCION_DE_CLIENTE';
+          const pendingEvent = pendingDeliveryEvents.find(e => e.asset_id === scannedAsset.id && e.event_type === expectedInitialEventType);
           
-          const pendingEvent = pendingEvents
-            .filter(e => e.asset_id === currentSelectedAsset.id && e.event_type === expectedInitialEventType)
-            .sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis())[0];
-
-          if (!pendingEvent) {
-            throw new Error(`No se encontró el evento inicial de '${expectedInitialEventType}' para el activo ${currentSelectedAsset.code}. No se puede completar la operación.`);
+          if (pendingEvent) {
+            const eventRef = doc(firestore, "events", pendingEvent.id);
+            transaction.update(eventRef, { event_type: data.event_type, timestamp: Timestamp.now() });
+          } else {
+             // If no pending event, create a new one (covers edge cases)
+             const eventData = { asset_id: scannedAsset.id, asset_code: scannedAsset.code, customer_id: selectedCustomer.id, customer_name: selectedCustomer.name, event_type: data.event_type, timestamp: Timestamp.now(), user_id: user.uid, variety: data.variety || "" };
+             const newEventRef = doc(collection(firestore, "events"));
+             transaction.set(newEventRef, eventData);
           }
-          const eventRef = doc(firestore, "events", pendingEvent.id);
-          transaction.update(eventRef, {
-            event_type: data.event_type,
-            timestamp: Timestamp.now(),
-          });
-
         } else {
-            const eventData = {
-                asset_id: currentSelectedAsset.id,
-                asset_code: currentSelectedAsset.code,
-                customer_id: selectedCustomer.id,
-                customer_name: selectedCustomer.name,
-                event_type: data.event_type,
-                timestamp: Timestamp.now(),
-                user_id: user.uid,
-                variety: data.variety || "",
-            };
+            const eventData = { asset_id: scannedAsset.id, asset_code: scannedAsset.code, customer_id: selectedCustomer.id, customer_name: selectedCustomer.name, event_type: data.event_type, timestamp: Timestamp.now(), user_id: user.uid, variety: data.variety || "" };
             const newEventRef = doc(collection(firestore, "events"));
             transaction.set(newEventRef, eventData);
         }
 
-        const assetRef = doc(firestore, "assets", currentSelectedAsset.id);
+        const assetRef = doc(firestore, "assets", scannedAsset.id);
         transaction.update(assetRef, { location: newLocation, state: newState });
       });
 
-      toast({
-        title: "Movimiento Registrado",
-        description: `El movimiento del activo ${currentSelectedAsset.code} ha sido registrado.`,
-      });
-      
-      form.reset({
-        event_type: watchEventType, // Keep the selected event type
-        variety: "",
-      });
-
-      // Refresh data to reflect the latest changes
+      toast({ title: "Movimiento Registrado", description: `El activo ${scannedAsset.code} ha sido actualizado.` });
+      resetMovementState();
       await fetchData();
 
     } catch (e: any) {
       console.error("La transacción falló: ", e);
-      logAppEvent({
-        level: 'ERROR',
-        message: 'Transaction failed',
-        component: 'MovementsPage-onSubmit',
-        stack: e.stack,
-      });
-      toast({
-        title: "Error",
-        description: e.message || "No se pudo completar la transacción. Por favor, inténtalo de nuevo.",
-        variant: "destructive"
-      });
+      logAppEvent({ level: 'ERROR', message: 'Transaction failed', component: 'MovementsPage-onSubmit', stack: e.stack });
+      toast({ title: "Error", description: e.message || "No se pudo completar la transacción.", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
   }
-
-  const handleEventTypeChange = (value: MovementEventType) => {
-    form.setValue('event_type', value);
-    form.resetField('asset_id');
-    form.resetField('customer_id');
-  };
-
-  const eventTypeDetails: Record<MovementEventType, { title: string; description: string }> = {
-    SALIDA_A_REPARTO: { title: "Salida a Reparto (Cargar Camión)", description: "Registra los activos que salen de la planta hacia un cliente." },
-    ENTREGA_A_CLIENTE: { title: "Entrega a Cliente", description: "Confirma la entrega de un activo que ya está en reparto." },
-    RECOLECCION_DE_CLIENTE: { title: "Recolección de Cliente", description: "Registra un activo vacío que se retira de un cliente." },
-    RECEPCION_EN_PLANTA: { title: "Recepción en Planta (Descargar Camión)", description: "Confirma la llegada a planta de un activo recolectado." },
-    SALIDA_VACIO: { title: "Préstamo (Salida Vacío)", description: "Registra la salida de un activo vacío hacia un cliente." },
-    DEVOLUCION: { title: "Devolución (Lleno)", description: "Registra un activo lleno que un cliente devuelve a planta." },
-  };
+  
+  const currentEventType = form.watch('event_type');
+  const showVarietyField = scannedAsset?.type === 'BARRIL' && (currentEventType === 'SALIDA_A_REPARTO' || currentEventType === 'DEVOLUCION');
+  const requiresCustomerSelection = isManualOverride 
+      ? stateLogic[scannedAsset!.location]?.[scannedAsset!.state]?.manualOverrides.includes(currentEventType) || actionLogic?.requiresCustomerSelection
+      : actionLogic?.requiresCustomerSelection;
 
   return (
     <div className="flex flex-1 flex-col">
-      <Dialog open={isScannerOpen} onOpenChange={setScannerOpen}>
-        <PageHeader
-            title="Registrar un Movimiento"
-            description="Elige una acción y completa los detalles."
-            action={
+        <PageHeader title="Registrar Movimiento" description="Escanea un código QR para empezar." />
+        <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
+          {isLoading ? (
+            <div className="flex justify-center items-center py-10">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-8 text-center">
+                <p className="text-lg text-muted-foreground max-w-md">
+                    Pulsa el botón para activar la cámara de tu dispositivo y escanear el código QR del activo que deseas mover.
+                </p>
                 <DialogTrigger asChild>
-                    <Button size="lg" variant="outline" onClick={() => setScannerOpen(true)}>
-                        <QrCode className="mr-2 h-5 w-5" />
+                    <Button size="lg" className="h-24 w-full max-w-xs text-xl" onClick={() => setScannerOpen(true)}>
+                        <QrCode className="mr-4 h-10 w-10" />
                         Escanear QR
                     </Button>
                 </DialogTrigger>
-            }
-        />
-        <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
-            <Card className="mx-auto w-full max-w-2xl">
-            <CardHeader>
-                <CardTitle>{eventTypeDetails[watchEventType].title}</CardTitle>
-                <CardDescription>{eventTypeDetails[watchEventType].description}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="flex justify-center items-center py-10">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-              ) : (
-                <Form {...form}>
-                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-                    <FormField
-                      control={form.control}
-                      name="event_type"
-                      render={({ field }) => (
-                        <FormItem className="space-y-3">
-                          <FormLabel>Elige una acción</FormLabel>
-                          <FormControl>
-                            <RadioGroup
-                              onValueChange={(value: MovementEventType) => handleEventTypeChange(value)}
-                              defaultValue={field.value}
-                              className="grid grid-cols-2 md:grid-cols-3 gap-4"
-                            >
-                              {(Object.keys(eventTypeDetails) as MovementEventType[]).map((type) => (
-                                <FormItem key={type}>
-                                  <FormControl>
-                                    <RadioGroupItem value={type} id={type} className="sr-only" />
-                                  </FormControl>
-                                  <Label
-                                    htmlFor={type}
-                                    className={`flex flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground cursor-pointer
-                                      ${field.value === type ? 'border-primary' : ''}`}
-                                  >
-                                    <span className="text-center font-semibold">{eventTypeDetails[type].title.split('(')[0].trim()}</span>
-                                  </Label>
-                                </FormItem>
-                              ))}
-                            </RadioGroup>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <div className="space-y-4 rounded-md border p-4">
-                        <FormField
-                        control={form.control}
-                        name="asset_id"
-                        render={({ field }) => (
-                            <FormItem>
-                            <FormLabel>Activo</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value || ''}>
-                                <FormControl>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Selecciona un activo para mover" />
-                                </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                {filteredAssets.length === 0 ? (
-                                    <div className="p-4 text-sm text-muted-foreground">No hay activos disponibles para esta operación.</div>
-                                ) : (
-                                    filteredAssets.map(asset => (
-                                    <SelectItem key={asset.id} value={asset.id}>
-                                        {asset.code} ({asset.type} - {asset.format}) - <span className="text-muted-foreground">{asset.state}</span>
-                                    </SelectItem>
-                                    ))
-                                )}
-                                </SelectContent>
-                            </Select>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                        />
-                        {showVarietyField && (
-                        <FormField
-                            control={form.control}
-                            name="variety"
-                            render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Variedad de Cerveza</FormLabel>
-                                <FormControl>
-                                <Input placeholder="ej., IPA, Stout, Lager" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                            )}
-                        />
-                        )}
-                        <FormField
-                        control={form.control}
-                        name="customer_id"
-                        render={({ field }) => (
-                            <FormItem>
-                            <FormLabel>Cliente</FormLabel>
-                            <Select
-                                onValueChange={field.onChange}
-                                value={field.value || ''}
-                                disabled={watchEventType === 'ENTREGA_A_CLIENTE' || watchEventType === 'RECEPCION_EN_PLANTA'}
-                            >
-                                <FormControl>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Selecciona el cliente asociado" />
-                                </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                {customers.map(customer => (
-                                    <SelectItem key={customer.id} value={customer.id}>
-                                    {customer.name}
-                                    </SelectItem>
-                                ))}
-                                </SelectContent>
-                            </Select>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                        />
-                    </div>
-                    
-                    <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
-                      {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Guardar Movimiento
-                    </Button>
-                  </form>
-                </Form>
-              )}
-            </CardContent>
-            </Card>
+            </div>
+          )}
         </main>
-        <DialogContent>
-            <DialogHeader>
-                <DialogTitle>Escanear Código QR</DialogTitle>
-                <DialogDescription>
-                    Apunta la cámara al código QR del activo. La cámara permanecerá activa para escaneos rápidos.
-                </DialogDescription>
-            </DialogHeader>
-            <Suspense fallback={<div className="flex justify-center items-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
-              {isScannerOpen && (
-                <QrScanner
-                    onScanSuccess={handleScanSuccess}
-                    onScanError={handleScanError}
-                />
-              )}
-            </Suspense>
-        </DialogContent>
-      </Dialog>
+
+        <Dialog open={isScannerOpen} onOpenChange={setScannerOpen}>
+             <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Escanear Código QR</DialogTitle>
+                    <DialogDescription>Apunta la cámara al código QR del activo.</DialogDescription>
+                </DialogHeader>
+                <Suspense fallback={<div className="flex justify-center items-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+                  {isScannerOpen && <QrScanner onScanSuccess={handleScanSuccess} onScanError={handleScanError} />}
+                </Suspense>
+            </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!scannedAsset} onOpenChange={(open) => !open && resetMovementState()}>
+            <DialogContent>
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)}>
+                        <DialogHeader>
+                            <DialogTitle>Registrar Movimiento</DialogTitle>
+                            <DialogDescription>Confirma la acción para el activo <span className="font-bold">{scannedAsset?.code}</span>.</DialogDescription>
+                        </DialogHeader>
+                        
+                        <div className="my-4 space-y-4">
+                           <Alert>
+                                <AlertTitle className="flex items-center gap-2">
+                                    <span className="font-normal">{scannedAsset?.location.replace('_', ' ')}</span>
+                                    <ArrowRight className="h-4 w-4" />
+                                    <span>{getEventTypeTranslation(currentEventType)}</span>
+                                </AlertTitle>
+                                <AlertDescription>
+                                    {actionLogic?.description}
+                                </AlertDescription>
+                            </Alert>
+                            
+                            {isManualOverride && actionLogic?.manualOverrides.length ? (
+                                <FormField
+                                    control={form.control}
+                                    name="event_type"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Acción Manual</FormLabel>
+                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                                                <SelectContent>
+                                                    <SelectItem value={actionLogic.primary}>{getEventTypeTranslation(actionLogic.primary)} (Sugerido)</SelectItem>
+                                                    {actionLogic.manualOverrides.map(type => (
+                                                        <SelectItem key={type} value={type}>{getEventTypeTranslation(type)}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            ) : null}
+
+                            {requiresCustomerSelection && (
+                                <FormField
+                                    control={form.control}
+                                    name="customer_id"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Cliente</FormLabel>
+                                            <Select onValueChange={field.onChange} value={field.value || ''} disabled={!!actionLogic?.autoFillsCustomer && !isManualOverride}>
+                                                <FormControl><SelectTrigger><SelectValue placeholder="Selecciona un cliente" /></SelectTrigger></FormControl>
+                                                <SelectContent>
+                                                    {customers.map(customer => (<SelectItem key={customer.id} value={customer.id}>{customer.name}</SelectItem>))}
+                                                </SelectContent>
+                                            </Select>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            )}
+
+                             {customerForMovement && !requiresCustomerSelection && (
+                                <div>
+                                    <Label>Cliente</Label>
+                                    <Input value={customerForMovement.name} disabled />
+                                </div>
+                            )}
+
+                            {showVarietyField && (
+                                <FormField
+                                    control={form.control}
+                                    name="variety"
+                                    render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Variedad de Cerveza</FormLabel>
+                                        <FormControl><Input placeholder="ej., IPA, Stout, Lager" {...field} /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                    )}
+                                />
+                            )}
+                        </div>
+
+                        <DialogFooter className="grid grid-cols-2 gap-2 sm:flex">
+                           {actionLogic?.manualOverrides.length && !isManualOverride ? (
+                                <Button type="button" variant="ghost" onClick={() => setIsManualOverride(true)}>Realizar otra acción</Button>
+                           ) : <div />}
+                           <div className="flex col-start-2 gap-2">
+                                <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+                                <Button type="submit" disabled={isSubmitting}>
+                                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Confirmar
+                                </Button>
+                           </div>
+                        </DialogFooter>
+                    </form>
+                </Form>
+            </DialogContent>
+        </Dialog>
     </div>
   );
 }
+
+    
