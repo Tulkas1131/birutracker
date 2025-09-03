@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { logAppEvent } from "@/lib/logging";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Label } from "@/components/ui/label";
 
 const QrScanner = dynamic(() => import('@/components/qr-scanner').then(mod => mod.QrScanner), {
   ssr: false,
@@ -305,34 +306,34 @@ export default function MovementsPage() {
   return (
     <div className="flex flex-1 flex-col">
         <PageHeader title="Registrar Movimiento" description="Escanea un código QR para empezar." />
-        <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
-          {isLoading ? (
-            <div className="flex justify-center items-center py-10">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center gap-8 text-center">
-                <p className="text-lg text-muted-foreground max-w-md">
-                    Pulsa el botón para activar la cámara de tu dispositivo y escanear el código QR del activo que deseas mover.
-                </p>
-                <DialogTrigger asChild>
-                    <Button size="lg" className="h-24 w-full max-w-xs text-xl" onClick={() => setScannerOpen(true)}>
-                        <QrCode className="mr-4 h-10 w-10" />
-                        Escanear QR
-                    </Button>
-                </DialogTrigger>
-            </div>
-          )}
-        </main>
-
         <Dialog open={isScannerOpen} onOpenChange={setScannerOpen}>
-             <DialogContent>
+            <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
+            {isLoading ? (
+                <div className="flex justify-center items-center py-10">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+            ) : (
+                <div className="flex flex-col items-center justify-center gap-8 text-center">
+                    <p className="text-lg text-muted-foreground max-w-md">
+                        Pulsa el botón para activar la cámara de tu dispositivo y escanear el código QR del activo que deseas mover.
+                    </p>
+                    <DialogTrigger asChild>
+                        <Button size="lg" className="h-24 w-full max-w-xs text-xl">
+                            <QrCode className="mr-4 h-10 w-10" />
+                            Escanear QR
+                        </Button>
+                    </DialogTrigger>
+                </div>
+            )}
+            </main>
+
+            <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Escanear Código QR</DialogTitle>
                     <DialogDescription>Apunta la cámara al código QR del activo.</DialogDescription>
                 </DialogHeader>
                 <Suspense fallback={<div className="flex justify-center items-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
-                  {isScannerOpen && <QrScanner onScanSuccess={handleScanSuccess} onScanError={handleScanError} />}
+                  <QrScanner onScanSuccess={handleScanSuccess} onScanError={handleScanError} />
                 </Suspense>
             </DialogContent>
         </Dialog>
