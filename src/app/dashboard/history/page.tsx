@@ -384,7 +384,7 @@ export default function HistoryPage() {
                   disabled={currentPage === 1}
                 >
                    <ChevronLeft className="h-4 w-4" />
-                  <span className="sr-only sm:not-sr-only">Anterior</span>
+                   Anterior
                 </Button>
                 <Button
                   variant="outline"
@@ -392,7 +392,7 @@ export default function HistoryPage() {
                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                   disabled={currentPage === totalPages}
                 >
-                  <span className="sr-only sm:not-sr-only">Siguiente</span>
+                  Siguiente
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
