@@ -21,10 +21,9 @@ import { useIsMobile } from '@/hooks/use-mobile';
 
 const ITEMS_PER_PAGE = 10;
 
-function EventTableRow({ event, assetsMap, onDelete }: { event: Event, assetsMap: Map<string, Asset>, onDelete: (id: string) => void }) {
+function EventTableRowContent({ event, assetsMap, onDelete }: { event: Event, assetsMap: Map<string, Asset>, onDelete: (id: string) => void }) {
   const [daysAtCustomer, setDaysAtCustomer] = useState<number | null>(null);
   const userRole = useUserRole();
-  const isMobile = useIsMobile();
 
   useEffect(() => {
     const asset = assetsMap.get(event.asset_id);
@@ -53,51 +52,13 @@ function EventTableRow({ event, assetsMap, onDelete }: { event: Event, assetsMap
     }
   };
 
-  if (isMobile) {
-    return (
-       <TableCell colSpan={userRole === 'Admin' ? 7 : 6} className="p-0">
-          <div className="flex flex-col p-4 space-y-2">
-              <div className="flex justify-between items-center">
-                  <span className="font-bold text-lg">{event.asset_code}</span>
-                   {daysAtCustomer !== null && (
-                      daysAtCustomer > 30 ? (
-                        <Badge variant="destructive">{daysAtCustomer} días</Badge>
-                      ) : (
-                        <Badge variant="secondary">{daysAtCustomer} días</Badge>
-                      )
-                   )}
-              </div>
-              <div className="text-sm text-muted-foreground">
-                  <p><span className="font-medium">Tipo:</span> {formatEventType(event.event_type)}</p>
-                  <p><span className="font-medium">Cliente:</span> {event.customer_name}</p>
-                  <p><span className="font-medium">Fecha:</span> {formatDate(event.timestamp)}</p>
-                  {event.variety && <p><span className="font-medium">Variedad:</span> {event.variety}</p>}
-              </div>
-              {userRole === 'Admin' && (
-                  <div className="flex justify-end">
-                       <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => onDelete(event.id)}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Eliminar
-                        </Button>
-                  </div>
-              )}
-          </div>
-      </TableCell>
-    )
-  }
-
   return (
     <>
-      <TableCell>{formatDate(event.timestamp)}</TableCell>
+      <TableCell className="hidden sm:table-cell">{formatDate(event.timestamp)}</TableCell>
       <TableCell className="font-medium">{event.asset_code}</TableCell>
-      <TableCell>{formatEventType(event.event_type)}</TableCell>
+      <TableCell className="hidden sm:table-cell">{formatEventType(event.event_type)}</TableCell>
       <TableCell>{event.customer_name}</TableCell>
-      <TableCell>
+      <TableCell className="hidden md:table-cell">
         {daysAtCustomer !== null ? (
           daysAtCustomer > 30 ? (
             <Badge variant="destructive">{daysAtCustomer} días</Badge>
@@ -108,7 +69,7 @@ function EventTableRow({ event, assetsMap, onDelete }: { event: Event, assetsMap
           '--'
         )}
       </TableCell>
-      <TableCell>{event.variety || 'N/A'}</TableCell>
+      <TableCell className="hidden lg:table-cell">{event.variety || 'N/A'}</TableCell>
       {userRole === 'Admin' && (
         <TableCell>
           <Button
@@ -125,57 +86,6 @@ function EventTableRow({ event, assetsMap, onDelete }: { event: Event, assetsMap
   );
 }
 
-
-function EventTable({ events, assets, isLoading, onDelete }: { events: Event[], assets: Asset[], isLoading: boolean, onDelete: (id: string) => void }) {
-  const userRole = useUserRole();
-  const isMobile = useIsMobile();
-  const assetsMap = useMemo(() => new Map(assets.map(asset => [asset.id, asset])), [assets]);
-
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center py-10">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  return (
-    <>
-      <div className="relative w-full overflow-auto">
-        <Table>
-          {!isMobile && (
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Código de Activo</TableHead>
-                  <TableHead>Tipo de Evento</TableHead>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead>Días en Cliente</TableHead>
-                  <TableHead>Variedad</TableHead>
-                  {userRole === 'Admin' && <TableHead>Acciones</TableHead>}
-                </TableRow>
-              </TableHeader>
-          )}
-          <TableBody>
-            {events.length > 0 ? (
-              events.map((event) => (
-                <TableRow key={event.id}>
-                  <EventTableRow event={event} assetsMap={assetsMap} onDelete={onDelete} />
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={userRole === 'Admin' ? 7 : 6} className="h-24 text-center">
-                  No se encontraron movimientos para los filtros seleccionados.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-    </>
-  );
-}
 
 export default function HistoryPage() {
   const [events, setEvents] = useState<Event[]>([]);
@@ -303,6 +213,8 @@ export default function HistoryPage() {
   
   const isLoading = isAssetsLoading || isEventsLoading;
 
+  const assetsMap = useMemo(() => new Map(assets.map(asset => [asset.id, asset])), [assets]);
+
   return (
     <div className="flex flex-1 flex-col">
       <PageHeader
@@ -344,10 +256,45 @@ export default function HistoryPage() {
                 </SelectContent>
               </Select>
             </div>
-            <EventTable events={paginatedEvents} assets={assets} isLoading={isLoading} onDelete={handleDelete} />
+            <div className="relative w-full overflow-auto">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead className="hidden sm:table-cell">Fecha</TableHead>
+                            <TableHead>Código</TableHead>
+                            <TableHead className="hidden sm:table-cell">Evento</TableHead>
+                            <TableHead>Cliente</TableHead>
+                            <TableHead className="hidden md:table-cell">Días en Cliente</TableHead>
+                            <TableHead className="hidden lg:table-cell">Variedad</TableHead>
+                            {userRole === 'Admin' && <TableHead>Acciones</TableHead>}
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {isLoading ? (
+                            <TableRow>
+                                <TableCell colSpan={userRole === 'Admin' ? 7 : 6} className="h-24 text-center">
+                                    <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+                                </TableCell>
+                            </TableRow>
+                        ) : paginatedEvents.length > 0 ? (
+                            paginatedEvents.map((event) => (
+                                <TableRow key={event.id}>
+                                    <EventTableRowContent event={event} assetsMap={assetsMap} onDelete={handleDelete} />
+                                </TableRow>
+                            ))
+                        ) : (
+                            <TableRow>
+                                <TableCell colSpan={userRole === 'Admin' ? 7 : 6} className="h-24 text-center">
+                                    No se encontraron movimientos para los filtros seleccionados.
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
           </CardContent>
           {totalPages > 1 && (
-            <CardFooter className="flex items-center justify-between py-4">
+            <CardFooter className="flex items-center justify-between border-t py-4">
               <span className="text-sm text-muted-foreground">
                 Página {currentPage} de {totalPages}
               </span>
@@ -359,7 +306,7 @@ export default function HistoryPage() {
                   disabled={currentPage === 1}
                 >
                    <ChevronLeft className="h-4 w-4" />
-                   Anterior
+                   <span className='ml-2'>Anterior</span>
                 </Button>
                 <Button
                   variant="outline"
@@ -367,7 +314,7 @@ export default function HistoryPage() {
                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                   disabled={currentPage === totalPages}
                 >
-                  Siguiente
+                  <span className='mr-2'>Siguiente</span>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
@@ -377,6 +324,5 @@ export default function HistoryPage() {
       </main>
     </div>
   );
-}
 
     
