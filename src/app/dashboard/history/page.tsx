@@ -55,46 +55,44 @@ function EventTableRow({ event, assetsMap, onDelete }: { event: Event, assetsMap
 
   if (isMobile) {
     return (
-       <TableRow>
-          <TableCell colSpan={userRole === 'Admin' ? 7 : 6} className="p-0">
-            <div className="flex flex-col p-4 space-y-2">
-                <div className="flex justify-between items-center">
-                    <span className="font-bold text-lg">{event.asset_code}</span>
-                     {daysAtCustomer !== null && (
-                        daysAtCustomer > 30 ? (
-                          <Badge variant="destructive">{daysAtCustomer} días</Badge>
-                        ) : (
-                          <Badge variant="secondary">{daysAtCustomer} días</Badge>
-                        )
-                     )}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                    <p><span className="font-medium">Tipo:</span> {formatEventType(event.event_type)}</p>
-                    <p><span className="font-medium">Cliente:</span> {event.customer_name}</p>
-                    <p><span className="font-medium">Fecha:</span> {formatDate(event.timestamp)}</p>
-                    {event.variety && <p><span className="font-medium">Variedad:</span> {event.variety}</p>}
-                </div>
-                {userRole === 'Admin' && (
-                    <div className="flex justify-end">
-                         <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => onDelete(event.id)}
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Eliminar
-                          </Button>
-                    </div>
-                )}
-            </div>
-        </TableCell>
-      </TableRow>
+       <TableCell colSpan={userRole === 'Admin' ? 7 : 6} className="p-0">
+          <div className="flex flex-col p-4 space-y-2">
+              <div className="flex justify-between items-center">
+                  <span className="font-bold text-lg">{event.asset_code}</span>
+                   {daysAtCustomer !== null && (
+                      daysAtCustomer > 30 ? (
+                        <Badge variant="destructive">{daysAtCustomer} días</Badge>
+                      ) : (
+                        <Badge variant="secondary">{daysAtCustomer} días</Badge>
+                      )
+                   )}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                  <p><span className="font-medium">Tipo:</span> {formatEventType(event.event_type)}</p>
+                  <p><span className="font-medium">Cliente:</span> {event.customer_name}</p>
+                  <p><span className="font-medium">Fecha:</span> {formatDate(event.timestamp)}</p>
+                  {event.variety && <p><span className="font-medium">Variedad:</span> {event.variety}</p>}
+              </div>
+              {userRole === 'Admin' && (
+                  <div className="flex justify-end">
+                       <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => onDelete(event.id)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Eliminar
+                        </Button>
+                  </div>
+              )}
+          </div>
+      </TableCell>
     )
   }
 
   return (
-    <TableRow>
+    <>
       <TableCell>{formatDate(event.timestamp)}</TableCell>
       <TableCell className="font-medium">{event.asset_code}</TableCell>
       <TableCell>{formatEventType(event.event_type)}</TableCell>
@@ -123,7 +121,7 @@ function EventTableRow({ event, assetsMap, onDelete }: { event: Event, assetsMap
           </Button>
         </TableCell>
       )}
-    </TableRow>
+    </>
   );
 }
 
@@ -161,7 +159,9 @@ function EventTable({ events, assets, isLoading, onDelete }: { events: Event[], 
           <TableBody>
             {events.length > 0 ? (
               events.map((event) => (
-                <EventTableRow key={event.id} event={event} assetsMap={assetsMap} onDelete={onDelete} />
+                <TableRow key={event.id}>
+                  <EventTableRow event={event} assetsMap={assetsMap} onDelete={onDelete} />
+                </TableRow>
               ))
             ) : (
               <TableRow>
@@ -378,3 +378,5 @@ export default function HistoryPage() {
     </div>
   );
 }
+
+    
