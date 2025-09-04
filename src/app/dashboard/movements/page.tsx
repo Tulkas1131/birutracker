@@ -305,8 +305,8 @@ export default function MovementsPage() {
 
   return (
     <div className="flex flex-1 flex-col">
-        <PageHeader title="Registrar Movimiento" description="Escanea un código QR para empezar." />
-        <Dialog open={isScannerOpen} onOpenChange={setScannerOpen}>
+      <PageHeader title="Registrar Movimiento" description="Escanea un código QR para empezar." />
+       <Dialog open={isScannerOpen} onOpenChange={setScannerOpen}>
             <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
             {isLoading ? (
                 <div className="flex justify-center items-center py-10">
@@ -333,7 +333,7 @@ export default function MovementsPage() {
                     <DialogDescription>Apunta la cámara al código QR del activo.</DialogDescription>
                 </DialogHeader>
                 <Suspense fallback={<div className="flex justify-center items-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
-                  <QrScanner onScanSuccess={handleScanSuccess} onScanError={handleScanError} />
+                  <QrScanner onScanSuccess={handleScanSuccess} onScanError={handleScanError} isScannerOpen={isScannerOpen} />
                 </Suspense>
             </DialogContent>
         </Dialog>

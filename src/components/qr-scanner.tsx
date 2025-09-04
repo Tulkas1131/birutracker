@@ -2,20 +2,29 @@
 "use client";
 
 import { useEffect, useRef, memo } from 'react';
-import { Html5QrcodeScanner, type QrCodeSuccessCallback, type QrCodeErrorCallback } from 'html5-qrcode';
+import { Html5QrcodeScanner, Html5Qrcode, type QrCodeSuccessCallback, type QrCodeErrorCallback } from 'html5-qrcode';
 
 interface QrScannerProps {
     onScanSuccess: (decodedText: string) => void;
     onScanError: (errorMessage: string) => void;
+    isScannerOpen: boolean;
 }
 
 const scannerRegionId = "qr-scanner-region";
 
-function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
+function QrScannerComponent({ onScanSuccess, onScanError, isScannerOpen }: QrScannerProps) {
     const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
     useEffect(() => {
-        // We need to wait for the dialog animation to finish before initializing the scanner
+        if (isScannerOpen && scannerRef.current) {
+            scannerRef.current.resume();
+        } else if (!isScannerOpen && scannerRef.current?.isScanning) {
+            scannerRef.current.pause(true);
+        }
+    }, [isScannerOpen]);
+
+    useEffect(() => {
+        // Initialize the scanner only once when the component mounts
         const timeoutId = setTimeout(() => {
             if (document.getElementById(scannerRegionId) && !scannerRef.current) {
                 const scanner = new Html5QrcodeScanner(
@@ -24,6 +33,7 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
                         fps: 10,
                         qrbox: { width: 250, height: 250 },
                         rememberLastUsedCamera: true,
+                        supportedScanTypes: [], // Use all supported scan types
                     },
                     false // verbose
                 );
@@ -39,9 +49,9 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
                 scanner.render(successCallback, errorCallback);
                 scannerRef.current = scanner;
             }
-        }, 100); // 100ms delay to ensure the DOM is ready
+        }, 100);
 
-        // Cleanup function
+        // Cleanup function to run when the component unmounts (e.g., user navigates away)
         return () => {
             clearTimeout(timeoutId);
             if (scannerRef.current) {
@@ -52,6 +62,7 @@ function QrScannerComponent({ onScanSuccess, onScanError }: QrScannerProps) {
                 });
             }
         };
+        // Empty dependency array ensures this effect runs only once on mount and unmount
     }, [onScanSuccess, onScanError]);
 
     return (
