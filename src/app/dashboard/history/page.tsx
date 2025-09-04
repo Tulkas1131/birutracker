@@ -17,12 +17,14 @@ import { Button } from '@/components/ui/button';
 import { differenceInDays } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { logAppEvent } from '@/lib/logging';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const ITEMS_PER_PAGE = 10;
 
 function EventTableRow({ event, assetsMap, onDelete }: { event: Event, assetsMap: Map<string, Asset>, onDelete: (id: string) => void }) {
   const [daysAtCustomer, setDaysAtCustomer] = useState<number | null>(null);
   const userRole = useUserRole();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const asset = assetsMap.get(event.asset_id);
@@ -48,6 +50,76 @@ function EventTableRow({ event, assetsMap, onDelete }: { event: Event, assetsMap
       default: return eventType;
     }
   };
+  
+  const content = (
+    <>
+      <TableCell className="font-medium">{event.asset_code}</TableCell>
+      <TableCell>{event.customer_name}</TableCell>
+      <TableCell>
+        {daysAtCustomer !== null ? (
+          daysAtCustomer > 30 ? (
+            <Badge variant="destructive">{daysAtCustomer} días</Badge>
+          ) : (
+            <span>{daysAtCustomer} días</span>
+          )
+        ) : (
+          '--'
+        )}
+      </TableCell>
+      {userRole === 'Admin' && (
+        <TableCell>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-destructive hover:text-destructive"
+            onClick={() => onDelete(event.id)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </TableCell>
+      )}
+    </>
+  );
+
+  if (isMobile) {
+    return (
+       <TableRow>
+          <TableCell colSpan={4} className="p-0">
+            <div className="flex flex-col p-4 space-y-2">
+                <div className="flex justify-between items-center">
+                    <span className="font-bold text-lg">{event.asset_code}</span>
+                     {daysAtCustomer !== null && (
+                        daysAtCustomer > 30 ? (
+                          <Badge variant="destructive">{daysAtCustomer} días</Badge>
+                        ) : (
+                          <Badge variant="secondary">{daysAtCustomer} días</Badge>
+                        )
+                     )}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                    <p><span className="font-medium">Tipo:</span> {formatEventType(event.event_type)}</p>
+                    <p><span className="font-medium">Cliente:</span> {event.customer_name}</p>
+                    <p><span className="font-medium">Fecha:</span> {formatDate(event.timestamp)}</p>
+                    {event.variety && <p><span className="font-medium">Variedad:</span> {event.variety}</p>}
+                </div>
+                {userRole === 'Admin' && (
+                    <div className="flex justify-end">
+                         <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => onDelete(event.id)}
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Eliminar
+                          </Button>
+                    </div>
+                )}
+            </div>
+        </TableCell>
+      </TableRow>
+    )
+  }
 
   return (
     <TableRow>
@@ -86,6 +158,7 @@ function EventTableRow({ event, assetsMap, onDelete }: { event: Event, assetsMap
 
 function EventTable({ events, assets, isLoading, onDelete }: { events: Event[], assets: Asset[], isLoading: boolean, onDelete: (id: string) => void }) {
   const userRole = useUserRole();
+  const isMobile = useIsMobile();
   const assetsMap = useMemo(() => new Map(assets.map(asset => [asset.id, asset])), [assets]);
 
   if (isLoading) {
@@ -100,17 +173,19 @@ function EventTable({ events, assets, isLoading, onDelete }: { events: Event[], 
     <>
       <div className="relative w-full overflow-auto">
         <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Fecha</TableHead>
-              <TableHead>Código de Activo</TableHead>
-              <TableHead>Tipo de Evento</TableHead>
-              <TableHead>Cliente</TableHead>
-              <TableHead>Días en Cliente</TableHead>
-              <TableHead>Variedad</TableHead>
-              {userRole === 'Admin' && <TableHead>Acciones</TableHead>}
-            </TableRow>
-          </TableHeader>
+          {!isMobile && (
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Código de Activo</TableHead>
+                  <TableHead>Tipo de Evento</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Días en Cliente</TableHead>
+                  <TableHead>Variedad</TableHead>
+                  {userRole === 'Admin' && <TableHead>Acciones</TableHead>}
+                </TableRow>
+              </TableHeader>
+          )}
           <TableBody>
             {events.map((event) => (
                <EventTableRow key={event.id} event={event} assetsMap={assetsMap} onDelete={onDelete} />
@@ -261,7 +336,7 @@ export default function HistoryPage() {
       />
       <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
         <Card>
-          <CardContent>
+          <CardContent className="p-4 md:p-6">
             <div className="flex flex-col sm:flex-row items-center gap-4 py-4">
               <Input
                 placeholder="Filtrar por cliente..."
@@ -309,7 +384,7 @@ export default function HistoryPage() {
                   disabled={currentPage === 1}
                 >
                    <ChevronLeft className="h-4 w-4" />
-                  Anterior
+                  <span className="sr-only sm:not-sr-only">Anterior</span>
                 </Button>
                 <Button
                   variant="outline"
@@ -317,7 +392,7 @@ export default function HistoryPage() {
                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                   disabled={currentPage === totalPages}
                 >
-                  Siguiente
+                  <span className="sr-only sm:not-sr-only">Siguiente</span>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
