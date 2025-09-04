@@ -47,10 +47,11 @@ const stateLogic: Record<Asset['location'], Partial<Record<Asset['state'], Actio
             requiresVariety: true,
         },
         VACIO: {
-            primary: 'SALIDA_VACIO',
-            manualOverrides: [],
-            description: "El activo está vacío en planta. Se registrará un préstamo.",
+            primary: 'SALIDA_A_REPARTO',
+            manualOverrides: ['SALIDA_VACIO'],
+            description: "El activo está vacío en planta. Se llenará y saldrá a reparto.",
             requiresCustomerSelection: true,
+            requiresVariety: true,
         }
     },
     EN_REPARTO: {
@@ -239,8 +240,8 @@ export default function MovementsPage() {
     }
     
     const selectedCustomer = customers.find(c => c.id === data.customer_id);
-     if (!selectedCustomer) {
-      toast({ title: "Error", description: "Cliente no encontrado.", variant: "destructive" });
+     if (actionLogic?.requiresCustomerSelection && !selectedCustomer) {
+      toast({ title: "Error", description: "Cliente no encontrado o no seleccionado.", variant: "destructive" });
       setIsSubmitting(false);
       return;
     }
@@ -259,26 +260,16 @@ export default function MovementsPage() {
 
     try {
       await runTransaction(firestore, async (transaction) => {
-        const isUpdateEvent = data.event_type === 'ENTREGA_A_CLIENTE' || data.event_type === 'RECEPCION_EN_PLANTA';
-
-        if (isUpdateEvent) {
-          const expectedInitialEventType = data.event_type === 'ENTREGA_A_CLIENTE' ? 'SALIDA_A_REPARTO' : 'RECOLECCION_DE_CLIENTE';
-          const pendingEvent = pendingDeliveryEvents.find(e => e.asset_id === scannedAsset.id && e.event_type === expectedInitialEventType);
-          
-          if (pendingEvent) {
-            const eventRef = doc(firestore, "events", pendingEvent.id);
-            transaction.update(eventRef, { event_type: data.event_type, timestamp: Timestamp.now() });
-          } else {
-             // If no pending event, create a new one (covers edge cases)
-             const eventData = { asset_id: scannedAsset.id, asset_code: scannedAsset.code, customer_id: selectedCustomer.id, customer_name: selectedCustomer.name, event_type: data.event_type, timestamp: Timestamp.now(), user_id: user.uid, variety: data.variety || "" };
-             const newEventRef = doc(collection(firestore, "events"));
-             transaction.set(newEventRef, eventData);
-          }
-        } else {
-            const eventData = { asset_id: scannedAsset.id, asset_code: scannedAsset.code, customer_id: selectedCustomer.id, customer_name: selectedCustomer.name, event_type: data.event_type, timestamp: Timestamp.now(), user_id: user.uid, variety: data.variety || "" };
-            const newEventRef = doc(collection(firestore, "events"));
-            transaction.set(newEventRef, eventData);
+        const customerId = selectedCustomer ? selectedCustomer.id : lastEvents.get(scannedAsset.id)?.customer_id || '';
+        const customerName = selectedCustomer ? selectedCustomer.name : lastEvents.get(scannedAsset.id)?.customer_name || 'N/A';
+        
+        if (!customerId) {
+            throw new Error("No se pudo determinar el cliente para este movimiento.");
         }
+
+        const eventData = { asset_id: scannedAsset.id, asset_code: scannedAsset.code, customer_id: customerId, customer_name: customerName, event_type: data.event_type, timestamp: Timestamp.now(), user_id: user.uid, variety: data.variety || "" };
+        const newEventRef = doc(collection(firestore, "events"));
+        transaction.set(newEventRef, eventData);
 
         const assetRef = doc(firestore, "assets", scannedAsset.id);
         transaction.update(assetRef, { location: newLocation, state: newState });
@@ -300,13 +291,18 @@ export default function MovementsPage() {
   const currentEventType = form.watch('event_type');
   const showVarietyField = scannedAsset?.type === 'BARRIL' && (currentEventType === 'SALIDA_A_REPARTO' || currentEventType === 'DEVOLUCION');
   const requiresCustomerSelection = isManualOverride 
-      ? stateLogic[scannedAsset!.location]?.[scannedAsset!.state]?.manualOverrides.includes(currentEventType) || actionLogic?.requiresCustomerSelection
+      ? (
+          currentEventType === 'SALIDA_A_REPARTO' || 
+          currentEventType === 'SALIDA_VACIO' ||
+          currentEventType === 'DEVOLUCION'
+        )
       : actionLogic?.requiresCustomerSelection;
+
 
   return (
     <div className="flex flex-1 flex-col">
-      <PageHeader title="Registrar Movimiento" description="Escanea un código QR para empezar." />
        <Dialog open={isScannerOpen} onOpenChange={setScannerOpen}>
+        <PageHeader title="Registrar Movimiento" description="Escanea un código QR para empezar." />
             <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
             {isLoading ? (
                 <div className="flex justify-center items-center py-10">
@@ -318,7 +314,7 @@ export default function MovementsPage() {
                         Pulsa el botón para activar la cámara de tu dispositivo y escanear el código QR del activo que deseas mover.
                     </p>
                     <DialogTrigger asChild>
-                        <Button size="lg" className="h-24 w-full max-w-xs text-xl">
+                        <Button size="lg" className="h-24 w-full max-w-xs text-xl" onClick={() => setScannerOpen(true)}>
                             <QrCode className="mr-4 h-10 w-10" />
                             Escanear QR
                         </Button>
@@ -350,7 +346,7 @@ export default function MovementsPage() {
                         <div className="my-4 space-y-4">
                            <Alert>
                                 <AlertTitle className="flex items-center gap-2">
-                                    <span className="font-normal">{scannedAsset?.location.replace('_', ' ')}</span>
+                                    <span className="font-normal">{scannedAsset?.location.replace('_', ' ')} ({scannedAsset?.state})</span>
                                     <ArrowRight className="h-4 w-4" />
                                     <span>{getEventTypeTranslation(currentEventType)}</span>
                                 </AlertTitle>
