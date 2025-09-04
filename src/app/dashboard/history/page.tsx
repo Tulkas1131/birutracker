@@ -31,6 +31,8 @@ function EventTableRow({ event, assetsMap, onDelete }: { event: Event, assetsMap
     if (event.event_type === 'ENTREGA_A_CLIENTE' && asset && asset.location === 'EN_CLIENTE') {
       const days = differenceInDays(new Date(), event.timestamp.toDate());
       setDaysAtCustomer(days);
+    } else {
+      setDaysAtCustomer(null);
     }
   }, [event, assetsMap]);
 
@@ -50,41 +52,11 @@ function EventTableRow({ event, assetsMap, onDelete }: { event: Event, assetsMap
       default: return eventType;
     }
   };
-  
-  const content = (
-    <>
-      <TableCell className="font-medium">{event.asset_code}</TableCell>
-      <TableCell>{event.customer_name}</TableCell>
-      <TableCell>
-        {daysAtCustomer !== null ? (
-          daysAtCustomer > 30 ? (
-            <Badge variant="destructive">{daysAtCustomer} días</Badge>
-          ) : (
-            <span>{daysAtCustomer} días</span>
-          )
-        ) : (
-          '--'
-        )}
-      </TableCell>
-      {userRole === 'Admin' && (
-        <TableCell>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-destructive hover:text-destructive"
-            onClick={() => onDelete(event.id)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </TableCell>
-      )}
-    </>
-  );
 
   if (isMobile) {
     return (
        <TableRow>
-          <TableCell colSpan={4} className="p-0">
+          <TableCell colSpan={userRole === 'Admin' ? 7 : 6} className="p-0">
             <div className="flex flex-col p-4 space-y-2">
                 <div className="flex justify-between items-center">
                     <span className="font-bold text-lg">{event.asset_code}</span>
@@ -187,17 +159,20 @@ function EventTable({ events, assets, isLoading, onDelete }: { events: Event[], 
               </TableHeader>
           )}
           <TableBody>
-            {events.map((event) => (
-               <EventTableRow key={event.id} event={event} assetsMap={assetsMap} onDelete={onDelete} />
-            ))}
+            {events.length > 0 ? (
+              events.map((event) => (
+                <EventTableRow key={event.id} event={event} assetsMap={assetsMap} onDelete={onDelete} />
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={userRole === 'Admin' ? 7 : 6} className="h-24 text-center">
+                  No se encontraron movimientos para los filtros seleccionados.
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </div>
-      {events.length === 0 && !isLoading && (
-        <div className="py-10 text-center text-muted-foreground">
-          No se encontraron movimientos para los filtros seleccionados.
-        </div>
-      )}
     </>
   );
 }
