@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useRef, memo } from 'react';
-import { Html5QrcodeScanner, Html5Qrcode, type QrCodeSuccessCallback, type QrCodeErrorCallback } from 'html5-qrcode';
+import { Html5QrcodeScanner, type QrCodeSuccessCallback, type QrCodeErrorCallback } from 'html5-qrcode';
 
 interface QrScannerProps {
     onScanSuccess: (decodedText: string) => void;
@@ -14,32 +14,36 @@ const scannerRegionId = "qr-scanner-region";
 
 function QrScannerComponent({ onScanSuccess, onScanError, isScannerOpen }: QrScannerProps) {
     const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+    const lastScanResult = useRef<string | null>(null);
 
     useEffect(() => {
-        if (isScannerOpen && scannerRef.current) {
-            scannerRef.current.resume();
-        } else if (!isScannerOpen && scannerRef.current?.isScanning) {
-            scannerRef.current.pause(true);
-        }
-    }, [isScannerOpen]);
-
-    useEffect(() => {
-        // Initialize the scanner only once when the component mounts
-        const timeoutId = setTimeout(() => {
-            if (document.getElementById(scannerRegionId) && !scannerRef.current) {
+        if (isScannerOpen && !scannerRef.current) {
+            // Delay initialization slightly to ensure the DOM element is ready
+            const timeoutId = setTimeout(() => {
+                 if (!document.getElementById(scannerRegionId)) {
+                    console.warn("QR scanner region not found in DOM.");
+                    return;
+                }
+                
+                lastScanResult.current = null; // Reset last scan result
+                
                 const scanner = new Html5QrcodeScanner(
                     scannerRegionId,
                     {
                         fps: 10,
                         qrbox: { width: 250, height: 250 },
                         rememberLastUsedCamera: true,
-                        supportedScanTypes: [], // Use all supported scan types
+                        supportedScanTypes: [],
                     },
                     false // verbose
                 );
 
                 const successCallback: QrCodeSuccessCallback = (decodedText, decodedResult) => {
-                    onScanSuccess(decodedText);
+                    // Prevent multiple rapid-fire scans of the same code
+                    if (decodedText !== lastScanResult.current) {
+                        lastScanResult.current = decodedText;
+                        onScanSuccess(decodedText);
+                    }
                 };
 
                 const errorCallback: QrCodeErrorCallback = (errorMessage) => {
@@ -48,22 +52,30 @@ function QrScannerComponent({ onScanSuccess, onScanError, isScannerOpen }: QrSca
 
                 scanner.render(successCallback, errorCallback);
                 scannerRef.current = scanner;
-            }
-        }, 100);
+            }, 100);
 
-        // Cleanup function to run when the component unmounts (e.g., user navigates away)
+            return () => clearTimeout(timeoutId);
+
+        } else if (!isScannerOpen && scannerRef.current) {
+            scannerRef.current.clear().catch(error => {
+                console.error("Failed to clear html5QrcodeScanner.", error);
+            }).finally(() => {
+                scannerRef.current = null;
+            });
+        }
+    }, [isScannerOpen, onScanSuccess, onScanError]);
+
+
+    // Final cleanup on component unmount
+    useEffect(() => {
         return () => {
-            clearTimeout(timeoutId);
             if (scannerRef.current) {
                 scannerRef.current.clear().catch(error => {
-                    console.error("Failed to clear html5QrcodeScanner.", error);
-                }).finally(() => {
-                    scannerRef.current = null;
+                     console.error("Cleanup failed on unmount.", error);
                 });
             }
         };
-        // Empty dependency array ensures this effect runs only once on mount and unmount
-    }, [onScanSuccess, onScanError]);
+    }, []);
 
     return (
         <div className="space-y-4">
@@ -72,5 +84,4 @@ function QrScannerComponent({ onScanSuccess, onScanError, isScannerOpen }: QrSca
     );
 }
 
-// Memoize the component to prevent unnecessary re-renders
 export const QrScanner = memo(QrScannerComponent);
