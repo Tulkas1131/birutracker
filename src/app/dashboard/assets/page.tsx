@@ -133,8 +133,9 @@ export default function AssetsPage() {
               }
               .print-container {
                 display: grid;
-                grid-template-columns: repeat(4, 1fr);
+                grid-template-columns: repeat(2, 1fr);
                 gap: 0.5rem;
+                justify-content: center;
               }
               .qr-label {
                 display: flex;
@@ -142,8 +143,8 @@ export default function AssetsPage() {
                 border: 1px solid #ccc;
                 border-radius: 8px;
                 overflow: hidden;
-                width: 150px;
-                height: 150px;
+                width: 300px;
+                height: 125px;
                 page-break-inside: avoid;
                 font-family: sans-serif;
                 background-color: white;
@@ -162,22 +163,31 @@ export default function AssetsPage() {
                 stroke: white;
               }
               .qr-label__title {
-                font-size: 0.5rem;
+                font-size: 0.6rem;
                 font-weight: 500;
               }
               .qr-label__body {
                 display: flex;
-                flex-direction: column;
                 align-items: center;
                 justify-content: center;
                 flex-grow: 1;
-                padding: 0.25rem;
+                gap: 1rem;
+                padding: 0.5rem;
+              }
+              .qr-label__code-container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
               }
               .qr-label__code {
-                font-size: 0.8rem;
+                font-size: 1.5rem;
                 font-weight: bold;
                 letter-spacing: 0.05em;
-                margin-top: 0.25rem;
+              }
+               .qr-label__format {
+                font-size: 0.8rem;
+                color: #555;
               }
               .single-qr-container {
                  display: flex;
@@ -269,13 +279,23 @@ export default function AssetsPage() {
     const firestore = db();
     try {
       if (selectedAsset) {
-        // Editing existing asset - only allow state and location changes
+        // Editing existing asset - allow state, location, format, and type changes (only on unlocked assets)
         const assetDataToUpdate: Partial<Asset> = {
           state: data.state,
           location: data.location,
-          format: data.format,
-          type: data.type,
         };
+        // Only allow changing format and type if asset is in plant
+        if(selectedAsset.location === 'EN_PLANTA') {
+            assetDataToUpdate.format = data.format;
+            assetDataToUpdate.type = data.type;
+        } else {
+            toast({
+                title: "Edición Limitada",
+                description: "El tipo y formato solo se pueden editar si el activo está EN PLANTA.",
+                variant: "default",
+                duration: 6000,
+            })
+        }
         await updateDoc(doc(firestore, "assets", selectedAsset.id), assetDataToUpdate);
         setAssets(prev => prev.map(asset => asset.id === selectedAsset.id ? { ...asset, ...assetDataToUpdate } : asset));
         toast({
@@ -541,23 +561,19 @@ export default function AssetsPage() {
     </div>
   );
 
-  const QrLabel = ({ asset, size = 'small' }: { asset: Asset, size?: 'small' | 'large' }) => {
-    const qrSize = size === 'large' ? 128 : 80;
-
+  const QrLabel = ({ asset }: { asset: Asset }) => {
     return (
-      <div className={`qr-label ${size === 'large' ? 'qr-label--large' : ''}`}>
+      <div className="qr-label">
         <div className="qr-label__header">
           <Logo className="qr-label__logo" />
           <span className="qr-label__title">Tracked by BiruTracker</span>
         </div>
         <div className="qr-label__body">
-          <QRCode value={asset.id} size={qrSize} renderAs="svg" level="H" imageSettings={{
-            src: '/icon-192x192.png',
-            height: qrSize / 4,
-            width: qrSize / 4,
-            excavate: true,
-          }} />
-          <div className="qr-label__code">{asset.code}</div>
+          <QRCode value={asset.id} size={80} renderAs="svg" level="H" />
+          <div className="qr-label__code-container">
+            <div className="qr-label__code">{asset.code}</div>
+            <div className="qr-label__format">{asset.format} {asset.type === 'BARRIL' ? 'Barril' : 'CO2'}</div>
+          </div>
         </div>
       </div>
     )
@@ -622,6 +638,7 @@ export default function AssetsPage() {
                 setFormOpen(false);
                 setSelectedAsset(undefined);
               }}
+              isLocked={selectedAsset?.location !== 'EN_PLANTA'}
             />
         </DialogContent>
       </Dialog>
@@ -650,7 +667,7 @@ export default function AssetsPage() {
             <Suspense fallback={<div className="flex h-[320px] w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
               {selectedAsset && (
                   <div ref={qrCodeRef} className="single-qr-container">
-                      <QrLabel asset={selectedAsset} size="large" />
+                      <QrLabel asset={selectedAsset}/>
                   </div>
               )}
             </Suspense>
@@ -700,5 +717,3 @@ export default function AssetsPage() {
     </div>
   );
 }
-
-    

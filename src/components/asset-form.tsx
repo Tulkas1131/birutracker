@@ -8,14 +8,17 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { assetSchema, type AssetFormData } from "@/lib/types";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+import { Lock } from "lucide-react";
 
 interface AssetFormProps {
   defaultValues?: AssetFormData;
   onSubmit: (data: Omit<AssetFormData, 'code'>) => void;
   onCancel: () => void;
+  isLocked?: boolean;
 }
 
-export function AssetForm({ defaultValues, onSubmit, onCancel }: AssetFormProps) {
+export function AssetForm({ defaultValues, onSubmit, onCancel, isLocked = false }: AssetFormProps) {
   const form = useForm<AssetFormData>({
     resolver: zodResolver(assetSchema),
     defaultValues: defaultValues || {
@@ -27,11 +30,20 @@ export function AssetForm({ defaultValues, onSubmit, onCancel }: AssetFormProps)
     },
   });
 
-  const isEditing = !!defaultValues;
+  const isCreating = !defaultValues;
 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {isLocked && !isCreating && (
+             <Alert variant="default">
+                <Lock className="h-4 w-4" />
+                <AlertTitle>Activo Bloqueado</AlertTitle>
+                <AlertDescription>
+                    El tipo y formato no se pueden cambiar porque el activo no está en planta.
+                </AlertDescription>
+            </Alert>
+        )}
         <FormField
           control={form.control}
           name="code"
@@ -51,7 +63,7 @@ export function AssetForm({ defaultValues, onSubmit, onCancel }: AssetFormProps)
           render={({ field }) => (
             <FormItem>
               <FormLabel>Tipo</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isEditing}>
+              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLocked}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecciona el tipo de activo" />
@@ -73,7 +85,7 @@ export function AssetForm({ defaultValues, onSubmit, onCancel }: AssetFormProps)
             <FormItem>
               <FormLabel>Formato</FormLabel>
               <FormControl>
-                <Input placeholder="ej., 50L o 6kg" {...field} disabled={isEditing}/>
+                <Input placeholder="ej., 50L o 6kg" {...field} disabled={isLocked}/>
               </FormControl>
               <FormMessage />
             </FormItem>
