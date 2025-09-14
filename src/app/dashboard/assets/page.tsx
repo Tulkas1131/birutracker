@@ -44,6 +44,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/use-user-role";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { logAppEvent } from "@/lib/logging";
+import { Logo } from "@/components/logo";
 
 const QRCode = dynamic(() => import('qrcode.react'), {
   loading: () => <div className="flex h-[256px] w-[256px] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>,
@@ -131,23 +132,34 @@ export default function AssetsPage() {
               }
               .print-container {
                 display: grid;
-                grid-template-columns: repeat(5, 1fr);
-                gap: 1rem;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 1.5rem 1rem;
               }
               .qr-item {
                 display: flex;
                 flex-direction: column;
                 align-items: center;
-                justify-content: center;
                 text-align: center;
                 page-break-inside: avoid;
                 border: 1px dashed #ccc;
                 padding: 0.5rem;
               }
-              .qr-item h1 {
-                font-size: 0.8rem;
-                margin-top: 0.25rem;
-                font-weight: bold;
+              .qr-item__header {
+                  font-size: 0.7rem;
+                  font-weight: bold;
+              }
+              .qr-item__body {
+                  display: flex;
+                  align-items: center;
+                  gap: 0.5rem;
+                  padding: 0.5rem 0;
+              }
+              .qr-item__code {
+                  font-size: 1.2rem;
+                  font-weight: bold;
+              }
+              .qr-item__footer {
+                  font-size: 0.6rem;
               }
             }
             .single-qr-container {
@@ -156,11 +168,31 @@ export default function AssetsPage() {
               align-items: center;
               justify-content: center;
               gap: 1rem;
-              padding: 1rem;
+              padding: 2rem;
+              border: 2px dashed #ccc;
+              max-width: 400px;
+              margin: 2rem auto;
               font-family: sans-serif;
             }
-             .single-qr-container h1 { font-size: 2rem; }
-            .single-qr-container p { font-size: 1.25rem; }
+            .single-qr-container__header {
+                font-size: 1.5rem;
+                font-weight: bold;
+            }
+            .single-qr-container__body {
+                display: flex;
+                align-items: center;
+                gap: 1.5rem;
+                padding: 1rem 0;
+            }
+            .single-qr-container__code {
+                font-size: 2.5rem;
+                font-weight: bold;
+                line-height: 1;
+            }
+            .single-qr-container__footer {
+                font-size: 1rem;
+                color: #555;
+            }
           </style>
         `);
         printWindow.document.write('</head><body>');
@@ -601,9 +633,12 @@ export default function AssetsPage() {
             <Suspense fallback={<div className="flex h-[320px] w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
               {selectedAsset && (
                   <div ref={qrCodeRef} className="single-qr-container">
-                      <QRCode value={selectedAsset.id} size={256} renderAs="svg" />
-                      <h1>{selectedAsset.code}</h1>
-                      <p>{selectedAsset.format} - {selectedAsset.type === 'BARRIL' ? 'Barril' : 'CO2'}</p>
+                      <div className="single-qr-container__header">BiruTracker</div>
+                      <div className="single-qr-container__body">
+                          <QRCode value={selectedAsset.id} size={128} renderAs="svg" />
+                          <div className="single-qr-container__code">{selectedAsset.code}</div>
+                      </div>
+                      <div className="single-qr-container__footer">{selectedAsset.format} - {selectedAsset.type === 'BARRIL' ? 'Barril' : 'CO2'}</div>
                   </div>
               )}
             </Suspense>
@@ -623,8 +658,12 @@ export default function AssetsPage() {
                 <div ref={batchQrRef} className="print-container">
                   {assetsToPrint.map(asset => (
                     <div key={asset.id} className="qr-item">
-                      <QRCode value={asset.id} size={100} renderAs="svg" />
-                      <h1>{asset.code}</h1>
+                      <div className="qr-item__header">BiruTracker</div>
+                      <div className="qr-item__body">
+                        <QRCode value={asset.id} size={64} renderAs="svg" />
+                        <div className="qr-item__code">{asset.code}</div>
+                      </div>
+                      <div className="qr-item__footer">{asset.format} - {asset.type === 'BARRIL' ? 'Barril' : 'CO2'}</div>
                     </div>
                   ))}
                 </div>
@@ -656,3 +695,5 @@ export default function AssetsPage() {
     </div>
   );
 }
+
+    
