@@ -44,7 +44,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/use-user-role";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { logAppEvent } from "@/lib/logging";
-import { Logo } from "@/components/logo";
 
 const QRCode = dynamic(() => import('qrcode.react'), {
   loading: () => <div className="flex h-[256px] w-[256px] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>,
@@ -127,14 +126,15 @@ export default function AssetsPage() {
           <style>
             @media print {
               body {
-                margin: 0.5in;
+                margin: 0;
+                padding: 0.25in 0;
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
               }
               .print-container {
                 display: grid;
                 grid-template-columns: repeat(2, 1fr);
-                gap: 0.5rem;
+                gap: 0.1rem;
                 justify-content: center;
               }
               .qr-label {
@@ -143,24 +143,20 @@ export default function AssetsPage() {
                 border: 1px solid #ccc;
                 border-radius: 8px;
                 overflow: hidden;
-                width: 300px;
-                height: 125px;
+                width: 3.5in;
+                height: 1.75in;
                 page-break-inside: avoid;
                 font-family: sans-serif;
                 background-color: white;
               }
               .qr-label__header {
                 display: flex;
+                justify-content: center;
                 align-items: center;
                 gap: 0.5rem;
-                padding: 0.25rem 0.5rem;
+                padding: 0.2rem 0.5rem;
                 background-color: #27272a;
                 color: white;
-              }
-              .qr-label__logo {
-                width: 16px;
-                height: 16px;
-                stroke: white;
               }
               .qr-label__title {
                 font-size: 0.6rem;
@@ -565,7 +561,6 @@ export default function AssetsPage() {
     return (
       <div className="qr-label">
         <div className="qr-label__header">
-          <Logo className="qr-label__logo" />
           <span className="qr-label__title">Tracked by BiruTracker</span>
         </div>
         <div className="qr-label__body">
