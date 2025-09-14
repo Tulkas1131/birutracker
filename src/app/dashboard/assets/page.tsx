@@ -128,70 +128,63 @@ export default function AssetsPage() {
             @media print {
               body {
                 margin: 0.5in;
-                font-family: sans-serif;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
               }
               .print-container {
                 display: grid;
-                grid-template-columns: repeat(3, 1fr);
-                gap: 1.5rem 1rem;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 0.5rem;
               }
-              .qr-item {
+              .qr-label {
+                display: flex;
+                flex-direction: column;
+                border: 1px solid #ccc;
+                border-radius: 8px;
+                overflow: hidden;
+                width: 150px;
+                height: 150px;
+                page-break-inside: avoid;
+                font-family: sans-serif;
+                background-color: white;
+              }
+              .qr-label__header {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                padding: 0.25rem 0.5rem;
+                background-color: #27272a;
+                color: white;
+              }
+              .qr-label__logo {
+                width: 16px;
+                height: 16px;
+                stroke: white;
+              }
+              .qr-label__title {
+                font-size: 0.5rem;
+                font-weight: 500;
+              }
+              .qr-label__body {
                 display: flex;
                 flex-direction: column;
                 align-items: center;
-                text-align: center;
-                page-break-inside: avoid;
-                border: 1px dashed #ccc;
-                padding: 0.5rem;
+                justify-content: center;
+                flex-grow: 1;
+                padding: 0.25rem;
               }
-              .qr-item__header {
-                  font-size: 0.7rem;
-                  font-weight: bold;
-              }
-              .qr-item__body {
-                  display: flex;
-                  align-items: center;
-                  gap: 0.5rem;
-                  padding: 0.5rem 0;
-              }
-              .qr-item__code {
-                  font-size: 1.2rem;
-                  font-weight: bold;
-              }
-              .qr-item__footer {
-                  font-size: 0.6rem;
-              }
-            }
-            .single-qr-container {
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              gap: 1rem;
-              padding: 2rem;
-              border: 2px dashed #ccc;
-              max-width: 400px;
-              margin: 2rem auto;
-              font-family: sans-serif;
-            }
-            .single-qr-container__header {
-                font-size: 1.5rem;
+              .qr-label__code {
+                font-size: 0.8rem;
                 font-weight: bold;
-            }
-            .single-qr-container__body {
-                display: flex;
-                align-items: center;
-                gap: 1.5rem;
-                padding: 1rem 0;
-            }
-            .single-qr-container__code {
-                font-size: 2.5rem;
-                font-weight: bold;
-                line-height: 1;
-            }
-            .single-qr-container__footer {
-                font-size: 1rem;
-                color: #555;
+                letter-spacing: 0.05em;
+                margin-top: 0.25rem;
+              }
+              .single-qr-container {
+                 display: flex;
+                 justify-content: center;
+                 align-items: center;
+                 padding: 2rem;
+              }
             }
           </style>
         `);
@@ -280,6 +273,8 @@ export default function AssetsPage() {
         const assetDataToUpdate: Partial<Asset> = {
           state: data.state,
           location: data.location,
+          format: data.format,
+          type: data.type,
         };
         await updateDoc(doc(firestore, "assets", selectedAsset.id), assetDataToUpdate);
         setAssets(prev => prev.map(asset => asset.id === selectedAsset.id ? { ...asset, ...assetDataToUpdate } : asset));
@@ -546,6 +541,28 @@ export default function AssetsPage() {
     </div>
   );
 
+  const QrLabel = ({ asset, size = 'small' }: { asset: Asset, size?: 'small' | 'large' }) => {
+    const qrSize = size === 'large' ? 128 : 80;
+
+    return (
+      <div className={`qr-label ${size === 'large' ? 'qr-label--large' : ''}`}>
+        <div className="qr-label__header">
+          <Logo className="qr-label__logo" />
+          <span className="qr-label__title">Tracked by BiruTracker</span>
+        </div>
+        <div className="qr-label__body">
+          <QRCode value={asset.id} size={qrSize} renderAs="svg" level="H" imageSettings={{
+            src: '/icon-192x192.png',
+            height: qrSize / 4,
+            width: qrSize / 4,
+            excavate: true,
+          }} />
+          <div className="qr-label__code">{asset.code}</div>
+        </div>
+      </div>
+    )
+  };
+
 
   return (
     <div className="flex flex-1 flex-col">
@@ -633,12 +650,7 @@ export default function AssetsPage() {
             <Suspense fallback={<div className="flex h-[320px] w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
               {selectedAsset && (
                   <div ref={qrCodeRef} className="single-qr-container">
-                      <div className="single-qr-container__header">BiruTracker</div>
-                      <div className="single-qr-container__body">
-                          <QRCode value={selectedAsset.id} size={128} renderAs="svg" />
-                          <div className="single-qr-container__code">{selectedAsset.code}</div>
-                      </div>
-                      <div className="single-qr-container__footer">{selectedAsset.format} - {selectedAsset.type === 'BARRIL' ? 'Barril' : 'CO2'}</div>
+                      <QrLabel asset={selectedAsset} size="large" />
                   </div>
               )}
             </Suspense>
@@ -657,14 +669,7 @@ export default function AssetsPage() {
               <Suspense fallback={<div className="flex h-full w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
                 <div ref={batchQrRef} className="print-container">
                   {assetsToPrint.map(asset => (
-                    <div key={asset.id} className="qr-item">
-                      <div className="qr-item__header">BiruTracker</div>
-                      <div className="qr-item__body">
-                        <QRCode value={asset.id} size={64} renderAs="svg" />
-                        <div className="qr-item__code">{asset.code}</div>
-                      </div>
-                      <div className="qr-item__footer">{asset.format} - {asset.type === 'BARRIL' ? 'Barril' : 'CO2'}</div>
-                    </div>
+                    <QrLabel key={asset.id} asset={asset} />
                   ))}
                 </div>
               </Suspense>
