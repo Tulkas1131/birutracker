@@ -125,17 +125,23 @@ export default function AssetsPage() {
         printWindow.document.write(`
           <style>
             @media print {
+              @page {
+                size: letter;
+                margin: 0.5in;
+              }
               body {
                 margin: 0;
-                padding: 0.25in 0;
+                padding: 0;
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
               }
               .print-container {
                 display: grid;
                 grid-template-columns: repeat(2, 1fr);
-                gap: 0.1rem;
-                justify-content: center;
+                grid-template-rows: repeat(5, 1fr);
+                gap: 0.25in 0.5in;
+                width: 7.5in;
+                height: 10in;
               }
               .qr-label {
                 display: flex;
@@ -153,7 +159,6 @@ export default function AssetsPage() {
                 display: flex;
                 justify-content: center;
                 align-items: center;
-                gap: 0.5rem;
                 padding: 0.2rem 0.5rem;
                 background-color: #27272a;
                 color: white;
@@ -168,13 +173,14 @@ export default function AssetsPage() {
                 justify-content: center;
                 flex-grow: 1;
                 gap: 1rem;
-                padding: 0.5rem;
+                padding: 0.25rem;
               }
               .qr-label__code-container {
                 display: flex;
                 flex-direction: column;
                 align-items: center;
                 justify-content: center;
+                text-align: center;
               }
               .qr-label__code {
                 font-size: 1.5rem;
