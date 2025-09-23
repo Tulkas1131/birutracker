@@ -182,13 +182,14 @@ export default function MovementsPage() {
   const handleScanSuccess = async (decodedText: string) => {
     setScannerOpen(false);
 
-    // Check if it's a URL and extract the ID
+    // Check if it's a URL and extract the ID, otherwise use the text as is.
     let assetId = decodedText;
     if (decodedText.includes('/asset/')) {
         const urlParts = decodedText.split('/asset/');
         assetId = urlParts[urlParts.length - 1];
     }
     
+    // Simple validation for Firestore-like ID
     if (!/^[a-zA-Z0-9]{20}$/.test(assetId)) {
         toast({ title: "Código QR Inválido", description: "El QR no contiene un identificador válido.", variant: "destructive" });
         return;
@@ -446,5 +447,3 @@ export default function MovementsPage() {
     </div>
   );
 }
-
-    
