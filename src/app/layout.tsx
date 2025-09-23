@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.React.Node;
+  children: React.ReactNode;
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
@@ -39,6 +39,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          {/* AuthProvider is not needed for public pages, but wrapping the whole app is simplest */}
           <AuthProvider>
             {children}
             <Toaster />
@@ -48,3 +49,5 @@ export default function RootLayout({
     </html>
   );
 }
+
+    

@@ -47,9 +47,9 @@ const stateLogic: Record<Asset['location'], Partial<Record<Asset['state'], Actio
             requiresVariety: true,
         },
         VACIO: {
-            primary: 'SALIDA_A_REPARTO',
+            primary: 'SALIDA_A_REPARTO', // This is now the default action
             manualOverrides: ['SALIDA_VACIO'],
-            description: "El activo está vacío en planta. Se llenará y saldrá a reparto.",
+            description: "El activo se llenará y saldrá a reparto. Para un préstamo, usa la anulación manual.",
             requiresCustomerSelection: true,
             requiresVariety: true,
         }
@@ -116,6 +116,7 @@ export default function MovementsPage() {
   const [scannedAsset, setScannedAsset] = useState<Asset | null>(null);
   const [actionLogic, setActionLogic] = useState<ActionLogic | null>(null);
   const [isManualOverride, setIsManualOverride] = useState(false);
+  const [baseUrl, setBaseUrl] = useState('');
 
   const form = useForm<MovementFormData>({
     resolver: zodResolver(movementSchema),
@@ -167,6 +168,7 @@ export default function MovementsPage() {
   }, [toast]);
 
   useEffect(() => {
+    setBaseUrl(window.location.origin);
     fetchData();
   }, [fetchData]);
   
@@ -179,13 +181,20 @@ export default function MovementsPage() {
 
   const handleScanSuccess = async (decodedText: string) => {
     setScannerOpen(false);
+
+    // Check if it's a URL and extract the ID
+    let assetId = decodedText;
+    if (decodedText.includes('/asset/')) {
+        const urlParts = decodedText.split('/asset/');
+        assetId = urlParts[urlParts.length - 1];
+    }
     
-    if (!/^[a-zA-Z0-9]{20}$/.test(decodedText)) {
-        toast({ title: "Código QR Inválido", description: "El QR no parece ser un identificador válido.", variant: "destructive" });
+    if (!/^[a-zA-Z0-9]{20}$/.test(assetId)) {
+        toast({ title: "Código QR Inválido", description: "El QR no contiene un identificador válido.", variant: "destructive" });
         return;
     }
     
-    const asset = assets.find(a => a.id === decodedText);
+    const asset = assets.find(a => a.id === assetId);
 
     if (!asset) {
         toast({ title: "Activo No Encontrado", description: "El activo escaneado no existe.", variant: "destructive" });
@@ -437,3 +446,5 @@ export default function MovementsPage() {
     </div>
   );
 }
+
+    
