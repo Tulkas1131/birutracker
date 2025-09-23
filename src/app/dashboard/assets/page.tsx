@@ -64,16 +64,12 @@ export default function AssetsPage() {
   const [activeTab, setActiveTab] = useState('barrels');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedAsset, setSelectedAsset] = useState<Asset | undefined>(undefined);
-  const [baseUrl, setBaseUrl] = useState('');
   const { toast } = useToast();
   const userRole = useUserRole();
   const qrCodeRef = useRef<HTMLDivElement>(null);
   const batchQrRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Set base URL for QR codes on client side
-    setBaseUrl(window.location.origin);
-    
     const fetchAssets = async () => {
       setIsLoading(true);
       try {
@@ -131,7 +127,7 @@ export default function AssetsPage() {
             @media print {
               @page {
                 size: letter;
-                margin: 0.5in;
+                margin: 0;
               }
               body {
                 padding: 0.5in;
@@ -141,7 +137,7 @@ export default function AssetsPage() {
               }
               .print-container {
                 display: grid;
-                grid-template-columns: repeat(2, 1fr);
+                grid-template-columns: 1fr 1fr;
                 gap: 0.25in;
                 width: 100%;
                 height: 100%;
@@ -567,14 +563,14 @@ export default function AssetsPage() {
     </div>
   );
 
-  const QrLabel = ({ asset, url }: { asset: Asset, url: string }) => {
+  const QrLabel = ({ asset }: { asset: Asset }) => {
     return (
       <div className="qr-label">
         <div className="qr-label__header">
           <span className="qr-label__title">Tracked by BiruTracker</span>
         </div>
         <div className="qr-label__body">
-          <QRCode value={url} size={80} renderAs="svg" level="H" />
+          <QRCode value={asset.id} size={80} renderAs="svg" level="H" />
           <div className="qr-label__code-container">
             <div className="qr-label__code">{asset.code}</div>
             <div className="qr-label__format">{asset.format} {asset.type === 'BARRIL' ? 'Barril' : 'CO2'}</div>
@@ -670,9 +666,9 @@ export default function AssetsPage() {
                 </DialogDescription>
             </DialogHeader>
             <Suspense fallback={<div className="flex h-[320px] w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
-              {selectedAsset && baseUrl && (
+              {selectedAsset && (
                   <div ref={qrCodeRef} className="single-qr-container">
-                      <QrLabel asset={selectedAsset} url={`${baseUrl}/asset/${selectedAsset.id}`} />
+                      <QrLabel asset={selectedAsset} />
                   </div>
               )}
             </Suspense>
@@ -691,7 +687,7 @@ export default function AssetsPage() {
               <Suspense fallback={<div className="flex h-full w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
                 <div ref={batchQrRef} className="print-container">
                   {assetsToPrint.map(asset => (
-                    <QrLabel key={asset.id} asset={asset} url={`${baseUrl}/asset/${asset.id}`} />
+                    <QrLabel key={asset.id} asset={asset} />
                   ))}
                 </div>
               </Suspense>

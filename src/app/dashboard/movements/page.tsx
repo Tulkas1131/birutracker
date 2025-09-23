@@ -116,7 +116,6 @@ export default function MovementsPage() {
   const [scannedAsset, setScannedAsset] = useState<Asset | null>(null);
   const [actionLogic, setActionLogic] = useState<ActionLogic | null>(null);
   const [isManualOverride, setIsManualOverride] = useState(false);
-  const [baseUrl, setBaseUrl] = useState('');
 
   const form = useForm<MovementFormData>({
     resolver: zodResolver(movementSchema),
@@ -168,7 +167,6 @@ export default function MovementsPage() {
   }, [toast]);
 
   useEffect(() => {
-    setBaseUrl(window.location.origin);
     fetchData();
   }, [fetchData]);
   
@@ -181,21 +179,14 @@ export default function MovementsPage() {
 
   const handleScanSuccess = async (decodedText: string) => {
     setScannerOpen(false);
-
-    // Check if it's a URL and extract the ID, otherwise use the text as is.
-    let assetId = decodedText;
-    if (decodedText.includes('/asset/')) {
-        const urlParts = decodedText.split('/asset/');
-        assetId = urlParts[urlParts.length - 1];
-    }
     
     // Simple validation for Firestore-like ID
-    if (!/^[a-zA-Z0-9]{20}$/.test(assetId)) {
+    if (!/^[a-zA-Z0-9]{20}$/.test(decodedText)) {
         toast({ title: "Código QR Inválido", description: "El QR no contiene un identificador válido.", variant: "destructive" });
         return;
     }
     
-    const asset = assets.find(a => a.id === assetId);
+    const asset = assets.find(a => a.id === decodedText);
 
     if (!asset) {
         toast({ title: "Activo No Encontrado", description: "El activo escaneado no existe.", variant: "destructive" });
@@ -447,3 +438,5 @@ export default function MovementsPage() {
     </div>
   );
 }
+
+    
