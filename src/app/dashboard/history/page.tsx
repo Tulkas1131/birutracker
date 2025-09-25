@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import type { Timestamp, DocumentData, QueryDocumentSnapshot } from "firebase/firestore/lite";
+import type { Timestamp } from "firebase/firestore/lite";
 import { db } from "@/lib/firebase";
 import { Loader2, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
@@ -134,35 +134,36 @@ export default function HistoryPage() {
   const userRole = useUserRole();
   const isMobile = useIsMobile();
 
-  useEffect(() => {
-    const fetchData = async () => {
-        setIsLoading(true);
-        try {
-            const { collection, query, orderBy, getDocs } = await import("firebase/firestore/lite");
-            const firestore = db();
-            const eventsQuery = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
-            const assetsQuery = query(collection(firestore, "assets"));
-            
-            const [eventsSnapshot, assetsSnapshot] = await Promise.all([
-                getDocs(eventsQuery),
-                getDocs(assetsQuery)
-            ]);
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+        const { collection, query, orderBy, getDocs } = await import("firebase/firestore/lite");
+        const firestore = db();
+        const eventsQuery = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
+        const assetsQuery = query(collection(firestore, "assets"));
+        
+        const [eventsSnapshot, assetsSnapshot] = await Promise.all([
+            getDocs(eventsQuery),
+            getDocs(assetsQuery)
+        ]);
 
-            const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
-            const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
-            
-            setAllEvents(eventsData);
-            setAssets(assetsData);
-        } catch(error: any) {
-            console.error("Error fetching data: ", error);
-            logAppEvent({ level: 'ERROR', message: 'Failed to fetch history data', component: 'HistoryPage', stack: error.stack });
-            toast({ title: "Error al Cargar Historial", description: "No se pudo cargar el historial de movimientos.", variant: "destructive"});
-        } finally {
-            setIsLoading(false);
-        }
-    };
-    fetchData();
+        const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
+        const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
+        
+        setAllEvents(eventsData);
+        setAssets(assetsData);
+    } catch(error: any) {
+        console.error("Error fetching data: ", error);
+        logAppEvent({ level: 'ERROR', message: 'Failed to fetch history data', component: 'HistoryPage', stack: error.stack });
+        toast({ title: "Error al Cargar Historial", description: "No se pudo cargar el historial de movimientos.", variant: "destructive"});
+    } finally {
+        setIsLoading(false);
+    }
   }, [toast]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
   
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCustomerSearch(e.target.value);
@@ -294,5 +295,3 @@ export default function HistoryPage() {
     </div>
   );
 }
-
-    
