@@ -44,6 +44,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/use-user-role";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { logAppEvent } from "@/lib/logging";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const QRCode = dynamic(() => import('qrcode.react'), {
   loading: () => <div className="flex h-[256px] w-[256px] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>,
@@ -66,6 +67,7 @@ export default function AssetsPage() {
   const [selectedAsset, setSelectedAsset] = useState<Asset | undefined>(undefined);
   const { toast } = useToast();
   const userRole = useUserRole();
+  const isMobile = useIsMobile();
   const qrCodeRef = useRef<HTMLDivElement>(null);
   const batchQrRef = useRef<HTMLDivElement>(null);
 
@@ -440,85 +442,144 @@ export default function AssetsPage() {
     setCurrentPage(1);
   };
 
-  const AssetTable = ({ assetList, type }: { assetList: Asset[], type: 'BARRIL' | 'CO2' }) => (
+  const AssetCardMobile = ({ asset }: { asset: Asset }) => (
+    <div className="flex items-center justify-between rounded-lg border bg-card p-4">
+      <div className="flex flex-col gap-1">
+        <span className="font-semibold">{asset.code}</span>
+        <span className="text-sm text-muted-foreground">{asset.format}</span>
+        <div className="flex items-center gap-2">
+           <Badge variant={asset.state === 'LLENO' ? 'default' : 'secondary'}>
+              {asset.state === 'LLENO' ? 'Lleno' : 'Vacío'}
+            </Badge>
+            <Badge variant={getLocationVariant(asset.location)}>
+              {getLocationText(asset.location)}
+            </Badge>
+        </div>
+      </div>
+       <div className="flex items-center">
+          <Button variant="ghost" size="icon" onClick={() => handleShowQrCode(asset)}>
+              <QrCode className="h-5 w-5" />
+          </Button>
+          <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                  <Button aria-haspopup="true" size="icon" variant="ghost">
+                      <MoreHorizontal className="h-4 w-4" />
+                      <span className="sr-only">Toggle menu</span>
+                  </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                  <DropdownMenuItem onSelect={() => handleEdit(asset)}>Editar</DropdownMenuItem>
+                  {userRole === 'Admin' && (
+                      <DropdownMenuItem onSelect={() => confirmDelete(asset)} className="text-destructive">
+                          Eliminar
+                      </DropdownMenuItem>
+                  )}
+              </DropdownMenuContent>
+          </DropdownMenu>
+       </div>
+    </div>
+  );
+  
+  const AssetTableDesktop = ({ assetList }: { assetList: Asset[] }) => (
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Código</TableHead>
+            <TableHead>Formato</TableHead>
+            <TableHead>Estado</TableHead>
+            <TableHead>Ubicación</TableHead>
+            <TableHead>QR</TableHead>
+            <TableHead>
+              <span className="sr-only">Acciones</span>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {isLoading ? (
+            <TableRow>
+              <TableCell colSpan={6} className="h-24 text-center">
+                <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+              </TableCell>
+            </TableRow>
+          ) : assetList.length === 0 ? (
+            <TableRow>
+                <TableCell colSpan={6} className="h-24 text-center">
+                No hay activos. ¡Añade uno para empezar!
+              </TableCell>
+            </TableRow>
+          ) : (
+            assetList.map((asset) => (
+              <TableRow key={asset.id}>
+                <TableCell className="font-medium">{asset.code}</TableCell>
+                <TableCell>{asset.format}</TableCell>
+                <TableCell>
+                  <Badge variant={asset.state === 'LLENO' ? 'default' : 'secondary'}>
+                    {asset.state === 'LLENO' ? 'Lleno' : 'Vacío'}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge variant={getLocationVariant(asset.location)}>
+                    {getLocationText(asset.location)}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <Button variant="ghost" size="icon" onClick={() => handleShowQrCode(asset)}>
+                      <QrCode className="h-5 w-5" />
+                  </Button>
+                </TableCell>
+                <TableCell>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button aria-haspopup="true" size="icon" variant="ghost">
+                        <MoreHorizontal className="h-4 w-4" />
+                        <span className="sr-only">Toggle menu</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                      <DropdownMenuItem onSelect={() => handleEdit(asset)}>Editar</DropdownMenuItem>
+                      {userRole === 'Admin' && (
+                          <DropdownMenuItem onSelect={() => confirmDelete(asset)} className="text-destructive">
+                              Eliminar
+                          </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
+  );
+
+  const AssetList = ({ assetList, type }: { assetList: Asset[], type: 'BARRIL' | 'CO2' }) => (
      <Card>
-        <CardHeader>
+        <CardHeader className="hidden md:flex">
           <CardTitle className="text-xl">{type === 'BARRIL' ? 'Barriles' : 'Cilindros de CO2'}</CardTitle>
           <CardDescription>
             Un listado de todos los activos de tipo {type === 'BARRIL' ? 'barril' : 'CO2'} en tu inventario.
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Código</TableHead>
-                <TableHead>Formato</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Ubicación</TableHead>
-                <TableHead>QR</TableHead>
-                <TableHead>
-                  <span className="sr-only">Acciones</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center">
-                    <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
-                  </TableCell>
-                </TableRow>
-              ) : assetList.length === 0 ? (
-                <TableRow>
-                   <TableCell colSpan={6} className="h-24 text-center">
-                    No hay activos. ¡Añade uno para empezar!
-                  </TableCell>
-                </TableRow>
-              ) : (
-                assetList.map((asset) => (
-                  <TableRow key={asset.id}>
-                    <TableCell className="font-medium">{asset.code}</TableCell>
-                    <TableCell>{asset.format}</TableCell>
-                    <TableCell>
-                      <Badge variant={asset.state === 'LLENO' ? 'default' : 'secondary'}>
-                        {asset.state === 'LLENO' ? 'Lleno' : 'Vacío'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={getLocationVariant(asset.location)}>
-                        {getLocationText(asset.location)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="icon" onClick={() => handleShowQrCode(asset)}>
-                          <QrCode className="h-5 w-5" />
-                      </Button>
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button aria-haspopup="true" size="icon" variant="ghost">
-                            <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Toggle menu</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                          <DropdownMenuItem onSelect={() => handleEdit(asset)}>Editar</DropdownMenuItem>
-                          {userRole === 'Admin' && (
-                              <DropdownMenuItem onSelect={() => confirmDelete(asset)} className="text-destructive">
-                                  Eliminar
-                              </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+        <CardContent className="p-0 md:p-0">
+          {isMobile ? (
+              <div className="space-y-4 p-4">
+                  {isLoading ? (
+                    <div className="flex justify-center items-center py-10">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                  ) : assetList.length === 0 ? (
+                    <div className="py-10 text-center text-muted-foreground">
+                       No hay activos. ¡Añade uno para empezar!
+                    </div>
+                  ) : (
+                    assetList.map(asset => <AssetCardMobile key={asset.id} asset={asset} />)
+                  )}
+              </div>
+          ) : (
+             <AssetTableDesktop assetList={assetList} />
+          )}
         </CardContent>
         {totalPages > 1 && (
           <CardFooter className="flex items-center justify-between py-4">
@@ -617,10 +678,10 @@ export default function AssetsPage() {
                 {activeTab === 'co2' && <CountsDisplay counts={assetCountsByFormat.co2} />}
               </div>
               <TabsContent value="barrels">
-                 <AssetTable assetList={paginatedAssets} type="BARRIL" />
+                 <AssetList assetList={paginatedAssets} type="BARRIL" />
               </TabsContent>
               <TabsContent value="co2">
-                 <AssetTable assetList={paginatedAssets} type="CO2" />
+                 <AssetList assetList={paginatedAssets} type="CO2" />
               </TabsContent>
             </Tabs>
         </main>
