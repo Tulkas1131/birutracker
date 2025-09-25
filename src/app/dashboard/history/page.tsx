@@ -9,7 +9,7 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Event, Asset } from "@/lib/types";
 import { useUserRole } from '@/hooks/use-user-role';
 import { useToast } from '@/hooks/use-toast';
@@ -20,6 +20,67 @@ import { logAppEvent } from '@/lib/logging';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 const ITEMS_PER_PAGE = 10;
+
+const formatEventType = (eventType: Event['event_type']) => {
+    switch (eventType) {
+      case 'SALIDA_A_REPARTO': return 'Salida a Reparto';
+      case 'ENTREGA_A_CLIENTE': return 'Entrega a Cliente';
+      case 'RECOLECCION_DE_CLIENTE': return 'Recolección de Cliente';
+      case 'RECEPCION_EN_PLANTA': return 'Recepción en Planta';
+      case 'SALIDA_VACIO': return 'Salida Vacío (Préstamo)';
+      case 'DEVOLUCION': return 'Devolución (Lleno)';
+      default: return eventType;
+    }
+};
+
+const formatDate = (timestamp: Timestamp) => {
+    if (!timestamp || !timestamp.toDate) return 'Fecha inválida';
+    return timestamp.toDate().toLocaleString();
+};
+
+function EventCardMobile({ event, assetsMap, onDelete }: { event: Event, assetsMap: Map<string, Asset>, onDelete: (id: string) => void }) {
+    const userRole = useUserRole();
+    const daysAtCustomer = useMemo(() => {
+        const asset = assetsMap.get(event.asset_id);
+        if (event.event_type === 'ENTREGA_A_CLIENTE' && asset && asset.location === 'EN_CLIENTE') {
+            return differenceInDays(new Date(), event.timestamp.toDate());
+        }
+        return null;
+    }, [event, assetsMap]);
+
+    return (
+        <div className="rounded-lg border bg-card p-4">
+            <div className="flex justify-between items-start">
+                <div className="flex flex-col gap-1.5">
+                    <span className="font-semibold">{event.asset_code}</span>
+                    <span className="text-sm font-medium">{formatEventType(event.event_type)}</span>
+                    <span className="text-sm text-muted-foreground">{event.customer_name}</span>
+                    <span className="text-xs text-muted-foreground">{formatDate(event.timestamp)}</span>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                    {daysAtCustomer !== null && (
+                        daysAtCustomer > 30 ? (
+                            <Badge variant="destructive">{daysAtCustomer} días</Badge>
+                        ) : (
+                            <Badge variant="outline">{daysAtCustomer} días</Badge>
+                        )
+                    )}
+                    {userRole === 'Admin' && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive hover:text-destructive h-8 w-8"
+                            onClick={() => onDelete(event.id)}
+                        >
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 
 function EventTableRowContent({ event, assetsMap, onDelete }: { event: Event, assetsMap: Map<string, Asset>, onDelete: (id: string) => void }) {
   const [daysAtCustomer, setDaysAtCustomer] = useState<number | null>(null);
@@ -34,23 +95,6 @@ function EventTableRowContent({ event, assetsMap, onDelete }: { event: Event, as
       setDaysAtCustomer(null);
     }
   }, [event, assetsMap]);
-
-  const formatDate = (timestamp: Timestamp) => {
-    if (!timestamp || !timestamp.toDate) return 'Fecha inválida';
-    return timestamp.toDate().toLocaleString();
-  };
-
-  const formatEventType = (eventType: Event['event_type']) => {
-    switch (eventType) {
-      case 'SALIDA_A_REPARTO': return 'Salida a Reparto';
-      case 'ENTREGA_A_CLIENTE': return 'Entrega a Cliente';
-      case 'RECOLECCION_DE_CLIENTE': return 'Recolección de Cliente';
-      case 'RECEPCION_EN_PLANTA': return 'Recepción en Planta';
-      case 'SALIDA_VACIO': return 'Salida Vacío (Préstamo)';
-      case 'DEVOLUCION': return 'Devolución (Lleno)';
-      default: return eventType;
-    }
-  };
 
   return (
     <>
@@ -95,6 +139,7 @@ export default function HistoryPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast();
   const userRole = useUserRole();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const firestore = db();
@@ -256,42 +301,60 @@ export default function HistoryPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="relative w-full overflow-auto">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead className="hidden sm:table-cell">Fecha</TableHead>
-                            <TableHead>Código</TableHead>
-                            <TableHead className="hidden sm:table-cell">Evento</TableHead>
-                            <TableHead>Cliente</TableHead>
-                            <TableHead className="hidden md:table-cell">Días en Cliente</TableHead>
-                            <TableHead className="hidden lg:table-cell">Variedad</TableHead>
-                            {userRole === 'Admin' && <TableHead>Acciones</TableHead>}
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {isLoading ? (
-                            <TableRow>
-                                <TableCell colSpan={userRole === 'Admin' ? 7 : 6} className="h-24 text-center">
-                                    <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
-                                </TableCell>
-                            </TableRow>
-                        ) : paginatedEvents.length > 0 ? (
-                            paginatedEvents.map((event) => (
-                                <TableRow key={event.id}>
-                                    <EventTableRowContent event={event} assetsMap={assetsMap} onDelete={handleDelete} />
-                                </TableRow>
-                            ))
-                        ) : (
-                            <TableRow>
-                                <TableCell colSpan={userRole === 'Admin' ? 7 : 6} className="h-24 text-center">
-                                    No se encontraron movimientos para los filtros seleccionados.
-                                </TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
-            </div>
+            {isMobile ? (
+                <div className="space-y-4">
+                  {isLoading ? (
+                    <div className="flex justify-center items-center py-10">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                  ) : paginatedEvents.length > 0 ? (
+                      paginatedEvents.map((event) => (
+                          <EventCardMobile key={event.id} event={event} assetsMap={assetsMap} onDelete={handleDelete} />
+                      ))
+                  ) : (
+                      <div className="py-10 text-center text-muted-foreground">
+                          No se encontraron movimientos para los filtros seleccionados.
+                      </div>
+                  )}
+                </div>
+            ) : (
+              <div className="relative w-full overflow-auto">
+                  <Table>
+                      <TableHeader>
+                          <TableRow>
+                              <TableHead className="hidden sm:table-cell">Fecha</TableHead>
+                              <TableHead>Código</TableHead>
+                              <TableHead className="hidden sm:table-cell">Evento</TableHead>
+                              <TableHead>Cliente</TableHead>
+                              <TableHead className="hidden md:table-cell">Días en Cliente</TableHead>
+                              <TableHead className="hidden lg:table-cell">Variedad</TableHead>
+                              {userRole === 'Admin' && <TableHead>Acciones</TableHead>}
+                          </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                          {isLoading ? (
+                              <TableRow>
+                                  <TableCell colSpan={userRole === 'Admin' ? 7 : 6} className="h-24 text-center">
+                                      <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+                                  </TableCell>
+                              </TableRow>
+                          ) : paginatedEvents.length > 0 ? (
+                              paginatedEvents.map((event) => (
+                                  <TableRow key={event.id}>
+                                      <EventTableRowContent event={event} assetsMap={assetsMap} onDelete={handleDelete} />
+                                  </TableRow>
+                              ))
+                          ) : (
+                              <TableRow>
+                                  <TableCell colSpan={userRole === 'Admin' ? 7 : 6} className="h-24 text-center">
+                                      No se encontraron movimientos para los filtros seleccionados.
+                                  </TableCell>
+                              </TableRow>
+                          )}
+                      </TableBody>
+                  </Table>
+              </div>
+            )}
           </CardContent>
           {totalPages > 1 && (
             <CardFooter className="flex items-center justify-between border-t py-4">
@@ -324,5 +387,4 @@ export default function HistoryPage() {
       </main>
     </div>
   );
-
-    
+}
