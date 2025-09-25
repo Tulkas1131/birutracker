@@ -81,23 +81,18 @@ function EventCardMobile({ event, assetsMap, onDelete }: { event: Event, assetsM
     );
 }
 
-
-function EventTableRowContent({ event, assetsMap, onDelete }: { event: Event, assetsMap: Map<string, Asset>, onDelete: (id: string) => void }) {
-  const [daysAtCustomer, setDaysAtCustomer] = useState<number | null>(null);
+function EventTableRow({ event, assetsMap, onDelete }: { event: Event, assetsMap: Map<string, Asset>, onDelete: (id: string) => void }) {
   const userRole = useUserRole();
-
-  useEffect(() => {
+  const daysAtCustomer = useMemo(() => {
     const asset = assetsMap.get(event.asset_id);
     if (event.event_type === 'ENTREGA_A_CLIENTE' && asset && asset.location === 'EN_CLIENTE') {
-      const days = differenceInDays(new Date(), event.timestamp.toDate());
-      setDaysAtCustomer(days);
-    } else {
-      setDaysAtCustomer(null);
+      return differenceInDays(new Date(), event.timestamp.toDate());
     }
+    return null;
   }, [event, assetsMap]);
 
   return (
-    <>
+    <TableRow>
       <TableCell className="hidden sm:table-cell">{formatDate(event.timestamp)}</TableCell>
       <TableCell className="font-medium">{event.asset_code}</TableCell>
       <TableCell className="hidden sm:table-cell">{formatEventType(event.event_type)}</TableCell>
@@ -126,10 +121,9 @@ function EventTableRowContent({ event, assetsMap, onDelete }: { event: Event, as
           </Button>
         </TableCell>
       )}
-    </>
+    </TableRow>
   );
 }
-
 
 export default function HistoryPage() {
   const [events, setEvents] = useState<Event[]>([]);
@@ -199,7 +193,6 @@ export default function HistoryPage() {
     eventType: 'ALL',
   });
 
-
   const handleFilterChange = (name: string, value: string) => {
     setFilters(prev => ({ ...prev, [name]: value }));
     setCurrentPage(1);
@@ -239,7 +232,6 @@ export default function HistoryPage() {
     }
   };
 
-
   const filteredEvents = useMemo(() => {
     return events
       .filter(event => {
@@ -257,7 +249,6 @@ export default function HistoryPage() {
   }, [filteredEvents, currentPage]);
   
   const isLoading = isAssetsLoading || isEventsLoading;
-
   const assetsMap = useMemo(() => new Map(assets.map(asset => [asset.id, asset])), [assets]);
 
   return (
@@ -268,41 +259,41 @@ export default function HistoryPage() {
       />
       <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
         <Card>
-          <CardContent className="p-4 md:p-6">
-            <div className="flex flex-col sm:flex-row items-center gap-4 py-4">
-              <Input
-                placeholder="Filtrar por cliente..."
-                value={filters.customer}
-                onChange={(e) => handleFilterChange('customer', e.target.value)}
-                className="w-full sm:max-w-sm"
-              />
-              <Select value={filters.assetType} onValueChange={(value) => handleFilterChange('assetType', value)}>
-                <SelectTrigger className="w-full sm:w-[180px]">
-                  <SelectValue placeholder="Tipo de Activo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">Todos los Tipos</SelectItem>
-                  <SelectItem value="KEG">KEG</SelectItem>
-                  <SelectItem value="CO2">CO2</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={filters.eventType} onValueChange={(value) => handleFilterChange('eventType', value)}>
-                <SelectTrigger className="w-full sm:w-[220px]">
-                  <SelectValue placeholder="Tipo de Evento" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="ALL">Todos los Eventos</SelectItem>
-                    <SelectItem value="SALIDA_A_REPARTO">Salida a Reparto</SelectItem>
-                    <SelectItem value="ENTREGA_A_CLIENTE">Entrega a Cliente</SelectItem>
-                    <SelectItem value="RECOLECCION_DE_CLIENTE">Recolección de Cliente</SelectItem>
-                    <SelectItem value="RECEPCION_EN_PLANTA">Recepción en Planta</SelectItem>
-                    <SelectItem value="SALIDA_VACIO">Salida Vacío (Préstamo)</SelectItem>
-                    <SelectItem value="DEVOLUCION">Devolución (Lleno)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="flex flex-col sm:flex-row items-center gap-4 p-4 md:p-6">
+            <Input
+              placeholder="Filtrar por cliente..."
+              value={filters.customer}
+              onChange={(e) => handleFilterChange('customer', e.target.value)}
+              className="w-full sm:max-w-sm"
+            />
+            <Select value={filters.assetType} onValueChange={(value) => handleFilterChange('assetType', value)}>
+              <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectValue placeholder="Tipo de Activo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Todos los Tipos</SelectItem>
+                <SelectItem value="KEG">KEG</SelectItem>
+                <SelectItem value="CO2">CO2</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filters.eventType} onValueChange={(value) => handleFilterChange('eventType', value)}>
+              <SelectTrigger className="w-full sm:w-[220px]">
+                <SelectValue placeholder="Tipo de Evento" />
+              </SelectTrigger>
+              <SelectContent>
+                  <SelectItem value="ALL">Todos los Eventos</SelectItem>
+                  <SelectItem value="SALIDA_A_REPARTO">Salida a Reparto</SelectItem>
+                  <SelectItem value="ENTREGA_A_CLIENTE">Entrega a Cliente</SelectItem>
+                  <SelectItem value="RECOLECCION_DE_CLIENTE">Recolección de Cliente</SelectItem>
+                  <SelectItem value="RECEPCION_EN_PLANTA">Recepción en Planta</SelectItem>
+                  <SelectItem value="SALIDA_VACIO">Salida Vacío (Préstamo)</SelectItem>
+                  <SelectItem value="DEVOLUCION">Devolución (Lleno)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <CardContent className="p-0">
             {isMobile ? (
-                <div className="space-y-4">
+                <div className="space-y-4 p-4">
                   {isLoading ? (
                     <div className="flex justify-center items-center py-10">
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -318,42 +309,38 @@ export default function HistoryPage() {
                   )}
                 </div>
             ) : (
-              <div className="relative w-full overflow-auto">
-                  <Table>
-                      <TableHeader>
+              <Table>
+                  <TableHeader>
+                      <TableRow>
+                          <TableHead className="hidden sm:table-cell">Fecha</TableHead>
+                          <TableHead>Código</TableHead>
+                          <TableHead className="hidden sm:table-cell">Evento</TableHead>
+                          <TableHead>Cliente</TableHead>
+                          <TableHead className="hidden md:table-cell">Días en Cliente</TableHead>
+                          <TableHead className="hidden lg:table-cell">Variedad</TableHead>
+                          {userRole === 'Admin' && <TableHead>Acciones</TableHead>}
+                      </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                      {isLoading ? (
                           <TableRow>
-                              <TableHead className="hidden sm:table-cell">Fecha</TableHead>
-                              <TableHead>Código</TableHead>
-                              <TableHead className="hidden sm:table-cell">Evento</TableHead>
-                              <TableHead>Cliente</TableHead>
-                              <TableHead className="hidden md:table-cell">Días en Cliente</TableHead>
-                              <TableHead className="hidden lg:table-cell">Variedad</TableHead>
-                              {userRole === 'Admin' && <TableHead>Acciones</TableHead>}
+                              <TableCell colSpan={userRole === 'Admin' ? 7 : 6} className="h-24 text-center">
+                                  <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+                              </TableCell>
                           </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                          {isLoading ? (
-                              <TableRow>
-                                  <TableCell colSpan={userRole === 'Admin' ? 7 : 6} className="h-24 text-center">
-                                      <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
-                                  </TableCell>
-                              </TableRow>
-                          ) : paginatedEvents.length > 0 ? (
-                              paginatedEvents.map((event) => (
-                                  <TableRow key={event.id}>
-                                      <EventTableRowContent event={event} assetsMap={assetsMap} onDelete={handleDelete} />
-                                  </TableRow>
-                              ))
-                          ) : (
-                              <TableRow>
-                                  <TableCell colSpan={userRole === 'Admin' ? 7 : 6} className="h-24 text-center">
-                                      No se encontraron movimientos para los filtros seleccionados.
-                                  </TableCell>
-                              </TableRow>
-                          )}
-                      </TableBody>
-                  </Table>
-              </div>
+                      ) : paginatedEvents.length > 0 ? (
+                          paginatedEvents.map((event) => (
+                              <EventTableRow key={event.id} event={event} assetsMap={assetsMap} onDelete={handleDelete} />
+                          ))
+                      ) : (
+                          <TableRow>
+                              <TableCell colSpan={userRole === 'Admin' ? 7 : 6} className="h-24 text-center">
+                                  No se encontraron movimientos para los filtros seleccionados.
+                              </TableCell>
+                          </TableRow>
+                      )}
+                  </TableBody>
+              </Table>
             )}
           </CardContent>
           {totalPages > 1 && (
