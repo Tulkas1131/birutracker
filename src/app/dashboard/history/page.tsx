@@ -9,7 +9,6 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Event, Asset } from "@/lib/types";
 import { useUserRole } from '@/hooks/use-user-role';
 import { useToast } from '@/hooks/use-toast';
@@ -131,6 +130,7 @@ export default function HistoryPage() {
   const [isAssetsLoading, setIsAssetsLoading] = useState(true);
   const [isEventsLoading, setIsEventsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [customerSearch, setCustomerSearch] = useState('');
   const { toast } = useToast();
   const userRole = useUserRole();
   const isMobile = useIsMobile();
@@ -187,14 +187,8 @@ export default function HistoryPage() {
     getAssets();
   }, [toast]);
 
-  const [filters, setFilters] = useState({
-    customer: '',
-    assetType: 'ALL',
-    eventType: 'ALL',
-  });
-
-  const handleFilterChange = (name: string, value: string) => {
-    setFilters(prev => ({ ...prev, [name]: value }));
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCustomerSearch(e.target.value);
     setCurrentPage(1);
   };
 
@@ -234,13 +228,10 @@ export default function HistoryPage() {
 
   const filteredEvents = useMemo(() => {
     return events
-      .filter(event => {
-        const customerMatch = event.customer_name.toLowerCase().includes(filters.customer.toLowerCase());
-        const assetTypeMatch = filters.assetType === 'ALL' || (event.asset_code && event.asset_code.startsWith(filters.assetType));
-        const eventTypeMatch = filters.eventType === 'ALL' || event.event_type === filters.eventType;
-        return customerMatch && assetTypeMatch && eventTypeMatch;
-      });
-  }, [events, filters]);
+      .filter(event => 
+        event.customer_name.toLowerCase().includes(customerSearch.toLowerCase())
+      );
+  }, [events, customerSearch]);
   
   const totalPages = Math.ceil(filteredEvents.length / ITEMS_PER_PAGE);
   const paginatedEvents = useMemo(() => {
@@ -261,35 +252,11 @@ export default function HistoryPage() {
         <Card>
           <div className="flex flex-col sm:flex-row items-center gap-4 p-4 md:p-6">
             <Input
-              placeholder="Filtrar por cliente..."
-              value={filters.customer}
-              onChange={(e) => handleFilterChange('customer', e.target.value)}
+              placeholder="Buscar por cliente..."
+              value={customerSearch}
+              onChange={handleSearchChange}
               className="w-full sm:max-w-sm"
             />
-            <Select value={filters.assetType} onValueChange={(value) => handleFilterChange('assetType', value)}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Tipo de Activo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Todos los Tipos</SelectItem>
-                <SelectItem value="KEG">KEG</SelectItem>
-                <SelectItem value="CO2">CO2</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filters.eventType} onValueChange={(value) => handleFilterChange('eventType', value)}>
-              <SelectTrigger className="w-full sm:w-[220px]">
-                <SelectValue placeholder="Tipo de Evento" />
-              </SelectTrigger>
-              <SelectContent>
-                  <SelectItem value="ALL">Todos los Eventos</SelectItem>
-                  <SelectItem value="SALIDA_A_REPARTO">Salida a Reparto</SelectItem>
-                  <SelectItem value="ENTREGA_A_CLIENTE">Entrega a Cliente</SelectItem>
-                  <SelectItem value="RECOLECCION_DE_CLIENTE">Recolección de Cliente</SelectItem>
-                  <SelectItem value="RECEPCION_EN_PLANTA">Recepción en Planta</SelectItem>
-                  <SelectItem value="SALIDA_VACIO">Salida Vacío (Préstamo)</SelectItem>
-                  <SelectItem value="DEVOLUCION">Devolución (Lleno)</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
           <CardContent className="p-0">
             {isMobile ? (
@@ -304,7 +271,7 @@ export default function HistoryPage() {
                       ))
                   ) : (
                       <div className="py-10 text-center text-muted-foreground">
-                          No se encontraron movimientos para los filtros seleccionados.
+                          No se encontraron movimientos.
                       </div>
                   )}
                 </div>
@@ -335,7 +302,7 @@ export default function HistoryPage() {
                       ) : (
                           <TableRow>
                               <TableCell colSpan={userRole === 'Admin' ? 7 : 6} className="h-24 text-center">
-                                  No se encontraron movimientos para los filtros seleccionados.
+                                  No se encontraron movimientos.
                               </TableCell>
                           </TableRow>
                       )}
