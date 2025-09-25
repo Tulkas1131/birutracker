@@ -95,6 +95,10 @@ La base de datos en Firestore es el corazón de la aplicación. Se organiza en l
   - **Propósito:** Es el historial de todos los movimientos. Cada vez que se registra una salida o un retorno, se crea un nuevo documento en esta colección.
   - **Campos:** `asset_code`, `asset_id`, `customer_id`, `customer_name`, `event_type`, `timestamp`, `user_id`, `variety`.
 
+- **`app_logs`**:
+  - **Propósito:** Guarda un registro de eventos importantes y errores que ocurren en la aplicación. Solo es visible para los administradores y ayuda a diagnosticar problemas.
+  - **Campos:** `timestamp`, `level`, `message`, `component`, `userEmail`, `stack` (opcional).
+
 ---
 
 ## 5. Funcionalidades Clave y Estructura de Archivos
@@ -117,15 +121,21 @@ La estructura de archivos clave se encuentra dentro de la carpeta `src/`.
 
 ### 5.3. Historial y Alertas (`src/app/dashboard/history/page.tsx`)
 
-- **Trazabilidad Completa:** Muestra un registro de todos los eventos, con filtros por cliente, tipo de activo y tipo de evento.
+- **Trazabilidad Completa:** Muestra un registro paginado de todos los eventos. Por defecto, carga solo los últimos movimientos para un rendimiento óptimo.
+- **Búsqueda Eficiente:** Incluye un campo de búsqueda por nombre de cliente. Las búsquedas se realizan directamente en la base de datos (Firestore), lo que garantiza una respuesta rápida incluso con un gran volumen de datos.
 - **Alerta de Permanencia:** El historial calcula y muestra cuántos días lleva un activo en posesión de un cliente. Si supera los 30 días, se resalta visualmente como una alerta para facilitar el seguimiento.
 
-### 5.4. Autenticación y Layout (`src/app/dashboard/layout.tsx`)
+### 5.4. Logs del Sistema (Solo Admins) (`src/app/dashboard/logs/page.tsx`)
+
+- **Diagnóstico y Monitoreo:** Esta sección, accesible solo para usuarios con rol de "Admin", muestra un registro de todos los eventos y errores que ocurren en la aplicación.
+- **Detalles del Error:** Permite a los administradores ver información detallada de cada log, incluido el `stack trace` en caso de errores, facilitando la identificación y solución de problemas.
+
+### 5.5. Autenticación y Layout (`src/app/dashboard/layout.tsx`)
 
 - **Protección de Rutas:** El layout del panel de control utiliza un `AuthProvider` y el hook `useAuthState` para verificar la sesión del usuario. Si no está autenticado, es redirigido a la página de inicio de sesión.
-- **Gestión de Roles:** El hook `useUserRole` obtiene el rol del usuario ("Admin" u "Operador") desde la colección `users` de Firestore, permitiendo mostrar u ocultar funcionalidades específicas (como los botones de eliminación).
+- **Gestión de Roles:** El hook `useUserRole` obtiene el rol del usuario ("Admin" u "Operador") desde la colección `users` de Firestore, permitiendo mostrar u ocultar funcionalidades específicas (como los botones de eliminación o la página de Logs).
 
-### 5.5. Tipos y Esquemas (`src/lib/types.ts`)
+### 5.6. Tipos y Esquemas (`src/lib/types.ts`)
 
 - **¡Archivo muy importante!** Define las estructuras de datos (tipos de TypeScript) y los esquemas de validación de formularios (con Zod). Si quieres añadir o modificar un campo en un activo o cliente, debes empezar por este archivo.
 
