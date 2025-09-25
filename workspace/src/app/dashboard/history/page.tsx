@@ -166,8 +166,8 @@ export default function HistoryPage() {
 
   const [filters, setFilters] = useState({
     customer: '',
-    assetType: 'ALL',
-    eventType: 'ALL',
+    assetType: 'KEG',
+    eventType: 'RECEPCION_EN_PLANTA',
   });
 
 
