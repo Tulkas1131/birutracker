@@ -4,7 +4,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import type { Timestamp, DocumentData, QueryDocumentSnapshot } from "firebase/firestore/lite";
 import { db } from "@/lib/firebase";
-import { Loader2, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
@@ -320,7 +320,7 @@ export default function HistoryPage() {
                   onClick={() => fetchEvents(customerSearch)}
                   disabled={isLastPage || isLoading}
                 >
-                   {isLoading ? <Loader2 className='mr-2 h-4 w-4 animate-spin' /> : null}
+                   {isLoading && events.length > 0 ? <Loader2 className='mr-2 h-4 w-4 animate-spin' /> : null}
                    Cargar más
                 </Button>
               </div>
