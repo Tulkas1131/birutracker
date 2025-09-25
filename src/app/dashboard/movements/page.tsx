@@ -329,9 +329,7 @@ export default function MovementsPage() {
                     <DialogTitle>Escanear Código QR</DialogTitle>
                     <DialogDescription>Apunta la cámara al código QR del activo.</DialogDescription>
                 </DialogHeader>
-                <Suspense fallback={<div className="flex justify-center items-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
-                  <QrScanner onScanSuccess={handleScanSuccess} onScanError={handleScanError} isScannerOpen={isScannerOpen} />
-                </Suspense>
+                <QrScanner onScanSuccess={handleScanSuccess} onScanError={handleScanError} isScannerOpen={isScannerOpen} />
             </DialogContent>
         </Dialog>
 
