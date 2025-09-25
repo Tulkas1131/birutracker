@@ -1,7 +1,7 @@
 
 "use client";
 
-import { AlertCircle, Download, Rocket } from "lucide-react";
+import { AlertCircle, Download } from "lucide-react";
 import { usePWAInstall } from "@/hooks/use-pwa-install";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,11 +11,9 @@ import {
 } from "@/components/ui/popover";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useUpdateNotification } from "@/hooks/use-update-notification";
 
 export function PwaInstallButton() {
   const { canInstall, promptInstall, isIOS } = usePWAInstall();
-  const { updateAvailable, refreshCacheAndReload } = useUpdateNotification();
   const isMobile = useIsMobile();
   
   const installButtonContent = (
@@ -25,23 +23,7 @@ export function PwaInstallButton() {
     </>
   );
 
-  const updateButtonContent = (
-    <>
-        <Rocket className="h-4 w-4" />
-        <span className="sr-only sm:not-sr-only sm:ml-2">Actualizar</span>
-    </>
-  );
-
-  // Highest priority: show update button if an update is available
-  if (updateAvailable) {
-    return (
-        <Button variant="outline" size={isMobile ? "icon" : "sm"} onClick={refreshCacheAndReload}>
-            {updateButtonContent}
-        </Button>
-    );
-  }
-
-  // Next priority: show install button for iOS
+  // Show install button for iOS
   if (isIOS) {
     return (
       <Popover>
@@ -66,7 +48,7 @@ export function PwaInstallButton() {
     );
   }
 
-  // Finally, show install button for other platforms (Android/Desktop)
+  // Show install button for other platforms (Android/Desktop)
   if (canInstall) {
     return (
         <Button variant="outline" size={isMobile ? "icon" : "sm"} onClick={promptInstall}>
