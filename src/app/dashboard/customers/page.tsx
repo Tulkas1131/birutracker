@@ -30,6 +30,7 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, Dialog
 import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/use-user-role";
 import { logAppEvent } from "@/lib/logging";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -41,6 +42,7 @@ export default function CustomersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast();
   const userRole = useUserRole();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const fetchCustomers = async () => {
@@ -160,6 +162,36 @@ export default function CustomersPage() {
     }
   };
 
+  const CustomerCardMobile = ({ customer }: { customer: Customer }) => (
+    <div className="flex items-center justify-between rounded-lg border bg-card p-4">
+        <div className="flex flex-col gap-1">
+            <span className="font-semibold">{customer.name}</span>
+            <Badge variant="outline" className="w-fit">{customer.type}</Badge>
+            <span className="text-sm text-muted-foreground">{customer.address}</span>
+            <span className="text-sm text-muted-foreground">{customer.contact}</span>
+        </div>
+        <div className="flex items-center">
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button aria-haspopup="true" size="icon" variant="ghost">
+                        <MoreHorizontal className="h-4 w-4" />
+                        <span className="sr-only">Toggle menu</span>
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                    <DropdownMenuItem onSelect={() => handleEdit(customer)}>Editar</DropdownMenuItem>
+                    {userRole === 'Admin' && (
+                        <DropdownMenuItem onSelect={() => handleDelete(customer.id)} className="text-destructive">
+                            Eliminar
+                        </DropdownMenuItem>
+                    )}
+                </DropdownMenuContent>
+            </DropdownMenu>
+        </div>
+    </div>
+  );
+
   return (
     <div className="flex flex-1 flex-col">
        <Dialog open={isFormOpen} onOpenChange={setFormOpen}>
@@ -178,6 +210,21 @@ export default function CustomersPage() {
         <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
           <Card>
             <CardContent className="p-0">
+              {isMobile ? (
+                  <div className="space-y-4 p-4">
+                     {isLoading ? (
+                      <div className="flex justify-center items-center py-10">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      </div>
+                    ) : paginatedCustomers.length === 0 ? (
+                       <div className="py-10 text-center text-muted-foreground">
+                          No hay clientes. ¡Añade uno para empezar!
+                       </div>
+                    ) : (
+                      paginatedCustomers.map(customer => <CustomerCardMobile key={customer.id} customer={customer} />)
+                    )}
+                  </div>
+              ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -236,6 +283,7 @@ export default function CustomersPage() {
                     )}
                   </TableBody>
                 </Table>
+              )}
             </CardContent>
              {totalPages > 1 && (
                 <CardFooter className="flex items-center justify-between py-4">
