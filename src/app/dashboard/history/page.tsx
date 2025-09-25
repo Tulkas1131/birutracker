@@ -1,8 +1,8 @@
 
 "use client";
 
-import { useState, useMemo, useEffect } from 'react';
-import type { Timestamp } from "firebase/firestore/lite";
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import type { Timestamp, DocumentData, QueryDocumentSnapshot } from "firebase/firestore/lite";
 import { db } from "@/lib/firebase";
 import { Loader2, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
@@ -127,78 +127,106 @@ function EventTableRow({ event, assetsMap, onDelete }: { event: Event, assetsMap
 export default function HistoryPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [isAssetsLoading, setIsAssetsLoading] = useState(true);
-  const [isEventsLoading, setIsEventsLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
   const [customerSearch, setCustomerSearch] = useState('');
+  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [isLastPage, setIsLastPage] = useState(false);
   const { toast } = useToast();
   const userRole = useUserRole();
   const isMobile = useIsMobile();
 
-  useEffect(() => {
-    const firestore = db();
-    
-    const getEvents = async () => {
-        try {
-            const { collection, query, orderBy, getDocs } = await import("firebase/firestore/lite");
-            const q = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
-            const snapshot = await getDocs(q);
-            const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
-            setEvents(eventsData);
-        } catch(error: any) {
-            console.error("Error fetching events: ", error);
-             logAppEvent({
-                level: 'ERROR',
-                message: 'Failed to fetch events',
-                component: 'HistoryPage',
-                stack: error.stack,
-             });
-             toast({
-                title: "Error al Cargar Historial",
-                description: "No se pudo cargar el historial de movimientos.",
-                variant: "destructive",
-            });
-        } finally {
-            setIsEventsLoading(false);
+  const fetchEvents = useCallback(async (searchQuery = '', newSearch = false) => {
+    setIsLoading(true);
+    try {
+        const { collection, query, orderBy, getDocs, limit, where, startAfter } = await import("firebase/firestore/lite");
+        const firestore = db();
+        let q;
+        const eventsCollection = collection(firestore, "events");
+
+        if (searchQuery) {
+            // Firestore doesn't support case-insensitive or partial text search natively.
+            // This query performs a prefix search.
+            q = query(
+                eventsCollection,
+                orderBy("customer_name"),
+                where("customer_name", ">=", searchQuery),
+                where("customer_name", "<=", searchQuery + '\uf8ff'),
+                limit(ITEMS_PER_PAGE)
+            );
+        } else {
+             q = query(eventsCollection, orderBy("timestamp", "desc"), limit(ITEMS_PER_PAGE));
         }
-    };
+
+        if (lastVisible && !newSearch) {
+             q = query(q, startAfter(lastVisible));
+        }
+
+        const snapshot = await getDocs(q);
+        const newEvents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
+        
+        setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
+        setIsLastPage(newEvents.length < ITEMS_PER_PAGE);
+
+        if (newSearch) {
+            setEvents(newEvents);
+        } else {
+            setEvents(prev => [...prev, ...newEvents]);
+        }
+        
+    } catch(error: any) {
+        console.error("Error fetching events: ", error);
+         logAppEvent({ level: 'ERROR', message: 'Failed to fetch events', component: 'HistoryPage', stack: error.stack });
+         toast({ title: "Error al Cargar Historial", description: "No se pudo cargar el historial de movimientos.", variant: "destructive"});
+    } finally {
+        setIsLoading(false);
+    }
+  }, [toast, lastVisible]);
+
+
+  useEffect(() => {
+    // Initial fetch
+    fetchEvents('', true);
 
     const getAssets = async () => {
       try {
         const { collection, query, getDocs } = await import("firebase/firestore/lite");
+        const firestore = db();
         const assetsQuery = query(collection(firestore, "assets"));
         const assetsSnapshot = await getDocs(assetsQuery);
         const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
         setAssets(assetsData);
       } catch (error: any) {
         console.error("Error fetching assets for history: ", error);
-        logAppEvent({
-            level: 'ERROR',
-            message: 'Failed to fetch assets for history page',
-            component: 'HistoryPage',
-            stack: error.stack,
-        });
-      } finally {
-        setIsAssetsLoading(false);
+        logAppEvent({ level: 'ERROR', message: 'Failed to fetch assets for history page', component: 'HistoryPage', stack: error.stack });
       }
     };
     
-    getEvents();
     getAssets();
-  }, [toast]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  
+  // Debounce search
+  useEffect(() => {
+    const handler = setTimeout(() => {
+        setLastVisible(null);
+        setIsLastPage(false);
+        fetchEvents(customerSearch, true);
+    }, 500); // 500ms delay
+
+    return () => {
+        clearTimeout(handler);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerSearch]);
+
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCustomerSearch(e.target.value);
-    setCurrentPage(1);
   };
 
   const handleDelete = async (id: string) => {
     if (userRole !== 'Admin') {
-      toast({
-        title: "Acceso Denegado",
-        description: "No tienes permiso para eliminar eventos.",
-        variant: "destructive",
-      });
+      toast({ title: "Acceso Denegado", description: "No tienes permiso para eliminar eventos.", variant: "destructive" });
       return;
     }
     const { doc, deleteDoc } = await import("firebase/firestore/lite");
@@ -206,40 +234,14 @@ export default function HistoryPage() {
     try {
       await deleteDoc(doc(firestore, "events", id));
       setEvents(prevEvents => prevEvents.filter(event => event.id !== id));
-      toast({
-        title: "Evento Eliminado",
-        description: "El evento ha sido eliminado del historial.",
-      });
+      toast({ title: "Evento Eliminado", description: "El evento ha sido eliminado del historial." });
     } catch (error: any) {
       console.error("Error eliminando evento: ", error);
-       logAppEvent({
-        level: 'ERROR',
-        message: `Failed to delete event ${id}`,
-        component: 'HistoryPage',
-        stack: error.stack,
-      });
-      toast({
-        title: "Error",
-        description: "No se pudo eliminar el evento.",
-        variant: "destructive",
-      });
+       logAppEvent({ level: 'ERROR', message: `Failed to delete event ${id}`, component: 'HistoryPage', stack: error.stack });
+      toast({ title: "Error", description: "No se pudo eliminar el evento.", variant: "destructive" });
     }
   };
 
-  const filteredEvents = useMemo(() => {
-    return events
-      .filter(event => 
-        event.customer_name.toLowerCase().includes(customerSearch.toLowerCase())
-      );
-  }, [events, customerSearch]);
-  
-  const totalPages = Math.ceil(filteredEvents.length / ITEMS_PER_PAGE);
-  const paginatedEvents = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredEvents.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredEvents, currentPage]);
-  
-  const isLoading = isAssetsLoading || isEventsLoading;
   const assetsMap = useMemo(() => new Map(assets.map(asset => [asset.id, asset])), [assets]);
 
   return (
@@ -261,12 +263,12 @@ export default function HistoryPage() {
           <CardContent className="p-0">
             {isMobile ? (
                 <div className="space-y-4 p-4">
-                  {isLoading ? (
+                  {isLoading && events.length === 0 ? (
                     <div className="flex justify-center items-center py-10">
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     </div>
-                  ) : paginatedEvents.length > 0 ? (
-                      paginatedEvents.map((event) => (
+                  ) : events.length > 0 ? (
+                      events.map((event) => (
                           <EventCardMobile key={event.id} event={event} assetsMap={assetsMap} onDelete={handleDelete} />
                       ))
                   ) : (
@@ -289,14 +291,14 @@ export default function HistoryPage() {
                       </TableRow>
                   </TableHeader>
                   <TableBody>
-                      {isLoading ? (
+                      {isLoading && events.length === 0 ? (
                           <TableRow>
                               <TableCell colSpan={userRole === 'Admin' ? 7 : 6} className="h-24 text-center">
                                   <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                               </TableCell>
                           </TableRow>
-                      ) : paginatedEvents.length > 0 ? (
-                          paginatedEvents.map((event) => (
+                      ) : events.length > 0 ? (
+                          events.map((event) => (
                               <EventTableRow key={event.id} event={event} assetsMap={assetsMap} onDelete={handleDelete} />
                           ))
                       ) : (
@@ -310,33 +312,19 @@ export default function HistoryPage() {
               </Table>
             )}
           </CardContent>
-          {totalPages > 1 && (
-            <CardFooter className="flex items-center justify-between border-t py-4">
-              <span className="text-sm text-muted-foreground">
-                Página {currentPage} de {totalPages}
-              </span>
+          <CardFooter className="flex items-center justify-center border-t py-4">
               <div className="flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
+                  onClick={() => fetchEvents(customerSearch)}
+                  disabled={isLastPage || isLoading}
                 >
-                   <ChevronLeft className="h-4 w-4" />
-                   <span className='ml-2'>Anterior</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                >
-                  <span className='mr-2'>Siguiente</span>
-                  <ChevronRight className="h-4 w-4" />
+                   {isLoading ? <Loader2 className='mr-2 h-4 w-4 animate-spin' /> : null}
+                   Cargar más
                 </Button>
               </div>
             </CardFooter>
-          )}
         </Card>
       </main>
     </div>
