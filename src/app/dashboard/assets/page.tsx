@@ -45,6 +45,7 @@ import { useUserRole } from "@/hooks/use-user-role";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { logAppEvent } from "@/lib/logging";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Logo } from "@/components/logo";
 
 const QRCode = dynamic(() => import('qrcode.react'), {
   loading: () => <div className="flex h-[256px] w-[256px] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>,
@@ -68,8 +69,7 @@ export default function AssetsPage() {
   const { toast } = useToast();
   const userRole = useUserRole();
   const isMobile = useIsMobile();
-  const qrCodeRef = useRef<HTMLDivElement>(null);
-  const batchQrRef = useRef<HTMLDivElement>(null);
+  const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchAssets = async () => {
@@ -120,96 +120,25 @@ export default function AssetsPage() {
     setQrCodeOpen(true);
   };
 
-  const handlePrint = (ref: React.RefObject<HTMLDivElement>) => {
+  const handlePrint = () => {
     const printWindow = window.open('', '', 'height=800,width=1000');
-    if (printWindow && ref.current) {
+    if (printWindow && printRef.current) {
         printWindow.document.write('<html><head><title>Imprimir QR</title>');
-        printWindow.document.write(`
-          <style>
-            @media print {
-              @page {
-                size: letter;
-                margin: 0;
-              }
-              body {
-                padding: 0.5in;
-                margin: 0;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-              }
-              .print-container {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 0.25in;
-                width: 100%;
-                height: 100%;
-              }
-              .qr-label {
-                display: flex;
-                flex-direction: column;
-                border: 1px solid #ccc;
-                border-radius: 8px;
-                overflow: hidden;
-                width: 100%;
-                height: 1.75in;
-                page-break-inside: avoid;
-                font-family: sans-serif;
-                background-color: white;
-              }
-              .qr-label__header {
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                padding: 0.2rem 0.5rem;
-                background-color: #27272a;
-                color: white;
-              }
-              .qr-label__title {
-                font-size: 0.6rem;
-                font-weight: 500;
-              }
-              .qr-label__body {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                flex-grow: 1;
-                gap: 1rem;
-                padding: 0.25rem;
-              }
-              .qr-label__code-container {
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                text-align: center;
-              }
-              .qr-label__code {
-                font-size: 1.5rem;
-                font-weight: bold;
-                letter-spacing: 0.05em;
-              }
-               .qr-label__format {
-                font-size: 0.8rem;
-                color: #555;
-              }
-              .single-qr-container {
-                 display: flex;
-                 justify-content: center;
-                 align-items: center;
-                 padding: 2rem;
-              }
-            }
-          </style>
-        `);
-        printWindow.document.write('</head><body>');
-        printWindow.document.write(ref.current.innerHTML);
+        // Link to the main stylesheet to get all styles, including print styles
+        const styles = Array.from(document.styleSheets)
+            .map(styleSheet => `<link rel="stylesheet" href="${styleSheet.href}">`)
+            .join('');
+        printWindow.document.write(styles);
+        printWindow.document.write('</head><body class="bg-white">');
+        printWindow.document.write(printRef.current.innerHTML);
         printWindow.document.write('</body></html>');
         printWindow.document.close();
         printWindow.focus();
-        // Use requestAnimationFrame for better browser compatibility
-        printWindow.requestAnimationFrame(() => {
+        
+        // Use a timeout to ensure styles are loaded before printing
+        setTimeout(() => {
             printWindow.print();
-        });
+        }, 500);
     }
   };
   
@@ -628,22 +557,40 @@ export default function AssetsPage() {
     return (
       <div className="qr-label">
         <div className="qr-label__header">
+          <Logo className="h-6 w-6 text-white" />
           <span className="qr-label__title">Tracked by BiruTracker</span>
         </div>
         <div className="qr-label__body">
-          <QRCode value={asset.id} size={80} renderAs="svg" level="H" />
-          <div className="qr-label__code-container">
+          <div className="qr-label__qr-container">
+            <QRCode value={asset.id} size={120} renderAs="svg" level="H" includeMargin={false} />
+          </div>
+          <div className="qr-label__info">
             <div className="qr-label__code">{asset.code}</div>
             <div className="qr-label__format">{asset.format} {asset.type === 'BARRIL' ? 'Barril' : 'CO2'}</div>
           </div>
         </div>
       </div>
-    )
+    );
   };
-
 
   return (
     <div className="flex flex-1 flex-col">
+       {/* Hidden div for printing content */}
+       <div className="print-only">
+          <div ref={printRef}>
+              {selectedAsset && (
+                  <div className="print-sheet">
+                      <QrLabel asset={selectedAsset} />
+                  </div>
+              )}
+              {isBatchQrOpen && (
+                  <div className="print-sheet">
+                      {assetsToPrint.map(asset => <QrLabel key={asset.id} asset={asset} />)}
+                  </div>
+              )}
+          </div>
+       </div>
+
        <Dialog open={isFormOpen} onOpenChange={setFormOpen}>
         <PageHeader
           title="Activos"
@@ -728,12 +675,15 @@ export default function AssetsPage() {
             </DialogHeader>
             <Suspense fallback={<div className="flex h-[320px] w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
               {selectedAsset && (
-                  <div ref={qrCodeRef} className="single-qr-container">
+                  <div className="flex justify-center items-center p-4">
                       <QrLabel asset={selectedAsset} />
                   </div>
               )}
             </Suspense>
-            <Button onClick={() => handlePrint(qrCodeRef)}>Imprimir QR</Button>
+            <Button onClick={handlePrint}>
+                <Printer className="mr-2 h-4 w-4" />
+                Imprimir
+            </Button>
         </DialogContent>
       </Dialog>
       <Dialog open={isBatchQrOpen} onOpenChange={setBatchQrOpen}>
@@ -746,14 +696,14 @@ export default function AssetsPage() {
             </DialogHeader>
             <ScrollArea className="h-[60vh] p-4">
               <Suspense fallback={<div className="flex h-full w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
-                <div ref={batchQrRef} className="print-container">
+                <div className="grid grid-cols-2 gap-4">
                   {assetsToPrint.map(asset => (
                     <QrLabel key={asset.id} asset={asset} />
                   ))}
                 </div>
               </Suspense>
             </ScrollArea>
-            <Button onClick={() => handlePrint(batchQrRef)} className="mt-4">
+            <Button onClick={handlePrint} className="mt-4">
               <Printer className="mr-2 h-5 w-5" />
               Imprimir Todos ({assetsToPrint.length})
             </Button>
