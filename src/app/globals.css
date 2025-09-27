@@ -95,13 +95,15 @@
     print-color-adjust: exact;
   }
   .qr-label__header {
-    @apply flex items-center justify-between px-2 py-0.5 bg-gray-800 text-white flex-shrink-0;
+    @apply flex items-center justify-between px-2 bg-gray-800 text-white flex-shrink-0;
+    padding-top: 2px;
+    padding-bottom: 2px;
   }
   .qr-label__title {
     @apply text-xs font-medium tracking-wider flex-grow text-right;
   }
   .qr-label__body {
-    @apply flex flex-col flex-grow items-center justify-center p-2 mx-auto;
+    @apply flex flex-col flex-grow items-center justify-start pt-1 pb-2 px-2 mx-auto;
     max-width: 140px;
   }
   .qr-label__qr-container {
@@ -111,10 +113,13 @@
     aspect-ratio: 1 / 1;
   }
   .qr-label__code {
-    @apply text-sm font-bold tracking-wider text-center text-gray-800 pt-1;
+    @apply text-sm font-bold tracking-wider text-center text-gray-800;
+    line-height: 1.1;
+    margin-top: 2px;
   }
   .qr-label__format {
     @apply text-xs text-center text-gray-600;
+    line-height: 1.1;
   }
 
   /* Hide elements not meant for printing */
@@ -145,13 +150,13 @@
   /* Print sheet layout */
   .print-sheet, .print-sheet-single {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
     gap: 0;
-    width: 7.5in;
   }
   
   .print-sheet {
+     grid-template-columns: repeat(3, 1fr);
      grid-template-rows: repeat(6, 1fr);
+     width: 7.5in;
      height: 10in;
   }
 
