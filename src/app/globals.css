@@ -103,14 +103,14 @@
     @apply text-xs font-medium tracking-wider flex-grow text-right;
   }
   .qr-label__body {
-    @apply flex flex-col flex-grow items-center justify-center p-1;
-    width: 120px;
+    @apply flex flex-col flex-grow items-center justify-center;
+    max-width: 140px;
     margin: 0 auto;
   }
   .qr-label__qr-container {
     @apply p-1;
-    width: 102px;
-    height: 102px;
+    width: 100px;
+    height: 100px;
     aspect-ratio: 1 / 1;
   }
   .qr-label__code {
@@ -198,3 +198,5 @@
       top: auto;
   }
 }
+
+    
