@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prueba de Etiqueta QR</title>
+    <style>
+        /* General page styles */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
+            padding: 2rem;
+            background-color: #f0f2f5;
+        }
+
+        /* Print-specific styles */
+        @media print {
+            @page {
+                size: letter;
+                margin: 0.5in;
+            }
+
+            body {
+                padding: 0;
+                margin: 0;
+                background-color: #fff;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .print-controls {
+                display: none !important;
+            }
+
+            .print-sheet {
+                margin: 0;
+                box-shadow: none;
+                border: none;
+            }
+        }
+        
+        .print-controls {
+            max-width: 8.5in;
+            margin: 0 auto 2rem auto;
+            padding: 1rem;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .print-controls button {
+            padding: 0.5rem 1rem;
+            font-size: 1rem;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        /* The sheet container */
+        .print-sheet {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: repeat(5, 1fr);
+            gap: 0; /* No gap needed as labels define their own size */
+            width: 8.5in;
+            height: 11in;
+            box-sizing: border-box;
+            margin: 0 auto;
+            background-color: #fff;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            border: 1px solid #ccc;
+        }
+
+        /* Guillotine marks container */
+        .label-wrapper {
+            position: relative;
+            width: 4.25in;
+            height: 2.2in;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* The actual QR label */
+        .qr-label {
+            width: 3.5in;
+            height: 1.75in;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .qr-label__header {
+            background-color: #27272a;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.3rem 0.5rem;
+            flex-shrink: 0;
+        }
+        
+        .qr-label__logo {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .qr-label__logo svg {
+            width: 1rem;
+            height: 1rem;
+        }
+        
+        .qr-label__title {
+            font-size: 0.6rem;
+            font-weight: 500;
+        }
+        
+        .qr-label__body {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 0.25rem;
+        }
+
+        .qr-label__code {
+            font-size: 1.5rem;
+            font-weight: bold;
+            letter-spacing: 0.05em;
+            margin-top: 0.25rem;
+        }
+
+        /* Guillotine Marks using pseudo-elements */
+        .label-wrapper::before,
+        .label-wrapper::after {
+            content: '';
+            position: absolute;
+            background-color: #333;
+        }
+
+        /* Horizontal marks */
+        .label-wrapper::before {
+            height: 1px;
+            width: 0.25in;
+            left: 0;
+            right: 0;
+        }
+        /* Vertical marks */
+        .label-wrapper::after {
+            width: 1px;
+            height: 0.25in;
+            top: 0;
+            bottom: 0;
+        }
+
+        /* Positioning the marks on the edges */
+        .label-wrapper:nth-child(odd)::after { left: 0.25in; } /* Left edge */
+        .label-wrapper:nth-child(even)::after { right: 0.25in; } /* Right edge */
+        .label-wrapper:nth-child(1)::before, .label-wrapper:nth-child(2)::before { top: 0.25in; } /* Top edge */
+        .label-wrapper:nth-child(9)::before, .label-wrapper:nth-child(10)::before { bottom: 0.25in; } /* Bottom edge */
+
+        /* Center marks */
+        .label-wrapper:nth-child(odd)::after { right: -0.5px; } /* Center vertical */
+        .label-wrapper:nth-child(2n+1)::before, .label-wrapper:nth-child(2n+2)::before { bottom: -0.5px; } /* Center horizontal */
+
+    </style>
+</head>
+<body>
+
+    <div class="print-controls">
+        <h1>Prueba de Impresión de Etiquetas QR</h1>
+        <p>Esta página muestra 10 etiquetas en una hoja tamaño carta con marcas de corte.</p>
+        <button onclick="window.print()">Imprimir Prueba</button>
+    </div>
+
+    <div class="print-sheet">
+        <!-- Generate 10 sample labels -->
+        <script>
+            const sheet = document.querySelector('.print-sheet');
+            for (let i = 1; i <= 10; i++) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'label-wrapper';
+
+                const codeNumber = String(i).padStart(3, '0');
+                const qrValue = `DUMMY_ID_${codeNumber}`;
+
+                wrapper.innerHTML = `
+                    <div class="qr-label">
+                        <div class="qr-label__header">
+                            <div class="qr-label__logo">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M10 21h4"></path><path d="M10 3h4"></path><path d="M14 3v2"></path><path d="M10 3v2"></path><path d="M18 8v8c0 1.1-.9 2-2 2H8c-1.1 0-2-.9-2-2V8c0-1.1.9-2 2-2h8c1.1 0 2 .9 2 2Z"></path><path d="M10 12h4"></path><path d="M12 10v4"></path>
+                                </svg>
+                                <span class="qr-label__title">BiruTracker</span>
+                            </div>
+                        </div>
+                        <div class="qr-label__body">
+                            <svg width="80" height="80" class="qr-code-svg"></svg>
+                            <div class="qr-label__code">KEG-${codeNumber}</div>
+                        </div>
+                    </div>
+                `;
+                sheet.appendChild(wrapper);
+            }
+        </script>
+    </div>
+
+    <!-- Minimal QR Code Generation Library -->
+    <script>
+        (function() {
+            function QR(e) {
+                for (var t = [], r = 0; r < e.length; r++) {
+                    for (var n = e[r], i = 0; i < n.length; i++) t.push(n[i]);
+                }
+                return t
+            }
+            function generateQRCode(text) {
+                var e = text, t = 4, r = "L";
+                var n = (function(e, t) {
+                    for (var r = (e = encodeURI(e)).length, n = -1, i = [], o = 0; o < r; o++) {
+                        var a = e.charCodeAt(o);
+                        a > 255 ? (n = -1, i.push(a)) : (n != o - 1 && -1 != n || (i.push(230), n = o), i.push(a))
+                    }
+                    var u = i.length, l = u + 2;
+                    switch (t) {
+                        case "L": l < 21 ? t = 1 : l < 37 ? t = 2 : l < 57 ? t = 3 : t = 4; break;
+                        case "M": l < 33 ? t = 2 : l < 54 ? t = 3 : l < 78 ? t = 4 : t = 5; break;
+                        case "Q": l < 47 ? t = 3 : l < 77 ? t = 4 : l < 109 ? t = 5 : t = 6; break;
+                        case "H": l < 61 ? t = 4 : l < 100 ? t = 5 : l < 143 ? t = 6 : t = 7
+                    }
+                    var s = [1, u >> 8, 255 & u];
+                    return (i = s.concat(i))[p] = -1, {text: e, level: t, data: i}
+                })(e, r);
+                var i = function(e, t) {
+                    var r = e.data, n = e.level, i = [];
+                    i.push(v(t));
+                    for (var o = 0; o < r.length; o++) i.push(g(r[o]));
+                    r[p] > 0 && i.push("0000");
+                    for (var a = m(d[n].ecc), u = 0, l = 0; l < a.length; l++) {
+                        var s = a[l];
+                        if (s != u) {
+                            for (var c = d[n].b[l], f = 0; f < c; f++) {
+                                var h = i.slice(u, u + d[n].w[l]);
+                                i = i.concat(E(h, b[d[n].e[l]]));
+                                u += d[n].w[l]
+                            }
+                        }
+                    }
+                    return QR(C(i, n))
+                }(n, t);
+                var o = f[t].s;
+                i.unshift(!1, !1, !1, !1, !1, !1, !1);
+                var a = [[], [], [], [], [], [], []];
+                return i.forEach(function(e, t) {
+                    a[t % 7].push(e)
+                }), a.reverse(), i = QR(a),
+                {
+                    size: o,
+                    data: i
+                }
+            }
+            var d = {
+                1: {w: [7], b: [1], e: [7], ecc: [1], l: "L"},
+                2: {w: [10], b: [1], e: [10], ecc: [1], l: "L"},
+                3: {w: [13], b: [1], e: [13], ecc: [1], l: "L"},
+                4: {w: [17], b: [1], e: [17], ecc: [1], l: "L"}
+            };
+            var p = "BYTES_TO_ENCODE", f = {
+                1: {s: 21, a: []},
+                2: {s: 25, a: [6, 18]},
+                3: {s: 29, a: [6, 22]},
+                4: {s: 33, a: [6, 26]},
+                5: {s: 37, a: [6, 30]},
+            };
+            var v = function(e) { return ("000" + e.toString(2)).slice(-3) };
+            var g = function(e) { return ("0000000" + e.toString(2)).slice(-8) };
+            var m = function(e) { for (var t = 0, r = [], n = 0; n < e.length; n++) { var i = e[n]; r.push(i - t), t = i } return r };
+            var s = [1, 2, 4, 8, 16, 32, 64, 128, 29, 58, 116, 232, 205, 135, 19, 38, 76, 152, 45, 90, 180, 97, 194, 157, 47, 94, 188, 113, 226, 213, 183, 105, 210, 177, 127, 254, 245, 251, 239, 211, 179, 123, 246, 249, 235, 203, 139, 23, 46, 92, 184, 101, 202, 141, 27, 54, 108, 216, 193, 159, 51, 102, 204, 133, 15, 30, 60, 120, 240, 253, 243, 255, 247, 250, 237, 207, 143, 31, 62, 124, 248, 233, 206, 142, 28, 56, 112, 224, 217, 195, 158, 49, 98, 196, 153, 46, 92, 184, 101, 202, 141, 27, 54, 108, 216, 193, 159, 51, 102, 204, 133, 15, 30, 60, 120, 240, 253, 243, 255, 247, 250, 237, 207, 143, 31, 62, 124, 248, 233, 206, 142, 28, 56, 112, 224, 217, 195, 158, 49, 98, 196, 153, 46, 92, 184, 101, 202, 141, 27, 54, 108, 216, 193, 159, 51, 102, 204, 133, 15, 30, 60, 120, 240, 253, 243, 255, 247, 250, 237, 207, 143, 31, 62, 124, 248, 233, 206, 142, 28, 56, 112, 224, 217, 195, 158, 49, 98, 196, 153, 46, 92, 184, 101, 202, 141, 27, 54, 108, 216, 193, 159, 51, 102, 204, 133, 15, 30, 60, 120, 240, 253, 243, 255, 247, 250, 237, 207, 143];
+            var c = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254];
+            var E = function(e, t) {
+                for (var r = [], n = 0; n < t.length; n++) {
+                    for (var i = 0, o = 0; o < e.length; o++) {
+                        var a = e[o];
+                        "1" == a && (i ^= s[o + t.length - n - 1])
+                    }
+                    r.push(i)
+                }
+                for (n = 0; n < e.length; n++) r.push(parseInt(e[n], 2));
+                return r.map(function(e) { return g(e) })
+            };
+            var b = function() {
+                for (var e = [], t = 0; t < 256; t++) {
+                    for (var r = t, n = 0; n < 8; n++) r = r << 1 ^ (128 & r ? 29 : 0);
+                    e[t] = r
+                }
+                return function(t) {
+                    for (var r = [c[t - 1]], n = 0; n < t - 1; n++) {
+                        for (var i = r.slice(0), o = 0; o < i.length; o++) {
+                            var a = i[o];
+                            i[o] = s[a], o > 0 && (i[o] ^= i[o - 1] << 8)
+                        }
+                        r.push(c[(n + 1) % 255])
+                    }
+                    return r.map(function(e) { return g(e) })
+                }
+            }();
+            var C = function(e, t) {
+                for (var r = [], n = 0; n < 7; n++) {
+                    for (var i = ("000" + n.toString(2)).slice(-3), o = 0; o < e.length; o++) {
+                        var a = e[o], u = "0" == a[n] ? "1" : "0", l = i + ("000" + o.toString(2)).slice(-4);
+                        parseInt(l, 2) % 2 == 0 && (a = a.substr(0, n) + u + a.substr(n + 1)), e[o] = a
+                    }
+                }
+                return e.map(function(e) {
+                    return e.split("").map(function(e) {
+                        return "1" == e
+                    })
+                })
+            };
+            var renderQRCode = function(qr, el) {
+                var size = qr.size;
+                var data = qr.data;
+                var scale = el.getAttribute('width') / size;
+                var svg = '';
+                for (var y = 0; y < size; y++) {
+                    for (var x = 0; x < size; x++) {
+                        if (data[y * size + x]) {
+                            svg += '<rect x="' + (x * scale) + '" y="' + (y * scale) + '" width="' + scale + '" height="' + scale + '" fill="#000"/>';
+                        }
+                    }
+                }
+                el.innerHTML = svg;
+            };
+
+            document.querySelectorAll('.qr-code-svg').forEach(function(svg, index) {
+                var codeNumber = String(index + 1).padStart(3, '0');
+                var qrValue = `DUMMY_ID_${codeNumber}`;
+                var qr = generateQRCode(qrValue);
+                renderQRCode(qr, svg);
+            });
+        })();
+    </script>
+</body>
+</html>
