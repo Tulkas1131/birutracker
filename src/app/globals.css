@@ -97,15 +97,18 @@
     @apply flex items-center justify-between bg-gray-800 px-3 py-1 text-white;
   }
   .qr-label__title {
-    @apply text-xs font-medium tracking-wider;
+    @apply flex-grow text-xs font-medium tracking-wider text-right;
   }
   .qr-label__body {
     @apply flex flex-col flex-grow items-center justify-center p-2;
+    flex-grow: 1;
+    min-height: 0;
   }
   .qr-label__qr-container {
-    @apply flex items-center justify-center p-1 mx-auto aspect-square;
+    @apply flex items-center justify-center p-1;
     width: 128px;
     height: 128px;
+    aspect-ratio: 1 / 1;
   }
   .qr-label__info {
     @apply flex flex-col items-center justify-center text-center mt-1;
