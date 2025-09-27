@@ -140,7 +140,7 @@
   }
   
   .print-sheet {
-     grid-template-columns: repeat(3, 1fr);
+     grid-template-columns: repeat(2, 1fr);
      grid-template-rows: repeat(5, 1fr);
      width: 7.5in;
      height: 10in;
