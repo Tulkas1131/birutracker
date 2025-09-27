@@ -87,23 +87,21 @@
 @layer components {
   /* QR Label Component Styles */
   .qr-label {
-    @apply relative flex flex-col font-sans overflow-hidden bg-white border border-gray-300 rounded-md;
-    width: 3.5in;
+    @apply relative flex flex-col font-sans overflow-hidden bg-white border border-gray-400 border-dashed rounded-md;
+    width: 2in;
     height: 1.75in;
     page-break-inside: avoid;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
   .qr-label__header {
-    @apply flex items-center justify-between px-2 bg-gray-800 text-white;
-    padding-top: 0.125rem;
-    padding-bottom: 0.125rem;
+    @apply flex items-center justify-between px-2 py-1 bg-gray-800 text-white flex-shrink-0;
   }
   .qr-label__title {
     @apply text-xs font-medium tracking-wider flex-grow text-right;
   }
   .qr-label__body {
-    @apply flex flex-col flex-grow items-center justify-center;
+    @apply flex flex-col flex-grow items-center justify-center p-2;
     max-width: 140px;
     margin: 0 auto;
   }
@@ -114,7 +112,10 @@
     aspect-ratio: 1 / 1;
   }
   .qr-label__code {
-    @apply text-sm font-bold tracking-wider text-center text-gray-800 pt-0.5;
+    @apply text-base font-bold tracking-wider text-center text-gray-800 pt-1;
+  }
+  .qr-label__format {
+    @apply text-xs text-center text-gray-600;
   }
 
   /* Hide elements not meant for printing */
@@ -145,8 +146,8 @@
   /* Print sheet layout */
   .print-sheet {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    grid-template-rows: repeat(5, 1fr);
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(6, 1fr);
     gap: 0;
     width: 7.5in;
     height: 10in;
@@ -179,24 +180,22 @@
   /* Left edge mark */
   .qr-label::before { left: -0.375in; }
    /* Extend left edge mark to page margin for first column */
-  .qr-label:nth-child(2n+1)::before { left: -0.5in; width: 0.5in; }
+  .qr-label:nth-child(3n+1)::before { left: -0.5in; width: 0.5in; }
   
   /* Right edge mark */
-  .qr-label:nth-child(2n)::before { left: auto; right: -0.375in; }
+  .qr-label:nth-child(3n)::before { left: auto; right: -0.375in; }
    /* Extend right edge mark to page margin for second column */
-  .qr-label:nth-child(2n)::before { right: -0.5in; width: 0.5in; }
+  .qr-label:nth-child(3n)::before { right: -0.5in; width: 0.5in; }
   
   /* Top edge mark */
   .qr-label::after { top: -0.375in; }
   /* Extend top edge mark to page margin for first row */
-  .qr-label:nth-child(1)::after, .qr-label:nth-child(2)::after { top: -0.5in; height: 0.5in; }
+  .qr-label:nth-child(-n+3)::after { top: -0.5in; height: 0.5in; }
   
   /* Bottom edge mark */
-  .qr-label:nth-last-child(1)::after, .qr-label:nth-last-child(2)::after {
+  .qr-label:nth-last-child(-n+3)::after {
       bottom: -0.5in;
       height: 0.5in;
       top: auto;
   }
 }
-
-    

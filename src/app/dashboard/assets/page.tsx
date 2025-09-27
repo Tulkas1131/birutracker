@@ -565,6 +565,7 @@ export default function AssetsPage() {
             <QRCode value={asset.id} size={100} renderAs="svg" level="H" includeMargin={false} className="h-full w-full" />
           </div>
           <div className="qr-label__code">{asset.code}</div>
+          <div className="qr-label__format">{asset.format} {asset.type === 'BARRIL' ? 'Barril' : 'Cilindro'}</div>
         </div>
       </div>
     );
@@ -726,5 +727,3 @@ export default function AssetsPage() {
     </div>
   );
 }
-
-    
