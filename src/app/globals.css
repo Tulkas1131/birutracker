@@ -101,7 +101,7 @@
     @apply text-xs font-medium tracking-wider flex-grow text-right;
   }
   .qr-label__body {
-    @apply flex flex-col flex-grow items-center justify-center p-1 mx-auto;
+    @apply flex flex-col flex-grow items-center justify-center p-1 pt-0 mx-auto;
     max-width: 140px;
   }
   .qr-label__qr-container {
@@ -129,14 +129,39 @@
     margin: 0.5in;
   }
 
-  /* Hide the main app content when printing */
-  .print-container {
-    display: none !important;
+  body * {
+    visibility: hidden;
+  }
+
+  .print-only, .print-only * {
+    visibility: visible;
+  }
+  
+  .print-qr-dialog, .print-qr-dialog * {
+    visibility: visible;
+  }
+
+  .print-container, .print-container * {
+    visibility: hidden;
+    display: none;
+  }
+  
+  .print-qr-dialog {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+    box-shadow: none;
   }
 
   /* Show only the QR code sheet when printing */
   .print-only {
     display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
   }
   
   /* Print sheet layout */
@@ -153,5 +178,3 @@
     border: 1px dashed #999;
   }
 }
-
-    

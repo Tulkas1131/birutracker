@@ -630,8 +630,8 @@ export default function AssetsPage() {
                 />
             </DialogContent>
         </Dialog>
-        <Dialog open={isQrCodeOpen} onOpenChange={setQrCodeOpen}>
-          <DialogContent>
+        <Dialog open={isQrCodeOpen} onOpenChange={setQrCodeOpen} modal={false}>
+          <DialogContent className="print-qr-dialog">
               <DialogHeader>
                   <DialogTitle>Código QR del Activo</DialogTitle>
                   <DialogDescription>
@@ -645,7 +645,7 @@ export default function AssetsPage() {
                     </div>
                 )}
               </Suspense>
-              <Button onClick={() => window.print()}>
+              <Button onClick={handlePrint}>
                   <Printer className="mr-2 h-4 w-4" />
                   Imprimir
               </Button>
@@ -680,5 +680,3 @@ export default function AssetsPage() {
     </>
   );
 }
-
-    
