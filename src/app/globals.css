@@ -118,17 +118,23 @@
   }
 }
 
+/* Default screen styles */
+.print-only {
+  display: none;
+}
+
 @media print {
   @page {
     size: letter;
     margin: 0.5in;
   }
 
-  /* Hide everything except the print container */
+  /* Hide the main app content when printing */
   .print-container {
-    display: none;
+    display: none !important;
   }
 
+  /* Show only the QR code sheet when printing */
   .print-only {
     display: block;
   }
@@ -147,3 +153,5 @@
     border: 1px dashed #999;
   }
 }
+
+    
