@@ -48,7 +48,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Logo } from "@/components/logo";
 
 const QRCode = dynamic(() => import('qrcode.react'), {
-  loading: () => <div className="flex h-[256px] w-[256px] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>,
+  loading: () => <div className="flex h-[128px] w-[128px] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>,
   ssr: false,
 });
 
@@ -562,7 +562,7 @@ export default function AssetsPage() {
         </div>
         <div className="qr-label__body">
           <div className="qr-label__qr-container">
-            <QRCode value={asset.id} size={120} renderAs="svg" level="H" includeMargin={false} />
+            <QRCode value={asset.id} size={128} renderAs="svg" level="H" includeMargin={false} className="h-full w-full" />
           </div>
           <div className="qr-label__info">
             <div className="qr-label__code">{asset.code}</div>

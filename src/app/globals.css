@@ -86,7 +86,7 @@
 @layer components {
   /* QR Label Component Styles */
   .qr-label {
-    @apply relative flex w-full flex-col overflow-hidden rounded-md border-2 border-dashed border-gray-300 bg-white font-sans;
+    @apply relative flex w-full flex-col overflow-hidden rounded-md border bg-white font-sans;
     width: 3.75in;
     height: 1.75in;
     page-break-inside: avoid;
@@ -100,19 +100,21 @@
     @apply text-xs font-medium tracking-wider;
   }
   .qr-label__body {
-    @apply flex flex-col flex-grow items-center justify-center p-3;
+    @apply flex flex-col flex-grow items-center justify-center p-2;
   }
   .qr-label__qr-container {
-    @apply flex-shrink-0 p-1 w-[128px] h-[128px];
+    @apply flex items-center justify-center p-1 mx-auto aspect-square;
+    width: 128px;
+    height: 128px;
   }
   .qr-label__info {
-    @apply flex h-full flex-col items-center justify-center text-center;
+    @apply flex flex-col items-center justify-center text-center mt-1;
   }
   .qr-label__code {
-    @apply text-4xl font-bold tracking-wider text-gray-800;
+    @apply text-lg font-bold tracking-wider text-gray-800;
   }
   .qr-label__format {
-    @apply mt-1 text-base text-gray-600;
+    @apply text-sm text-gray-600;
   }
   
   /* Hide elements not meant for printing */
@@ -144,6 +146,7 @@
   .print-sheet {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(5, 1fr);
     gap: 0;
     width: 7.5in;
     height: 10in;
@@ -155,36 +158,44 @@
     content: '';
     position: absolute;
     background-color: #000;
+    z-index: 10;
   }
-  /* Horizontal lines */
+  
+  /* Horizontal lines (left and right) */
   .qr-label::before {
     height: 1px;
     width: 0.25in;
-    left: -0.375in;
+    top: 50%;
+    transform: translateY(-50%);
   }
-  /* Vertical lines */
+  /* Vertical lines (top and bottom) */
   .qr-label::after {
     width: 1px;
     height: 0.25in;
-    top: -0.375in;
+    left: 50%;
+    transform: translateX(-50%);
   }
-  /* Top edge */
-  .qr-label:nth-child(1)::after, .qr-label:nth-child(2)::after { top: -0.5in; height: 0.5in; }
-  /* Left edge */
+  
+  /* Left edge mark */
+  .qr-label::before { left: -0.375in; }
+  /* Extend left edge mark to page margin for first column */
   .qr-label:nth-child(2n+1)::before { left: -0.5in; width: 0.5in; }
-  /* Right edge */
-  .qr-label:nth-child(2n)::before { left: auto; right: -0.5in; width: 0.5in; }
-  /* Bottom edge */
-  .qr-label:nth-last-child(1)::before, .qr-label:nth-last-child(2)::before {
-    top: auto;
-    bottom: -0.5in;
-    height: 1px;
-    width: 0.25in;
-  }
+  
+  /* Right edge mark */
+  .qr-label:nth-child(2n)::before { left: auto; right: -0.375in; }
+   /* Extend right edge mark to page margin for second column */
+  .qr-label:nth-child(2n)::before { right: -0.5in; width: 0.5in; }
+
+
+  /* Top edge mark */
+  .qr-label::after { top: -0.375in; }
+  /* Extend top edge mark to page margin for first row */
+  .qr-label:nth-child(1)::after, .qr-label:nth-child(2)::after { top: -0.5in; height: 0.5in; }
+  
+  /* Bottom edge mark */
   .qr-label:nth-last-child(1)::after, .qr-label:nth-last-child(2)::after {
-    top: auto;
-    bottom: -0.5in;
-    height: 0.5in;
-    width: 1px;
+      bottom: -0.5in;
+      height: 0.5in;
+      top: auto;
   }
 }
