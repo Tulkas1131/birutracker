@@ -87,7 +87,7 @@
 @layer components {
   /* QR Label Component Styles */
   .qr-label {
-    @apply relative flex flex-col font-sans overflow-hidden bg-white border border-gray-300 rounded-md;
+    @apply relative flex flex-col font-sans overflow-hidden bg-white border border-dashed border-gray-400;
     width: 2in;
     height: 1.75in;
     page-break-inside: avoid;
@@ -95,13 +95,13 @@
     print-color-adjust: exact;
   }
   .qr-label__header {
-    @apply flex items-center justify-between px-2 py-[1px] bg-gray-800 text-white flex-shrink-0;
+    @apply flex items-center justify-between px-2 py-0 bg-gray-800 text-white flex-shrink-0;
   }
   .qr-label__title {
     @apply text-xs font-medium tracking-wider flex-grow text-right;
   }
   .qr-label__body {
-    @apply flex flex-col flex-grow items-center justify-center pt-1 pb-2 px-2 mx-auto;
+    @apply flex flex-col flex-grow items-center justify-center p-1 mx-auto;
     max-width: 140px;
   }
   .qr-label__qr-container {
@@ -124,31 +124,23 @@
     margin: 0.5in;
   }
 
-  body.print-body {
-    background-color: white !important;
-  }
-  
   /* Hide everything except the print container */
-  body > *:not(.print-body) {
-    display: none !important;
+  .print-container {
+    display: none;
+  }
+
+  .print-only {
+    display: block;
   }
   
   /* Print sheet layout */
-  .print-sheet, .print-sheet-single {
+  .print-sheet {
     display: grid;
     gap: 0;
-  }
-  
-  .print-sheet {
-     grid-template-columns: repeat(2, 1fr);
-     grid-template-rows: repeat(5, 1fr);
-     width: 7.5in;
-     height: 10in;
-  }
-
-  .print-sheet-single {
-    grid-template-columns: 1fr;
-    width: auto;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(5, 1fr);
+    width: 7.5in;
+    height: 10in;
   }
 
   .qr-label {

@@ -2,7 +2,6 @@
 "use client";
 
 import { useState, useRef, useMemo, Suspense, useEffect } from "react";
-import ReactDOMServer from 'react-dom/server';
 import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus, ChevronLeft, ChevronRight } from "lucide-react";
 import { db } from "@/lib/firebase";
 import dynamic from "next/dynamic";
@@ -55,7 +54,7 @@ const QRCode = dynamic(() => import('qrcode.react'), {
 
 const ITEMS_PER_PAGE = 10;
 
-// Componente para visualización en la UI
+// Componente para visualización en la UI y para impresión
 const QrLabel = ({ asset }: { asset: Asset }) => {
   return (
     <div className="qr-label">
@@ -74,99 +73,6 @@ const QrLabel = ({ asset }: { asset: Asset }) => {
   );
 };
 
-// Componente optimizado para la impresión con estilos en línea
-const PrintableQrLabel = ({ asset }: { asset: Asset }) => {
-  // Estilos en línea para asegurar la consistencia en la impresión
-  const labelStyle: React.CSSProperties = {
-    position: 'relative',
-    display: 'flex',
-    flexDirection: 'column',
-    fontFamily: 'sans-serif',
-    overflow: 'hidden',
-    backgroundColor: 'white',
-    border: '1px dashed #999',
-    width: '2in',
-    height: '1.75in',
-    pageBreakInside: 'avoid',
-  };
-
-  const headerStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '1px 8px',
-    backgroundColor: '#1f2937', // bg-gray-800
-    color: 'white',
-    flexShrink: 0,
-  };
-
-  const titleStyle: React.CSSProperties = {
-    fontSize: '0.75rem',
-    fontWeight: '500',
-    letterSpacing: '0.05em',
-    flexGrow: 1,
-    textAlign: 'right',
-  };
-
-  const bodyStyle: React.CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '4px 8px',
-    margin: '0 auto',
-    width: '100%',
-    maxWidth: '140px',
-  };
-  
-  const qrContainerStyle: React.CSSProperties = {
-      width: '100px',
-      height: '100px',
-      aspectRatio: '1 / 1',
-      padding: '4px',
-      margin: '0 auto',
-  };
-
-  const codeStyle: React.CSSProperties = {
-    fontSize: '0.875rem',
-    fontWeight: 'bold',
-    letterSpacing: '0.05em',
-    textAlign: 'center',
-    color: '#1f2937',
-    lineHeight: '1.2',
-    marginTop: '0',
-    marginBottom: '0',
-  };
-  
-  const formatStyle: React.CSSProperties = {
-      fontSize: '0.75rem',
-      textAlign: 'center',
-      color: '#4b5563',
-      lineHeight: '1.2',
-  };
-
-
-  return (
-    <div style={labelStyle}>
-      <div style={headerStyle}>
-        {/* SVG del logo directamente inyectado para máxima compatibilidad */}
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ height: '20px', width: '20px', color: 'white' }}>
-          <path d="M10 21h4" /><path d="M10 3h4" /><path d="M14 3v2" /><path d="M10 3v2" /><path d="M18 8v8c0 1.1-.9 2-2 2H8c-1.1 0-2-.9-2-2V8c0-1.1.9 2 2-2h8c1.1 0 2 .9 2 2Z" /><path d="M10 12h4" /><path d="M12 10v4" />
-        </svg>
-        <span style={titleStyle}>Tracked by BiruTracker</span>
-      </div>
-      <div style={bodyStyle}>
-        <div style={qrContainerStyle}>
-          <QRCode value={asset.id} size={100} renderAs="svg" level="H" includeMargin={false} />
-        </div>
-        <div style={codeStyle}>{asset.code}</div>
-        <div style={formatStyle}>{asset.format} {asset.type === 'BARRIL' ? 'Barril' : 'Cilindro CO2'}</div>
-      </div>
-    </div>
-  );
-};
-
 
 export default function AssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -174,7 +80,6 @@ export default function AssetsPage() {
   const [isFormOpen, setFormOpen] = useState(false);
   const [isBatchFormOpen, setBatchFormOpen] = useState(false);
   const [isQrCodeOpen, setQrCodeOpen] = useState(false);
-  const [isBatchQrOpen, setBatchQrOpen] = useState(false);
   const [isConfirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [assetToDelete, setAssetToDelete] = useState<Asset | null>(null);
   const [activeTab, setActiveTab] = useState('barrels');
@@ -233,50 +138,8 @@ export default function AssetsPage() {
     setQrCodeOpen(true);
   };
 
-  const handlePrint = (assetsToPrint: Asset[]) => {
-    const printWindow = window.open('', '', 'height=800,width=1000');
-    if (!printWindow) {
-        toast({ title: "Error de Impresión", description: "No se pudo abrir la ventana para imprimir.", variant: "destructive" });
-        return;
-    }
-  
-    // Genera el HTML de las etiquetas usando el componente de impresión
-    const labelsHtml = assetsToPrint.map(asset => 
-        ReactDOMServer.renderToStaticMarkup(<PrintableQrLabel asset={asset} />)
-    ).join('');
-  
-    const isSingle = assetsToPrint.length === 1;
-    const sheetClassName = isSingle ? 'print-sheet-single' : 'print-sheet';
-    const contentToPrint = `<div class="${sheetClassName}">${labelsHtml}</div>`;
-  
-    // Recolecta todos los estilos del documento principal para inyectarlos
-    const styles = Array.from(document.styleSheets)
-      .map(styleSheet => {
-        try {
-          return Array.from(styleSheet.cssRules)
-            .map(rule => rule.cssText)
-            .join('');
-        } catch (e) {
-          console.warn("No se pudo leer una hoja de estilos (CORS):", e);
-          return '';
-        }
-      })
-      .join('');
-  
-    printWindow.document.write('<html><head><title>Imprimir QR</title>');
-    // Inyecta los estilos directamente para máxima compatibilidad
-    printWindow.document.write(`<style>${styles}</style>`);
-    printWindow.document.write('</head><body class="print-body">');
-    printWindow.document.write(contentToPrint);
-    printWindow.document.write('</body></html>');
-    printWindow.document.close();
-  
-    setTimeout(() => {
-        printWindow.focus();
-        printWindow.print();
-        // Descomentar para cerrar la ventana después de imprimir
-        // printWindow.close(); 
-    }, 500); // Un timeout generoso para asegurar que todo cargue
+  const handlePrint = () => {
+    window.print();
   };
   
   const confirmDelete = (asset: Asset) => {
@@ -691,145 +554,129 @@ export default function AssetsPage() {
   );
 
   return (
-    <div className="flex flex-1 flex-col">
-       <Dialog open={isFormOpen} onOpenChange={setFormOpen}>
-        <PageHeader
-          title="Activos"
-          description="Gestiona tus barriles de cerveza y cilindros de CO₂."
-          action={
-            <div className="flex flex-col sm:flex-row items-center gap-2">
-                 <Button size="lg" variant="outline" onClick={() => handlePrint(assetsToPrint)} disabled={assetsToPrint.length === 0}>
-                    <Printer className="mr-2 h-5 w-5" />
-                    Imprimir Lote de QR
-                </Button>
-                <Button size="lg" variant="outline" onClick={handleNewBatch}>
-                    <PackagePlus className="mr-2 h-5 w-5" />
-                    Crear Lote
-                </Button>
-                <DialogTrigger asChild>
-                    <Button size="lg" onClick={handleNew}>
-                        <PlusCircle className="mr-2 h-5 w-5" />
-                        Nuevo Activo
-                    </Button>
-                </DialogTrigger>
-            </div>
-          }
-        />
-        <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
-            <Tabs defaultValue={activeTab} onValueChange={handleTabChange}>
-              <div className="flex flex-col sm:flex-row items-start justify-between gap-4 mb-4">
-                <TabsList>
-                  <TabsTrigger value="barrels">Barriles ({barrels.length})</TabsTrigger>
-                  <TabsTrigger value="co2">CO2 ({co2Cylinders.length})</TabsTrigger>
-                </TabsList>
-                {activeTab === 'barrels' && <CountsDisplay counts={assetCountsByFormat.barrels} />}
-                {activeTab === 'co2' && <CountsDisplay counts={assetCountsByFormat.co2} />}
+    <>
+      <div className="flex flex-1 flex-col print-container">
+        <Dialog open={isFormOpen} onOpenChange={setFormOpen}>
+          <PageHeader
+            title="Activos"
+            description="Gestiona tus barriles de cerveza y cilindros de CO₂."
+            action={
+              <div className="flex flex-col sm:flex-row items-center gap-2">
+                   <Button size="lg" variant="outline" onClick={handlePrint} disabled={assetsToPrint.length === 0}>
+                      <Printer className="mr-2 h-5 w-5" />
+                      Imprimir Lote de QR
+                  </Button>
+                  <Button size="lg" variant="outline" onClick={handleNewBatch}>
+                      <PackagePlus className="mr-2 h-5 w-5" />
+                      Crear Lote
+                  </Button>
+                  <DialogTrigger asChild>
+                      <Button size="lg" onClick={handleNew}>
+                          <PlusCircle className="mr-2 h-5 w-5" />
+                          Nuevo Activo
+                      </Button>
+                  </DialogTrigger>
               </div>
-              <TabsContent value="barrels">
-                 <AssetList assetList={paginatedAssets} type="BARRIL" />
-              </TabsContent>
-              <TabsContent value="co2">
-                 <AssetList assetList={paginatedAssets} type="CO2" />
-              </TabsContent>
-            </Tabs>
-        </main>
-        <DialogContent>
-            <DialogHeader>
-                <DialogTitle>{selectedAsset ? "Editar Activo" : "Crear Nuevo Activo"}</DialogTitle>
-                <DialogDescription>
-                    {selectedAsset ? "Modifica los detalles del activo existente." : "Completa el formulario para añadir un nuevo activo."}
-                </DialogDescription>
-            </DialogHeader>
-            <AssetForm
-              key={selectedAsset?.id || 'new'}
-              defaultValues={selectedAsset}
-              onSubmit={handleFormSubmit}
-              onCancel={() => {
-                setFormOpen(false);
-                setSelectedAsset(undefined);
-              }}
-              isLocked={selectedAsset?.location !== 'EN_PLANTA'}
-            />
-        </DialogContent>
-      </Dialog>
-      <Dialog open={isBatchFormOpen} onOpenChange={setBatchFormOpen}>
+            }
+          />
+          <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
+              <Tabs defaultValue={activeTab} onValueChange={handleTabChange}>
+                <div className="flex flex-col sm:flex-row items-start justify-between gap-4 mb-4">
+                  <TabsList>
+                    <TabsTrigger value="barrels">Barriles ({barrels.length})</TabsTrigger>
+                    <TabsTrigger value="co2">CO2 ({co2Cylinders.length})</TabsTrigger>
+                  </TabsList>
+                  {activeTab === 'barrels' && <CountsDisplay counts={assetCountsByFormat.barrels} />}
+                  {activeTab === 'co2' && <CountsDisplay counts={assetCountsByFormat.co2} />}
+                </div>
+                <TabsContent value="barrels">
+                   <AssetList assetList={paginatedAssets} type="BARRIL" />
+                </TabsContent>
+                <TabsContent value="co2">
+                   <AssetList assetList={paginatedAssets} type="CO2" />
+                </TabsContent>
+              </Tabs>
+          </main>
           <DialogContent>
               <DialogHeader>
-                  <DialogTitle>Crear Lote de Activos</DialogTitle>
+                  <DialogTitle>{selectedAsset ? "Editar Activo" : "Crear Nuevo Activo"}</DialogTitle>
                   <DialogDescription>
-                      Genera múltiples activos con formato y tipo idénticos. Los códigos se asignarán automáticamente.
+                      {selectedAsset ? "Modifica los detalles del activo existente." : "Completa el formulario para añadir un nuevo activo."}
                   </DialogDescription>
               </DialogHeader>
-              <AssetBatchForm
-                onSubmit={handleBatchFormSubmit}
-                onCancel={() => setBatchFormOpen(false)}
+              <AssetForm
+                key={selectedAsset?.id || 'new'}
+                defaultValues={selectedAsset}
+                onSubmit={handleFormSubmit}
+                onCancel={() => {
+                  setFormOpen(false);
+                  setSelectedAsset(undefined);
+                }}
+                isLocked={selectedAsset?.location !== 'EN_PLANTA'}
               />
           </DialogContent>
-      </Dialog>
-      <Dialog open={isQrCodeOpen} onOpenChange={setQrCodeOpen}>
-        <DialogContent>
-            <DialogHeader>
-                <DialogTitle>Código QR del Activo</DialogTitle>
-                <DialogDescription>
-                    Escanea este código para registrar movimientos rápidos. Puedes imprimirlo y pegarlo en el activo físico.
-                </DialogDescription>
-            </DialogHeader>
-            <Suspense fallback={<div className="flex h-[320px] w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
-              {selectedAsset && (
-                  <div className="flex justify-center items-center p-4">
-                      <QrLabel asset={selectedAsset} />
-                  </div>
-              )}
-            </Suspense>
-            <Button onClick={() => selectedAsset && handlePrint([selectedAsset])}>
-                <Printer className="mr-2 h-4 w-4" />
-                Imprimir
-            </Button>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={isBatchQrOpen} onOpenChange={setBatchQrOpen}>
-        <DialogContent className="max-w-4xl">
-            <DialogHeader>
-                <DialogTitle>Imprimir Lote de Códigos QR</DialogTitle>
-                <DialogDescription>
-                    Aquí están todos los códigos QR para la categoría seleccionada: {activeTab === 'barrels' ? 'Barriles' : 'CO2'}.
-                </DialogDescription>
-            </DialogHeader>
-            <ScrollArea className="h-[60vh] p-4">
-              <Suspense fallback={<div className="flex h-full w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
-                <div className="grid grid-cols-2 gap-4">
-                  {assetsToPrint.map(asset => (
-                    <QrLabel key={asset.id} asset={asset} />
-                  ))}
-                </div>
+        </Dialog>
+        <Dialog open={isBatchFormOpen} onOpenChange={setBatchFormOpen}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Crear Lote de Activos</DialogTitle>
+                    <DialogDescription>
+                        Genera múltiples activos con formato y tipo idénticos. Los códigos se asignarán automáticamente.
+                    </DialogDescription>
+                </DialogHeader>
+                <AssetBatchForm
+                  onSubmit={handleBatchFormSubmit}
+                  onCancel={() => setBatchFormOpen(false)}
+                />
+            </DialogContent>
+        </Dialog>
+        <Dialog open={isQrCodeOpen} onOpenChange={setQrCodeOpen}>
+          <DialogContent>
+              <DialogHeader>
+                  <DialogTitle>Código QR del Activo</DialogTitle>
+                  <DialogDescription>
+                      Escanea este código para registrar movimientos rápidos. Puedes imprimirlo y pegarlo en el activo físico.
+                  </DialogDescription>
+              </DialogHeader>
+              <Suspense fallback={<div className="flex h-[320px] w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+                {selectedAsset && (
+                    <div className="flex justify-center items-center p-4">
+                        <QrLabel asset={selectedAsset} />
+                    </div>
+                )}
               </Suspense>
-            </ScrollArea>
-            <Button onClick={() => handlePrint(assetsToPrint)} className="mt-4">
-              <Printer className="mr-2 h-5 w-5" />
-              Imprimir Todos ({assetsToPrint.length})
-            </Button>
-        </DialogContent>
-      </Dialog>
-      <AlertDialog open={isConfirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta acción es permanente y no se puede deshacer. Se eliminará el activo con código
-              <span className="font-bold"> {assetToDelete?.code}</span> de la base de datos.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setAssetToDelete(null)}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+              <Button onClick={() => window.print()}>
+                  <Printer className="mr-2 h-4 w-4" />
+                  Imprimir
+              </Button>
+          </DialogContent>
+        </Dialog>
+        <AlertDialog open={isConfirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta acción es permanente y no se puede deshacer. Se eliminará el activo con código
+                <span className="font-bold"> {assetToDelete?.code}</span> de la base de datos.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setAssetToDelete(null)}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Eliminar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+
+      <div className="print-only">
+        <div className="print-sheet">
+          {assetsToPrint.map(asset => (
+            <QrLabel key={asset.id} asset={asset} />
+          ))}
+        </div>
+      </div>
+    </>
   );
 }
-
-    
-    
