@@ -129,24 +129,28 @@
     margin: 0.5in;
   }
 
-  body * {
-    visibility: hidden;
+  /* Hide the main app content when printing */
+  .no-print {
+    display: none !important;
   }
 
-  .print-only, .print-only * {
+  /* Show the print-only sections */
+  .print-only {
+    display: block;
+  }
+
+  /* Special handling for single QR dialog print */
+  body.printing-single .print-only {
+    display: none; /* Hide batch sheet */
+  }
+  
+  body.printing-single .print-qr-dialog,
+  body.printing-single .print-qr-dialog * {
+    display: block;
     visibility: visible;
   }
   
-  .print-qr-dialog, .print-qr-dialog * {
-    visibility: visible;
-  }
-
-  .print-container, .print-container * {
-    visibility: hidden;
-    display: none;
-  }
-  
-  .print-qr-dialog {
+  body.printing-single .print-qr-dialog {
     position: absolute;
     left: 0;
     top: 0;
@@ -156,15 +160,8 @@
     box-shadow: none;
   }
 
-  /* Show only the QR code sheet when printing */
-  .print-only {
-    display: block;
-    position: absolute;
-    left: 0;
-    top: 0;
-  }
-  
-  /* Print sheet layout */
+
+  /* Layout for the batch print sheet */
   .print-sheet {
     display: grid;
     gap: 0;

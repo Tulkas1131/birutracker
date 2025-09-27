@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useRef, useMemo, Suspense, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus, ChevronLeft, ChevronRight } from "lucide-react";
 import { db } from "@/lib/firebase";
 import dynamic from "next/dynamic";
@@ -42,7 +42,6 @@ import { AssetBatchForm } from "@/components/asset-batch-form";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/use-user-role";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { logAppEvent } from "@/lib/logging";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Logo } from "@/components/logo";
@@ -139,7 +138,15 @@ export default function AssetsPage() {
   };
 
   const handlePrint = () => {
-    window.print();
+    if (isQrCodeOpen) {
+      // Logic to print single QR
+      document.body.classList.add('printing-single');
+      window.print();
+      document.body.classList.remove('printing-single');
+    } else {
+      // Logic to print batch
+      window.print();
+    }
   };
   
   const confirmDelete = (asset: Asset) => {
@@ -553,9 +560,11 @@ export default function AssetsPage() {
     </div>
   );
 
+  const printButtonText = isQrCodeOpen ? "Imprimir QR Seleccionado" : "Imprimir Lote de QR";
+  
   return (
     <>
-      <div className="flex flex-1 flex-col print-container">
+      <div className="no-print flex flex-1 flex-col">
         <Dialog open={isFormOpen} onOpenChange={setFormOpen}>
           <PageHeader
             title="Activos"
@@ -564,7 +573,7 @@ export default function AssetsPage() {
               <div className="flex flex-col sm:flex-row items-center gap-2">
                    <Button size="lg" variant="outline" onClick={handlePrint} disabled={assetsToPrint.length === 0}>
                       <Printer className="mr-2 h-5 w-5" />
-                      Imprimir Lote de QR
+                      {printButtonText}
                   </Button>
                   <Button size="lg" variant="outline" onClick={handleNewBatch}>
                       <PackagePlus className="mr-2 h-5 w-5" />
@@ -630,7 +639,7 @@ export default function AssetsPage() {
                 />
             </DialogContent>
         </Dialog>
-        <Dialog open={isQrCodeOpen} onOpenChange={setQrCodeOpen} modal={false}>
+        <Dialog open={isQrCodeOpen} onOpenChange={setQrCodeOpen}>
           <DialogContent className="print-qr-dialog">
               <DialogHeader>
                   <DialogTitle>Código QR del Activo</DialogTitle>
@@ -638,17 +647,11 @@ export default function AssetsPage() {
                       Escanea este código para registrar movimientos rápidos. Puedes imprimirlo y pegarlo en el activo físico.
                   </DialogDescription>
               </DialogHeader>
-              <Suspense fallback={<div className="flex h-[320px] w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
-                {selectedAsset && (
-                    <div className="flex justify-center items-center p-4">
-                        <QrLabel asset={selectedAsset} />
-                    </div>
-                )}
-              </Suspense>
-              <Button onClick={handlePrint}>
-                  <Printer className="mr-2 h-4 w-4" />
-                  Imprimir
-              </Button>
+              {selectedAsset && (
+                  <div className="flex justify-center items-center p-4">
+                      <QrLabel asset={selectedAsset} />
+                  </div>
+              )}
           </DialogContent>
         </Dialog>
         <AlertDialog open={isConfirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
