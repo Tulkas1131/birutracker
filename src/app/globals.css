@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -86,7 +87,10 @@
 @layer components {
   /* QR Label Component Styles */
   .qr-label {
-    @apply relative flex w-full flex-col overflow-hidden rounded-md border bg-white font-sans;
+    @apply relative flex flex-col font-sans overflow-hidden;
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.375rem; /* rounded-md */
     width: 3.75in;
     height: 1.75in;
     page-break-inside: avoid;
@@ -94,32 +98,33 @@
     print-color-adjust: exact;
   }
   .qr-label__header {
-    @apply flex items-center justify-between bg-gray-800 px-3 py-1 text-white;
+    @apply flex items-center justify-between px-3 py-1;
+    background-color: #212936;
+    color: white;
+    border-top-left-radius: 0.375rem;
+    border-top-right-radius: 0.375rem;
   }
   .qr-label__title {
-    @apply flex-grow text-xs font-medium tracking-wider text-right;
+    @apply text-xs font-medium tracking-wider flex-grow text-right;
   }
   .qr-label__body {
-    @apply flex flex-col flex-grow items-center justify-center p-2;
-    flex-grow: 1;
+    @apply flex flex-grow items-center justify-center p-2;
     min-height: 0;
   }
   .qr-label__qr-container {
     @apply flex items-center justify-center p-1;
-    width: 128px;
-    height: 128px;
+    width: 120px;
+    height: 120px;
     aspect-ratio: 1 / 1;
   }
-  .qr-label__info {
-    @apply flex flex-col items-center justify-center text-center mt-1;
+  .qr-label__footer {
+    @apply flex items-center justify-center pb-2;
   }
   .qr-label__code {
-    @apply text-lg font-bold tracking-wider text-gray-800;
+    @apply text-lg font-bold tracking-wider text-center;
+    color: #212936;
   }
-  .qr-label__format {
-    @apply text-sm text-gray-600;
-  }
-  
+
   /* Hide elements not meant for printing */
   .print-only {
     display: none;
@@ -185,11 +190,8 @@
   .qr-label:nth-child(2n+1)::before { left: -0.5in; width: 0.5in; }
   
   /* Right edge mark */
-  .qr-label:nth-child(2n)::before { left: auto; right: -0.375in; }
-   /* Extend right edge mark to page margin for second column */
   .qr-label:nth-child(2n)::before { right: -0.5in; width: 0.5in; }
-
-
+  
   /* Top edge mark */
   .qr-label::after { top: -0.375in; }
   /* Extend top edge mark to page margin for first row */
@@ -202,3 +204,5 @@
       top: auto;
   }
 }
+
+    

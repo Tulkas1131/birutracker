@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useRef, useMemo, Suspense, useEffect } from "react";
-import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus, ChevronLeft, ChevronRight } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus, ChevronLeft, ChevronRight, Package } from "lucide-react";
 import { db } from "@/lib/firebase";
 import dynamic from "next/dynamic";
 
@@ -557,17 +557,16 @@ export default function AssetsPage() {
     return (
       <div className="qr-label">
         <div className="qr-label__header">
-          <Logo className="h-6 w-6 text-white" />
+          <Package className="h-5 w-5 text-white" />
           <span className="qr-label__title">Tracked by BiruTracker</span>
         </div>
         <div className="qr-label__body">
           <div className="qr-label__qr-container">
             <QRCode value={asset.id} size={128} renderAs="svg" level="H" includeMargin={false} className="h-full w-full" />
           </div>
-          <div className="qr-label__info">
-            <div className="qr-label__code">{asset.code}</div>
-            <div className="qr-label__format">{asset.format} {asset.type === 'BARRIL' ? 'Barril' : 'CO2'}</div>
-          </div>
+        </div>
+        <div className="qr-label__footer">
+          <div className="qr-label__code">{asset.code}</div>
         </div>
       </div>
     );
@@ -729,3 +728,5 @@ export default function AssetsPage() {
     </div>
   );
 }
+
+    
