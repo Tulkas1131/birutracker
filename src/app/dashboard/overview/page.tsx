@@ -9,7 +9,8 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
 import { Input } from '@/components/ui/input';
-import type { Event, Asset } from "@/lib/types";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import type { Event, Asset, MovementEventType } from "@/lib/types";
 import { useUserRole } from '@/hooks/use-user-role';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -128,7 +129,11 @@ export default function OverviewPage() {
   const [allEvents, setAllEvents] = useState<Event[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [customerSearch, setCustomerSearch] = useState('');
+  const [filters, setFilters] = useState({
+    customer: '',
+    assetType: 'ALL',
+    eventType: 'ALL',
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast();
   const userRole = useUserRole();
@@ -165,15 +170,20 @@ export default function OverviewPage() {
     fetchData();
   }, [fetchData]);
   
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCustomerSearch(e.target.value);
-    setCurrentPage(1); // Reset to first page on new search
+  const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
+    setFilters(prev => ({ ...prev, [filterName]: value }));
+    setCurrentPage(1);
   };
 
   const filteredEvents = useMemo(() => {
-    if (!customerSearch) return allEvents;
-    return allEvents.filter(event => event.customer_name.toLowerCase().includes(customerSearch.toLowerCase()));
-  }, [allEvents, customerSearch]);
+    return allEvents.filter(event => {
+        const customerMatch = event.customer_name.toLowerCase().includes(filters.customer.toLowerCase());
+        const assetCodePrefix = event.asset_code.startsWith('KEG') ? 'BARRIL' : 'CO2';
+        const assetTypeMatch = filters.assetType === 'ALL' || (assetCodePrefix === filters.assetType);
+        const eventTypeMatch = filters.eventType === 'ALL' || event.event_type === filters.eventType;
+        return customerMatch && assetTypeMatch && eventTypeMatch;
+    });
+  }, [allEvents, filters]);
 
   const totalPages = Math.ceil(filteredEvents.length / ITEMS_PER_PAGE);
   const paginatedEvents = useMemo(() => {
@@ -212,10 +222,34 @@ export default function OverviewPage() {
           <div className="flex flex-col sm:flex-row items-center gap-4 p-4 md:p-6">
             <Input
               placeholder="Buscar por cliente..."
-              value={customerSearch}
-              onChange={handleSearchChange}
+              value={filters.customer}
+              onChange={(e) => handleFilterChange('customer', e.target.value)}
               className="w-full sm:max-w-sm"
             />
+            <Select value={filters.assetType} onValueChange={(value) => handleFilterChange('assetType', value)}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="Tipo de Activo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Todos los Tipos</SelectItem>
+                  <SelectItem value="BARRIL">Barril</SelectItem>
+                  <SelectItem value="CO2">CO2</SelectItem>
+                </SelectContent>
+            </Select>
+            <Select value={filters.eventType} onValueChange={(value) => handleFilterChange('eventType', value)}>
+                <SelectTrigger className="w-full sm:w-[220px]">
+                  <SelectValue placeholder="Tipo de Evento" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="ALL">Todos los Eventos</SelectItem>
+                    <SelectItem value="SALIDA_A_REPARTO">Salida a Reparto</SelectItem>
+                    <SelectItem value="ENTREGA_A_CLIENTE">Entrega a Cliente</SelectItem>
+                    <SelectItem value="RECOLECCION_DE_CLIENTE">Recolección de Cliente</SelectItem>
+                    <SelectItem value="RECEPCION_EN_PLANTA">Recepción en Planta</SelectItem>
+                    <SelectItem value="SALIDA_VACIO">Salida Vacío (Préstamo)</SelectItem>
+                    <SelectItem value="DEVOLUCION">Devolución (Lleno)</SelectItem>
+                </SelectContent>
+            </Select>
           </div>
           <CardContent className="p-0">
             {isLoading ? (
