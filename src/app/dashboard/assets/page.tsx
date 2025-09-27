@@ -2,7 +2,8 @@
 "use client";
 
 import { useState, useRef, useMemo, Suspense, useEffect } from "react";
-import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus, ChevronLeft, ChevronRight, Package } from "lucide-react";
+import ReactDOMServer from 'react-dom/server';
+import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus, ChevronLeft, ChevronRight } from "lucide-react";
 import { db } from "@/lib/firebase";
 import dynamic from "next/dynamic";
 
@@ -54,6 +55,25 @@ const QRCode = dynamic(() => import('qrcode.react'), {
 
 const ITEMS_PER_PAGE = 10;
 
+const QrLabel = ({ asset }: { asset: Asset }) => {
+  return (
+    <div className="qr-label">
+      <div className="qr-label__header">
+        <Logo className="h-5 w-5 text-white" />
+        <span className="qr-label__title">Tracked by BiruTracker</span>
+      </div>
+      <div className="qr-label__body">
+        <div className="qr-label__qr-container">
+          <QRCode value={asset.id} size={100} renderAs="svg" level="H" includeMargin={false} className="h-full w-full" />
+        </div>
+        <div className="qr-label__code">{asset.code}</div>
+        <div className="qr-label__format">{asset.format} {asset.type === 'BARRIL' ? 'Barril' : 'Cilindro CO2'}</div>
+      </div>
+    </div>
+  );
+};
+
+
 export default function AssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -69,26 +89,7 @@ export default function AssetsPage() {
   const { toast } = useToast();
   const userRole = useUserRole();
   const isMobile = useIsMobile();
-  const printRef = useRef<HTMLDivElement>(null);
   
-  const QrLabel = ({ asset }: { asset: Asset }) => {
-    return (
-      <div className="qr-label">
-        <div className="qr-label__header">
-          <Logo className="h-5 w-5 text-white" />
-          <span className="qr-label__title">Tracked by BiruTracker</span>
-        </div>
-        <div className="qr-label__body">
-          <div className="qr-label__qr-container">
-            <QRCode value={asset.id} size={100} renderAs="svg" level="H" includeMargin={false} className="h-full w-full" />
-          </div>
-          <div className="qr-label__code">{asset.code}</div>
-          <div className="qr-label__format">{asset.format} {asset.type === 'BARRIL' ? 'Barril' : 'Cilindro CO2'}</div>
-        </div>
-      </div>
-    );
-  };
-
   useEffect(() => {
     const fetchAssets = async () => {
       setIsLoading(true);
@@ -138,31 +139,32 @@ export default function AssetsPage() {
     setQrCodeOpen(true);
   };
 
-  const handlePrint = () => {
-    const contentToPrint = printRef.current?.innerHTML;
-    if (!contentToPrint) {
-      console.error("No content to print.");
-      toast({ title: "Error de Impresión", description: "No se encontró contenido para imprimir.", variant: "destructive" });
+  const handlePrint = (assetsToPrint: Asset[]) => {
+    const printWindow = window.open('', '', 'height=800,width=1000');
+    if (!printWindow) {
+      toast({ title: "Error de Impresión", description: "No se pudo abrir la ventana para imprimir.", variant: "destructive" });
       return;
     }
 
-    const printWindow = window.open('', '', 'height=800,width=1000');
-    if (printWindow) {
-        printWindow.document.write('<html><head><title>Imprimir QR</title>');
-        const styles = Array.from(document.styleSheets)
-            .map(styleSheet => `<link rel="stylesheet" href="${styleSheet.href}">`)
-            .join('');
-        printWindow.document.write(styles);
-        printWindow.document.write('</head><body>');
-        printWindow.document.write(contentToPrint);
-        printWindow.document.write('</body></html>');
-        printWindow.document.close();
-        
-        setTimeout(() => {
-            printWindow.focus();
-            printWindow.print();
-        }, 500); // Timeout to allow styles to load
-    }
+    const isSingle = assetsToPrint.length === 1;
+    const sheetClassName = isSingle ? 'print-sheet-single' : 'print-sheet';
+
+    const labelsHtml = assetsToPrint.map(asset => ReactDOMServer.renderToStaticMarkup(<QrLabel asset={asset} />)).join('');
+    const contentToPrint = `<div class="${sheetClassName}">${labelsHtml}</div>`;
+    
+    printWindow.document.write('<html><head><title>Imprimir QR</title>');
+    // Link to the main stylesheet
+    const stylesheetUrl = `${window.location.origin}/_next/static/css/app/layout.css`;
+    printWindow.document.write(`<link rel="stylesheet" href="${stylesheetUrl}">`);
+    printWindow.document.write('</head><body class="print-body">');
+    printWindow.document.write(contentToPrint);
+    printWindow.document.write('</body></html>');
+    printWindow.document.close();
+
+    setTimeout(() => {
+      printWindow.focus();
+      printWindow.print();
+    }, 500); // Timeout to allow styles and content to load
   };
   
   const confirmDelete = (asset: Asset) => {
@@ -578,29 +580,13 @@ export default function AssetsPage() {
 
   return (
     <div className="flex flex-1 flex-col">
-       {/* Hidden div for printing content */}
-       <div className="print-only">
-          <div ref={printRef}>
-              {selectedAsset && (
-                  <div className="print-sheet-single">
-                      <QrLabel asset={selectedAsset} />
-                  </div>
-              )}
-              {isBatchQrOpen && (
-                  <div className="print-sheet">
-                      {assetsToPrint.map(asset => <QrLabel key={asset.id} asset={asset} />)}
-                  </div>
-              )}
-          </div>
-       </div>
-
        <Dialog open={isFormOpen} onOpenChange={setFormOpen}>
         <PageHeader
           title="Activos"
           description="Gestiona tus barriles de cerveza y cilindros de CO₂."
           action={
             <div className="flex flex-col sm:flex-row items-center gap-2">
-                 <Button size="lg" variant="outline" onClick={() => {setBatchQrOpen(true); setTimeout(handlePrint, 100);}} disabled={assetsToPrint.length === 0}>
+                 <Button size="lg" variant="outline" onClick={() => handlePrint(assetsToPrint)} disabled={assetsToPrint.length === 0}>
                     <Printer className="mr-2 h-5 w-5" />
                     Imprimir Lote de QR
                 </Button>
@@ -683,7 +669,7 @@ export default function AssetsPage() {
                   </div>
               )}
             </Suspense>
-            <Button onClick={handlePrint}>
+            <Button onClick={() => selectedAsset && handlePrint([selectedAsset])}>
                 <Printer className="mr-2 h-4 w-4" />
                 Imprimir
             </Button>
@@ -706,7 +692,7 @@ export default function AssetsPage() {
                 </div>
               </Suspense>
             </ScrollArea>
-            <Button onClick={handlePrint} className="mt-4">
+            <Button onClick={() => handlePrint(assetsToPrint)} className="mt-4">
               <Printer className="mr-2 h-5 w-5" />
               Imprimir Todos ({assetsToPrint.length})
             </Button>
@@ -732,3 +718,5 @@ export default function AssetsPage() {
     </div>
   );
 }
+
+    

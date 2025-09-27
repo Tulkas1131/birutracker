@@ -96,8 +96,8 @@
   }
   .qr-label__header {
     @apply flex items-center justify-between px-2 bg-gray-800 text-white flex-shrink-0;
-    padding-top: 2px;
-    padding-bottom: 2px;
+    padding-top: 1px;
+    padding-bottom: 1px;
   }
   .qr-label__title {
     @apply text-xs font-medium tracking-wider flex-grow text-right;
@@ -113,18 +113,10 @@
     aspect-ratio: 1 / 1;
   }
   .qr-label__code {
-    @apply text-sm font-bold tracking-wider text-center text-gray-800;
-    line-height: 1.1;
-    margin-top: 2px;
+    @apply text-sm font-bold tracking-wider text-center text-gray-800 leading-tight;
   }
   .qr-label__format {
-    @apply text-xs text-center text-gray-600;
-    line-height: 1.1;
-  }
-
-  /* Hide elements not meant for printing */
-  .print-only {
-    display: none;
+    @apply text-xs text-center text-gray-600 leading-tight;
   }
 }
 
@@ -134,19 +126,15 @@
     margin: 0.5in;
   }
 
-  body {
-    background-color: white;
+  body.print-body {
+    background-color: white !important;
   }
-
+  
   /* Hide everything except the print container */
-  body > *:not(.print-only) {
+  body > *:not(.print-body) {
     display: none !important;
   }
   
-  .print-only {
-    display: block;
-  }
-
   /* Print sheet layout */
   .print-sheet, .print-sheet-single {
     display: grid;
@@ -215,3 +203,5 @@
       top: auto;
   }
 }
+
+    
