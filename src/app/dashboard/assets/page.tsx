@@ -70,6 +70,24 @@ export default function AssetsPage() {
   const userRole = useUserRole();
   const isMobile = useIsMobile();
   const printRef = useRef<HTMLDivElement>(null);
+  
+  const QrLabel = ({ asset }: { asset: Asset }) => {
+    return (
+      <div className="qr-label">
+        <div className="qr-label__header">
+          <Logo className="h-5 w-5 text-white" />
+          <span className="qr-label__title">Tracked by BiruTracker</span>
+        </div>
+        <div className="qr-label__body">
+          <div className="qr-label__qr-container">
+            <QRCode value={asset.id} size={100} renderAs="svg" level="H" includeMargin={false} className="h-full w-full" />
+          </div>
+          <div className="qr-label__code">{asset.code}</div>
+          <div className="qr-label__format">{asset.format} {asset.type === 'BARRIL' ? 'Barril' : 'Cilindro CO2'}</div>
+        </div>
+      </div>
+    );
+  };
 
   useEffect(() => {
     const fetchAssets = async () => {
@@ -121,24 +139,29 @@ export default function AssetsPage() {
   };
 
   const handlePrint = () => {
+    const contentToPrint = printRef.current?.innerHTML;
+    if (!contentToPrint) {
+      console.error("No content to print.");
+      toast({ title: "Error de Impresión", description: "No se encontró contenido para imprimir.", variant: "destructive" });
+      return;
+    }
+
     const printWindow = window.open('', '', 'height=800,width=1000');
-    if (printWindow && printRef.current) {
+    if (printWindow) {
         printWindow.document.write('<html><head><title>Imprimir QR</title>');
-        // Link to the main stylesheet to get all styles, including print styles
         const styles = Array.from(document.styleSheets)
             .map(styleSheet => `<link rel="stylesheet" href="${styleSheet.href}">`)
             .join('');
         printWindow.document.write(styles);
         printWindow.document.write('</head><body>');
-        printWindow.document.write(printRef.current.innerHTML);
+        printWindow.document.write(contentToPrint);
         printWindow.document.write('</body></html>');
         printWindow.document.close();
-        printWindow.focus();
         
-        // Use a timeout to ensure styles are loaded before printing
         setTimeout(() => {
+            printWindow.focus();
             printWindow.print();
-        }, 500);
+        }, 500); // Timeout to allow styles to load
     }
   };
   
@@ -553,31 +576,13 @@ export default function AssetsPage() {
     </div>
   );
 
-  const QrLabel = ({ asset }: { asset: Asset }) => {
-    return (
-      <div className="qr-label">
-        <div className="qr-label__header">
-          <Logo className="h-5 w-5 text-white" />
-          <span className="qr-label__title">Tracked by BiruTracker</span>
-        </div>
-        <div className="qr-label__body">
-          <div className="qr-label__qr-container">
-            <QRCode value={asset.id} size={100} renderAs="svg" level="H" includeMargin={false} className="h-full w-full" />
-          </div>
-          <div className="qr-label__code">{asset.code}</div>
-          <div className="qr-label__format">{asset.format} {asset.type === 'BARRIL' ? 'Barril' : 'Cilindro'}</div>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="flex flex-1 flex-col">
        {/* Hidden div for printing content */}
        <div className="print-only">
           <div ref={printRef}>
               {selectedAsset && (
-                  <div className="print-sheet">
+                  <div className="print-sheet-single">
                       <QrLabel asset={selectedAsset} />
                   </div>
               )}
@@ -595,7 +600,7 @@ export default function AssetsPage() {
           description="Gestiona tus barriles de cerveza y cilindros de CO₂."
           action={
             <div className="flex flex-col sm:flex-row items-center gap-2">
-                 <Button size="lg" variant="outline" onClick={() => setBatchQrOpen(true)} disabled={assetsToPrint.length === 0}>
+                 <Button size="lg" variant="outline" onClick={() => {setBatchQrOpen(true); setTimeout(handlePrint, 100);}} disabled={assetsToPrint.length === 0}>
                     <Printer className="mr-2 h-5 w-5" />
                     Imprimir Lote de QR
                 </Button>
