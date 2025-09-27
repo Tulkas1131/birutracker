@@ -55,6 +55,7 @@ const QRCode = dynamic(() => import('qrcode.react'), {
 
 const ITEMS_PER_PAGE = 10;
 
+// Componente para visualización en la UI
 const QrLabel = ({ asset }: { asset: Asset }) => {
   return (
     <div className="qr-label">
@@ -68,6 +69,99 @@ const QrLabel = ({ asset }: { asset: Asset }) => {
         </div>
         <div className="qr-label__code">{asset.code}</div>
         <div className="qr-label__format">{asset.format} {asset.type === 'BARRIL' ? 'Barril' : 'Cilindro CO2'}</div>
+      </div>
+    </div>
+  );
+};
+
+// Componente optimizado para la impresión con estilos en línea
+const PrintableQrLabel = ({ asset }: { asset: Asset }) => {
+  // Estilos en línea para asegurar la consistencia en la impresión
+  const labelStyle: React.CSSProperties = {
+    position: 'relative',
+    display: 'flex',
+    flexDirection: 'column',
+    fontFamily: 'sans-serif',
+    overflow: 'hidden',
+    backgroundColor: 'white',
+    border: '1px dashed #999',
+    width: '2in',
+    height: '1.75in',
+    pageBreakInside: 'avoid',
+  };
+
+  const headerStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '1px 8px',
+    backgroundColor: '#1f2937', // bg-gray-800
+    color: 'white',
+    flexShrink: 0,
+  };
+
+  const titleStyle: React.CSSProperties = {
+    fontSize: '0.75rem',
+    fontWeight: '500',
+    letterSpacing: '0.05em',
+    flexGrow: 1,
+    textAlign: 'right',
+  };
+
+  const bodyStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '4px 8px',
+    margin: '0 auto',
+    width: '100%',
+    maxWidth: '140px',
+  };
+  
+  const qrContainerStyle: React.CSSProperties = {
+      width: '100px',
+      height: '100px',
+      aspectRatio: '1 / 1',
+      padding: '4px',
+      margin: '0 auto',
+  };
+
+  const codeStyle: React.CSSProperties = {
+    fontSize: '0.875rem',
+    fontWeight: 'bold',
+    letterSpacing: '0.05em',
+    textAlign: 'center',
+    color: '#1f2937',
+    lineHeight: '1.2',
+    marginTop: '0',
+    marginBottom: '0',
+  };
+  
+  const formatStyle: React.CSSProperties = {
+      fontSize: '0.75rem',
+      textAlign: 'center',
+      color: '#4b5563',
+      lineHeight: '1.2',
+  };
+
+
+  return (
+    <div style={labelStyle}>
+      <div style={headerStyle}>
+        {/* SVG del logo directamente inyectado para máxima compatibilidad */}
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ height: '20px', width: '20px', color: 'white' }}>
+          <path d="M10 21h4" /><path d="M10 3h4" /><path d="M14 3v2" /><path d="M10 3v2" /><path d="M18 8v8c0 1.1-.9 2-2 2H8c-1.1 0-2-.9-2-2V8c0-1.1.9 2 2-2h8c1.1 0 2 .9 2 2Z" /><path d="M10 12h4" /><path d="M12 10v4" />
+        </svg>
+        <span style={titleStyle}>Tracked by BiruTracker</span>
+      </div>
+      <div style={bodyStyle}>
+        <div style={qrContainerStyle}>
+          <QRCode value={asset.id} size={100} renderAs="svg" level="H" includeMargin={false} />
+        </div>
+        <div style={codeStyle}>{asset.code}</div>
+        <div style={formatStyle}>{asset.format} {asset.type === 'BARRIL' ? 'Barril' : 'Cilindro CO2'}</div>
       </div>
     </div>
   );
@@ -145,32 +239,44 @@ export default function AssetsPage() {
         toast({ title: "Error de Impresión", description: "No se pudo abrir la ventana para imprimir.", variant: "destructive" });
         return;
     }
-
+  
+    // Genera el HTML de las etiquetas usando el componente de impresión
+    const labelsHtml = assetsToPrint.map(asset => 
+        ReactDOMServer.renderToStaticMarkup(<PrintableQrLabel asset={asset} />)
+    ).join('');
+  
     const isSingle = assetsToPrint.length === 1;
     const sheetClassName = isSingle ? 'print-sheet-single' : 'print-sheet';
-
-    const labelsHtml = assetsToPrint.map(asset => ReactDOMServer.renderToStaticMarkup(<QrLabel asset={asset} />)).join('');
     const contentToPrint = `<div class="${sheetClassName}">${labelsHtml}</div>`;
-    
+  
+    // Recolecta todos los estilos del documento principal para inyectarlos
+    const styles = Array.from(document.styleSheets)
+      .map(styleSheet => {
+        try {
+          return Array.from(styleSheet.cssRules)
+            .map(rule => rule.cssText)
+            .join('');
+        } catch (e) {
+          console.warn("No se pudo leer una hoja de estilos (CORS):", e);
+          return '';
+        }
+      })
+      .join('');
+  
     printWindow.document.write('<html><head><title>Imprimir QR</title>');
-
-    // Clone all style and link tags from the main document to the new window
-    const styles = document.head.querySelectorAll('style, link[rel="stylesheet"]');
-    styles.forEach(style => {
-        printWindow.document.head.appendChild(style.cloneNode(true));
-    });
-
+    // Inyecta los estilos directamente para máxima compatibilidad
+    printWindow.document.write(`<style>${styles}</style>`);
     printWindow.document.write('</head><body class="print-body">');
     printWindow.document.write(contentToPrint);
     printWindow.document.write('</body></html>');
     printWindow.document.close();
-
+  
     setTimeout(() => {
         printWindow.focus();
         printWindow.print();
-        // Keep the window open for debugging if needed, otherwise close it
-        // printWindow.close();
-    }, 500); // Timeout to allow styles and content to load
+        // Descomentar para cerrar la ventana después de imprimir
+        // printWindow.close(); 
+    }, 500); // Un timeout generoso para asegurar que todo cargue
   };
   
   const confirmDelete = (asset: Asset) => {
@@ -725,4 +831,5 @@ export default function AssetsPage() {
   );
 }
 
+    
     
