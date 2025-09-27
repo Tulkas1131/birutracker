@@ -142,8 +142,8 @@ export default function AssetsPage() {
   const handlePrint = (assetsToPrint: Asset[]) => {
     const printWindow = window.open('', '', 'height=800,width=1000');
     if (!printWindow) {
-      toast({ title: "Error de Impresión", description: "No se pudo abrir la ventana para imprimir.", variant: "destructive" });
-      return;
+        toast({ title: "Error de Impresión", description: "No se pudo abrir la ventana para imprimir.", variant: "destructive" });
+        return;
     }
 
     const isSingle = assetsToPrint.length === 1;
@@ -153,17 +153,23 @@ export default function AssetsPage() {
     const contentToPrint = `<div class="${sheetClassName}">${labelsHtml}</div>`;
     
     printWindow.document.write('<html><head><title>Imprimir QR</title>');
-    // Link to the main stylesheet
-    const stylesheetUrl = `${window.location.origin}/_next/static/css/app/layout.css`;
-    printWindow.document.write(`<link rel="stylesheet" href="${stylesheetUrl}">`);
+
+    // Clone all style and link tags from the main document to the new window
+    const styles = document.head.querySelectorAll('style, link[rel="stylesheet"]');
+    styles.forEach(style => {
+        printWindow.document.head.appendChild(style.cloneNode(true));
+    });
+
     printWindow.document.write('</head><body class="print-body">');
     printWindow.document.write(contentToPrint);
     printWindow.document.write('</body></html>');
     printWindow.document.close();
 
     setTimeout(() => {
-      printWindow.focus();
-      printWindow.print();
+        printWindow.focus();
+        printWindow.print();
+        // Keep the window open for debugging if needed, otherwise close it
+        // printWindow.close();
     }, 500); // Timeout to allow styles and content to load
   };
   
@@ -718,3 +724,5 @@ export default function AssetsPage() {
     </div>
   );
 }
+
+    
