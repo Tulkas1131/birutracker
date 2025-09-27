@@ -87,42 +87,32 @@
 @layer components {
   /* QR Label Component Styles */
   .qr-label {
-    @apply relative flex flex-col font-sans overflow-hidden;
-    background-color: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 0.375rem; /* rounded-md */
-    width: 3.75in;
+    @apply relative flex flex-col font-sans overflow-hidden bg-white border border-gray-300;
+    width: 3.5in;
     height: 1.75in;
     page-break-inside: avoid;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
   .qr-label__header {
-    @apply flex items-center justify-between px-3 py-1;
-    background-color: #212936;
-    color: white;
-    border-top-left-radius: 0.375rem;
-    border-top-right-radius: 0.375rem;
+    @apply flex items-center justify-between px-3 py-1 bg-gray-800 text-white;
   }
   .qr-label__title {
     @apply text-xs font-medium tracking-wider flex-grow text-right;
   }
   .qr-label__body {
     @apply flex flex-grow items-center justify-center p-2;
-    min-height: 0;
   }
   .qr-label__qr-container {
-    @apply flex items-center justify-center p-1;
+    @apply p-1;
     width: 120px;
     height: 120px;
-    aspect-ratio: 1 / 1;
   }
   .qr-label__footer {
-    @apply flex items-center justify-center pb-2;
+    @apply flex items-center justify-center;
   }
   .qr-label__code {
-    @apply text-lg font-bold tracking-wider text-center;
-    color: #212936;
+    @apply text-base font-bold tracking-wider text-center text-gray-800;
   }
 
   /* Hide elements not meant for printing */
@@ -186,10 +176,12 @@
   
   /* Left edge mark */
   .qr-label::before { left: -0.375in; }
-  /* Extend left edge mark to page margin for first column */
+   /* Extend left edge mark to page margin for first column */
   .qr-label:nth-child(2n+1)::before { left: -0.5in; width: 0.5in; }
   
   /* Right edge mark */
+  .qr-label:nth-child(2n)::before { left: auto; right: -0.375in; }
+   /* Extend right edge mark to page margin for second column */
   .qr-label:nth-child(2n)::before { right: -0.5in; width: 0.5in; }
   
   /* Top edge mark */

@@ -129,7 +129,7 @@ export default function AssetsPage() {
             .map(styleSheet => `<link rel="stylesheet" href="${styleSheet.href}">`)
             .join('');
         printWindow.document.write(styles);
-        printWindow.document.write('</head><body class="bg-white">');
+        printWindow.document.write('</head><body>');
         printWindow.document.write(printRef.current.innerHTML);
         printWindow.document.write('</body></html>');
         printWindow.document.close();
@@ -557,16 +557,16 @@ export default function AssetsPage() {
     return (
       <div className="qr-label">
         <div className="qr-label__header">
-          <Package className="h-5 w-5 text-white" />
+          <Logo className="h-5 w-5 text-white" />
           <span className="qr-label__title">Tracked by BiruTracker</span>
         </div>
         <div className="qr-label__body">
           <div className="qr-label__qr-container">
-            <QRCode value={asset.id} size={128} renderAs="svg" level="H" includeMargin={false} className="h-full w-full" />
+            <QRCode value={asset.id} size={118} renderAs="svg" level="H" includeMargin={false} className="h-full w-full" />
           </div>
-        </div>
-        <div className="qr-label__footer">
-          <div className="qr-label__code">{asset.code}</div>
+          <div className="qr-label__footer">
+            <div className="qr-label__code">{asset.code}</div>
+          </div>
         </div>
       </div>
     );
