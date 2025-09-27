@@ -87,7 +87,7 @@
 @layer components {
   /* QR Label Component Styles */
   .qr-label {
-    @apply relative flex flex-col font-sans overflow-hidden bg-white border border-gray-300;
+    @apply relative flex flex-col font-sans overflow-hidden bg-white border border-gray-300 rounded-md;
     width: 3.5in;
     height: 1.75in;
     page-break-inside: avoid;
@@ -95,24 +95,26 @@
     print-color-adjust: exact;
   }
   .qr-label__header {
-    @apply flex items-center justify-between px-3 py-1 bg-gray-800 text-white;
+    @apply flex items-center justify-between px-2 bg-gray-800 text-white;
+    padding-top: 0.125rem;
+    padding-bottom: 0.125rem;
   }
   .qr-label__title {
     @apply text-xs font-medium tracking-wider flex-grow text-right;
   }
   .qr-label__body {
-    @apply flex flex-grow items-center justify-center p-2;
+    @apply flex flex-col flex-grow items-center justify-center p-1;
+    width: 120px;
+    margin: 0 auto;
   }
   .qr-label__qr-container {
     @apply p-1;
-    width: 120px;
-    height: 120px;
-  }
-  .qr-label__footer {
-    @apply flex items-center justify-center;
+    width: 102px;
+    height: 102px;
+    aspect-ratio: 1 / 1;
   }
   .qr-label__code {
-    @apply text-base font-bold tracking-wider text-center text-gray-800;
+    @apply text-sm font-bold tracking-wider text-center text-gray-800 pt-0.5;
   }
 
   /* Hide elements not meant for printing */
@@ -196,5 +198,3 @@
       top: auto;
   }
 }
-
-    

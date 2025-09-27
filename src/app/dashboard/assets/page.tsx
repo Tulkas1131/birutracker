@@ -562,11 +562,9 @@ export default function AssetsPage() {
         </div>
         <div className="qr-label__body">
           <div className="qr-label__qr-container">
-            <QRCode value={asset.id} size={118} renderAs="svg" level="H" includeMargin={false} className="h-full w-full" />
+            <QRCode value={asset.id} size={100} renderAs="svg" level="H" includeMargin={false} className="h-full w-full" />
           </div>
-          <div className="qr-label__footer">
-            <div className="qr-label__code">{asset.code}</div>
-          </div>
+          <div className="qr-label__code">{asset.code}</div>
         </div>
       </div>
     );
