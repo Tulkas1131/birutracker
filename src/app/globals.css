@@ -100,10 +100,10 @@
     @apply text-xs font-medium tracking-wider;
   }
   .qr-label__body {
-    @apply flex flex-grow items-center justify-center p-3;
+    @apply flex flex-col flex-grow items-center justify-center p-3;
   }
   .qr-label__qr-container {
-    @apply flex-shrink-0 p-1;
+    @apply flex-shrink-0 p-1 w-[128px] h-[128px];
   }
   .qr-label__info {
     @apply flex h-full flex-col items-center justify-center text-center;
@@ -188,5 +188,3 @@
     width: 1px;
   }
 }
-
-    
