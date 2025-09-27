@@ -130,7 +130,7 @@
   }
 
   /* When the single QR dialog is open, hide everything else */
-  body:has(.print-qr-dialog[data-state="open"]) .print-container {
+  body:has(.print-qr-dialog[data-state="open"]) .no-print {
     display: none;
   }
   body:has(.print-qr-dialog[data-state="open"]) .print-only {
@@ -138,7 +138,7 @@
   }
 
   /* When the single QR dialog is NOT open, hide the main container */
-  body:not(:has(.print-qr-dialog[data-state="open"])) .print-container {
+  body:not(:has(.print-qr-dialog[data-state="open"])) .no-print {
     display: none;
   }
 
@@ -164,41 +164,16 @@
     height: 10in;
   }
 
-  .qr-label {
+  .print-item {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0.125in;
+    border: 1px dashed #999;
+    box-sizing: border-box;
+  }
+  .print-item .qr-label {
     border: none;
   }
   
-  .qr-label::before,
-  .qr-label::after {
-    content: "";
-    position: absolute;
-    width: 0.5in;
-    height: 0.5in;
-    border-color: #000;
-    border-style: solid;
-  }
-
-  .qr-label::before {
-    top: -0.25in;
-    left: -0.25in;
-    border-width: 1px 0 0 1px;
-  }
-
-  .qr-label::after {
-    top: -0.25in;
-    right: -0.25in;
-    border-width: 1px 1px 0 0;
-  }
-
-  .print-sheet .qr-label::before,
-  .print-sheet .qr-label::after {
-    bottom: -0.25in;
-    border-width: 0 0 1px 1px;
-  }
-
-  .print-sheet .qr-label::after {
-    left: auto;
-    right: -0.25in;
-    border-width: 0 1px 1px 0;
-  }
 }

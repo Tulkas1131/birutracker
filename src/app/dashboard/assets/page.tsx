@@ -5,6 +5,8 @@ import { useState, useEffect, useMemo } from "react";
 import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus, ChevronLeft, ChevronRight } from "lucide-react";
 import { db } from "@/lib/firebase";
 import dynamic from "next/dynamic";
+import { renderToStaticMarkup } from 'react-dom/server';
+
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -554,7 +556,7 @@ export default function AssetsPage() {
   
   return (
     <>
-      <div className="print-container">
+      <div className="no-print">
         <Dialog open={isFormOpen} onOpenChange={setFormOpen}>
           <PageHeader
             title="Activos"
@@ -672,7 +674,9 @@ export default function AssetsPage() {
       <div className="print-only">
         <div className="print-sheet">
           {assetsToPrint.map(asset => (
-            <QrLabel key={asset.id} asset={asset} />
+            <div key={asset.id} className="print-item">
+              <QrLabel asset={asset} />
+            </div>
           ))}
         </div>
       </div>
