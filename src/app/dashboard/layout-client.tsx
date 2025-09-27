@@ -51,7 +51,7 @@ const navItems = [
     { href: "/dashboard/assets", icon: Package, label: "Activos" },
     { href: "/dashboard/movements", icon: Truck, label: "Registrar" },
     { href: "/dashboard/customers", icon: Users, label: "Clientes" },
-    { href: "/dashboard/history", icon: History, label: "Historial" },
+    { href: "/dashboard/overview", icon: History, label: "Historial" },
 ];
 
 const adminNavItems = [

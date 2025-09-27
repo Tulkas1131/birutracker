@@ -124,7 +124,7 @@ function EventTableRow({ event, assetsMap, onDelete }: { event: Event, assetsMap
   );
 }
 
-export default function HistoryPage() {
+export default function OverviewPage() {
   const [allEvents, setAllEvents] = useState<Event[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
