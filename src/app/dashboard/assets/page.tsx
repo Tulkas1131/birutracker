@@ -39,7 +39,7 @@ import { PageHeader } from "@/components/page-header";
 import type { Asset, AssetBatchFormData } from "@/lib/types";
 import { AssetForm } from "@/components/asset-form";
 import { AssetBatchForm } from "@/components/asset-batch-form";
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/use-user-role";
 import { logAppEvent } from "@/lib/logging";
@@ -138,15 +138,7 @@ export default function AssetsPage() {
   };
 
   const handlePrint = () => {
-    if (isQrCodeOpen) {
-      // Logic to print single QR
-      document.body.classList.add('printing-single');
-      window.print();
-      document.body.classList.remove('printing-single');
-    } else {
-      // Logic to print batch
-      window.print();
-    }
+    window.print();
   };
   
   const confirmDelete = (asset: Asset) => {
@@ -559,12 +551,10 @@ export default function AssetsPage() {
       ))}
     </div>
   );
-
-  const printButtonText = isQrCodeOpen ? "Imprimir QR Seleccionado" : "Imprimir Lote de QR";
   
   return (
     <>
-      <div className="no-print flex flex-1 flex-col">
+      <div className="print-container">
         <Dialog open={isFormOpen} onOpenChange={setFormOpen}>
           <PageHeader
             title="Activos"
@@ -573,7 +563,7 @@ export default function AssetsPage() {
               <div className="flex flex-col sm:flex-row items-center gap-2">
                    <Button size="lg" variant="outline" onClick={handlePrint} disabled={assetsToPrint.length === 0}>
                       <Printer className="mr-2 h-5 w-5" />
-                      {printButtonText}
+                      Imprimir Lote de QR
                   </Button>
                   <Button size="lg" variant="outline" onClick={handleNewBatch}>
                       <PackagePlus className="mr-2 h-5 w-5" />
@@ -652,6 +642,12 @@ export default function AssetsPage() {
                       <QrLabel asset={selectedAsset} />
                   </div>
               )}
+              <DialogFooter>
+                  <Button variant="outline" onClick={handlePrint}>
+                      <Printer className="mr-2 h-4 w-4" />
+                      Imprimir
+                  </Button>
+              </DialogFooter>
           </DialogContent>
         </Dialog>
         <AlertDialog open={isConfirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>

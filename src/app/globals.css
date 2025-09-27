@@ -129,39 +129,32 @@
     margin: 0.5in;
   }
 
-  /* Hide the main app content when printing */
-  .no-print {
-    display: none !important;
+  /* When the single QR dialog is open, hide everything else */
+  body:has(.print-qr-dialog[data-state="open"]) .print-container {
+    display: none;
+  }
+  body:has(.print-qr-dialog[data-state="open"]) .print-only {
+    display: none;
   }
 
-  /* Show the print-only sections */
-  .print-only {
+  /* When the single QR dialog is NOT open, hide the main container */
+  body:not(:has(.print-qr-dialog[data-state="open"])) .print-container {
+    display: none;
+  }
+
+  /* Always show the print sheet unless a single dialog is open */
+  body:not(:has(.print-qr-dialog[data-state="open"])) .print-only {
     display: block;
   }
 
-  /* Special handling for single QR dialog print */
-  body.printing-single .print-only {
-    display: none; /* Hide batch sheet */
-  }
-  
-  body.printing-single .print-qr-dialog,
-  body.printing-single .print-qr-dialog * {
+  /* Make sure the single dialog content is visible for printing */
+  .print-qr-dialog[data-state="open"] {
     display: block;
-    visibility: visible;
-  }
-  
-  body.printing-single .print-qr-dialog {
     position: absolute;
     left: 0;
     top: 0;
-    width: 100%;
-    height: 100%;
-    border: none;
-    box-shadow: none;
   }
-
-
-  /* Layout for the batch print sheet */
+  
   .print-sheet {
     display: grid;
     gap: 0;
