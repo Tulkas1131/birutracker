@@ -167,7 +167,7 @@ export default function DashboardPage() {
                   title="Movimientos (Últimas 24h)" 
                   value={metrics.movimientosUltimas24h} 
                   icon={<History className="h-4 w-4 text-muted-foreground" />} 
-                  href="/dashboard/history"
+                  href="/dashboard/overview"
               />
           </div>
           <div className="lg:col-span-2">
@@ -175,7 +175,7 @@ export default function DashboardPage() {
                   title="Activos Críticos (>30 días)" 
                   value={metrics.activosCriticos} 
                   icon={<AlertTriangle className="h-4 w-4 text-destructive" />} 
-                  href="/dashboard/history"
+                  href="/dashboard/overview"
               />
           </div>
           
