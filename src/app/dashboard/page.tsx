@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
 import { History, Package, Truck, Users, PackageCheck, PackageSearch, Warehouse, AlertTriangle } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -67,20 +67,21 @@ export default function DashboardPage() {
     const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
     const movimientosUltimas24h = events.filter(event => event.timestamp.toDate() > twentyFourHoursAgo).length;
 
-    const deliveryEventsMap = new Map<string, Date>();
+    // Create a map of the most recent 'ENTREGA_A_CLIENTE' event for each asset.
+    const lastDeliveryEventMap = new Map<string, Date>();
     events
         .filter(e => e.event_type === 'ENTREGA_A_CLIENTE')
         .forEach(e => {
-            // We only care about the latest delivery event for each asset
-            if (!deliveryEventsMap.has(e.asset_id)) {
-                deliveryEventsMap.set(e.asset_id, e.timestamp.toDate());
+            // Since events are sorted descending by date, the first one we find for an asset is the latest one.
+            if (!lastDeliveryEventMap.has(e.asset_id)) {
+                lastDeliveryEventMap.set(e.asset_id, e.timestamp.toDate());
             }
         });
 
     const activosCriticos = assetsEnCliente.filter(asset => {
-        const deliveryDate = deliveryEventsMap.get(asset.id);
-        if (deliveryDate) {
-            return differenceInDays(now, deliveryDate) > 30;
+        const lastDeliveryDate = lastDeliveryEventMap.get(asset.id);
+        if (lastDeliveryDate) {
+            return differenceInDays(now, lastDeliveryDate) >= 30;
         }
         return false;
     }).length;
@@ -111,7 +112,16 @@ export default function DashboardPage() {
         </Card>
      );
 
-     return href ? <Link href={href}>{cardContent}</Link> : cardContent;
+     if (href) {
+       // Use URLSearchParams to add query parameters
+       const url = new URL(href, window.location.origin);
+       if (title.includes("Críticos")) {
+           url.searchParams.append('critical', 'true');
+       }
+       return <Link href={url.pathname + url.search}>{cardContent}</Link>;
+     }
+
+     return cardContent;
   };
   
   const GroupedStatCard = ({ title, data, icon, type }: { title: string, data: Record<string, number>, icon: React.ReactNode, type: 'BARRIL' | 'CO2' }) => {
@@ -172,7 +182,7 @@ export default function DashboardPage() {
           </div>
           <div className="lg:col-span-2">
               <StatCard 
-                  title="Activos Críticos (>30 días)" 
+                  title="Activos Críticos (>=30 días)" 
                   value={metrics.activosCriticos} 
                   icon={<AlertTriangle className="h-4 w-4 text-destructive" />} 
                   href="/dashboard/overview"
@@ -234,5 +244,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    

@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import type { Timestamp } from "firebase/firestore/lite";
 import { db } from "@/lib/firebase";
 import { Loader2, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
@@ -18,6 +19,8 @@ import { differenceInDays } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { logAppEvent } from '@/lib/logging';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -60,7 +63,7 @@ function EventCardMobile({ event, assetsMap, onDelete }: { event: Event, assetsM
                 </div>
                 <div className="flex flex-col items-end gap-2">
                     {daysAtCustomer !== null && (
-                        daysAtCustomer > 30 ? (
+                        daysAtCustomer >= 30 ? (
                             <Badge variant="destructive">{daysAtCustomer} días</Badge>
                         ) : (
                             <Badge variant="outline">{daysAtCustomer} días</Badge>
@@ -100,7 +103,7 @@ function EventTableRow({ event, assetsMap, onDelete }: { event: Event, assetsMap
       <TableCell>{event.customer_name}</TableCell>
       <TableCell className="hidden md:table-cell">
         {daysAtCustomer !== null ? (
-          daysAtCustomer > 30 ? (
+          daysAtCustomer >= 30 ? (
             <Badge variant="destructive">{daysAtCustomer} días</Badge>
           ) : (
             <span>{daysAtCustomer} días</span>
@@ -126,14 +129,17 @@ function EventTableRow({ event, assetsMap, onDelete }: { event: Event, assetsMap
   );
 }
 
-export default function OverviewPage() {
+function OverviewPageContent() {
   const [allEvents, setAllEvents] = useState<Event[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const searchParams = useSearchParams();
+  
   const [filters, setFilters] = useState({
     customer: '',
     assetType: 'ALL',
     eventType: 'ALL',
+    criticalOnly: searchParams.get('critical') === 'true',
   });
   const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast();
@@ -171,10 +177,12 @@ export default function OverviewPage() {
     fetchData();
   }, [fetchData]);
   
-  const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
+  const handleFilterChange = (filterName: keyof typeof filters, value: string | boolean) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
     setCurrentPage(1);
   };
+  
+  const assetsMap = useMemo(() => new Map(assets.map(asset => [asset.id, asset])), [assets]);
 
   const filteredEvents = useMemo(() => {
     return allEvents.filter(event => {
@@ -182,9 +190,22 @@ export default function OverviewPage() {
         const assetCodePrefix = event.asset_code.startsWith('KEG') ? 'BARRIL' : 'CO2';
         const assetTypeMatch = filters.assetType === 'ALL' || (assetCodePrefix === filters.assetType);
         const eventTypeMatch = filters.eventType === 'ALL' || event.event_type === filters.eventType;
-        return customerMatch && assetTypeMatch && eventTypeMatch;
+
+        let criticalMatch = true;
+        if (filters.criticalOnly) {
+          const asset = assetsMap.get(event.asset_id);
+          criticalMatch = false; // Assume not a match unless proven otherwise
+          if (event.event_type === 'ENTREGA_A_CLIENTE' && asset && asset.location === 'EN_CLIENTE') {
+              const days = differenceInDays(new Date(), event.timestamp.toDate());
+              if (days >= 30) {
+                  criticalMatch = true;
+              }
+          }
+        }
+        
+        return customerMatch && assetTypeMatch && eventTypeMatch && criticalMatch;
     });
-  }, [allEvents, filters]);
+  }, [allEvents, filters, assetsMap]);
 
   const totalPages = Math.ceil(filteredEvents.length / ITEMS_PER_PAGE);
   const paginatedEvents = useMemo(() => {
@@ -210,8 +231,6 @@ export default function OverviewPage() {
     }
   };
 
-  const assetsMap = useMemo(() => new Map(assets.map(asset => [asset.id, asset])), [assets]);
-
   return (
     <div className="flex flex-1 flex-col">
       <PageHeader
@@ -220,15 +239,15 @@ export default function OverviewPage() {
       />
       <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
         <Card>
-          <div className="flex flex-col sm:flex-row items-center gap-4 p-4 md:p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 items-center gap-4 p-4 md:p-6">
             <Input
               placeholder="Buscar por cliente..."
               value={filters.customer}
               onChange={(e) => handleFilterChange('customer', e.target.value)}
-              className="w-full sm:max-w-sm"
+              className="w-full"
             />
             <Select value={filters.assetType} onValueChange={(value) => handleFilterChange('assetType', value)}>
-                <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Tipo de Activo" />
                 </SelectTrigger>
                 <SelectContent>
@@ -238,7 +257,7 @@ export default function OverviewPage() {
                 </SelectContent>
             </Select>
             <Select value={filters.eventType} onValueChange={(value) => handleFilterChange('eventType', value)}>
-                <SelectTrigger className="w-full sm:w-[220px]">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Tipo de Evento" />
                 </SelectTrigger>
                 <SelectContent>
@@ -252,6 +271,14 @@ export default function OverviewPage() {
                     <SelectItem value="DEVOLUCION">Devolución (Lleno)</SelectItem>
                 </SelectContent>
             </Select>
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="critical-only"
+                checked={filters.criticalOnly}
+                onCheckedChange={(checked) => handleFilterChange('criticalOnly', checked)}
+              />
+              <Label htmlFor="critical-only">Solo Críticos ({'>'}30 días)</Label>
+            </div>
           </div>
           <CardContent className="p-0">
             {isLoading ? (
@@ -332,4 +359,12 @@ export default function OverviewPage() {
   );
 }
 
-    
+
+export default function OverviewPage() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <OverviewPageContent />
+        </Suspense>
+    );
+}
+
