@@ -44,13 +44,12 @@ const stateLogic: Record<Asset['location'], Partial<Record<Asset['state'], Actio
             manualOverrides: ['DEVOLUCION'],
             description: "El activo está lleno en planta, listo para ser despachado.",
             requiresCustomerSelection: true,
-            requiresVariety: true,
         },
         VACIO: {
-            primary: 'SALIDA_A_REPARTO', // This is now the default action
+            primary: 'LLENADO_EN_PLANTA',
             manualOverrides: ['SALIDA_VACIO'],
-            description: "El activo se llenará y saldrá a reparto. Para un préstamo, usa la anulación manual.",
-            requiresCustomerSelection: true,
+            description: "El activo está vacío. Registra el llenado o una salida en préstamo.",
+            requiresCustomerSelection: false,
             requiresVariety: true,
         }
     },
@@ -90,6 +89,7 @@ const stateLogic: Record<Asset['location'], Partial<Record<Asset['state'], Actio
 
 const getEventTypeTranslation = (eventType: MovementEventType): string => {
     const translations: Record<MovementEventType, string> = {
+        LLENADO_EN_PLANTA: "Llenar Activo",
         SALIDA_A_REPARTO: "Salida a Reparto",
         ENTREGA_A_CLIENTE: "Entrega a Cliente",
         RECOLECCION_DE_CLIENTE: "Recolección de Cliente",
@@ -119,7 +119,7 @@ export default function MovementsPage() {
 
   const form = useForm<MovementFormData>({
     resolver: zodResolver(movementSchema),
-    defaultValues: { variety: "" },
+    defaultValues: { variety: "", customer_id: "INTERNAL" }, // Default customer for internal ops
   });
   
   const fetchData = useCallback(async () => {
@@ -174,7 +174,7 @@ export default function MovementsPage() {
     setScannedAsset(null);
     setActionLogic(null);
     setIsManualOverride(false);
-    form.reset();
+    form.reset({ variety: "", customer_id: "INTERNAL" });
   };
 
   const handleScanSuccess = async (decodedText: string) => {
@@ -216,6 +216,10 @@ export default function MovementsPage() {
         if (eventToUse) {
             form.setValue('customer_id', eventToUse.customer_id);
         }
+    } else if (!logic.requiresCustomerSelection) {
+        form.setValue('customer_id', 'INTERNAL'); // default for internal ops
+    } else {
+        form.resetField('customer_id'); // Clear customer if selection is required
     }
   };
 
@@ -242,38 +246,45 @@ export default function MovementsPage() {
     
     const selectedCustomer = customers.find(c => c.id === data.customer_id);
      if (actionLogic?.requiresCustomerSelection && !selectedCustomer) {
-      toast({ title: "Error", description: "Cliente no encontrado o no seleccionado.", variant: "destructive" });
+      toast({ title: "Error", description: "Debes seleccionar un cliente.", variant: "destructive" });
       setIsSubmitting(false);
       return;
     }
     
     let newLocation: Asset['location'] = scannedAsset.location;
     let newState: Asset['state'] = scannedAsset.state;
+    let newVariety: string | undefined = scannedAsset.variety;
 
     switch (data.event_type) {
-      case 'SALIDA_A_REPARTO': newLocation = 'EN_REPARTO'; newState = 'LLENO'; break;
-      case 'ENTREGA_A_CLIENTE': newLocation = 'EN_CLIENTE'; newState = 'LLENO'; break;
-      case 'SALIDA_VACIO': newLocation = 'EN_CLIENTE'; newState = 'VACIO'; break;
-      case 'RECOLECCION_DE_CLIENTE': newLocation = 'EN_REPARTO'; newState = 'VACIO'; break;
-      case 'RECEPCION_EN_PLANTA': newLocation = 'EN_PLANTA'; newState = 'VACIO'; break;
-      case 'DEVOLUCION': newLocation = 'EN_PLANTA'; newState = 'LLENO'; break;
+      case 'LLENADO_EN_PLANTA': newState = 'LLENO'; newVariety = data.variety; break;
+      case 'SALIDA_A_REPARTO': newLocation = 'EN_REPARTO'; break;
+      case 'ENTREGA_A_CLIENTE': newLocation = 'EN_CLIENTE'; break;
+      case 'SALIDA_VACIO': newLocation = 'EN_CLIENTE'; newState = 'VACIO'; newVariety = ''; break;
+      case 'RECOLECCION_DE_CLIENTE': newLocation = 'EN_REPARTO'; newState = 'VACIO'; newVariety = ''; break;
+      case 'RECEPCION_EN_PLANTA': newLocation = 'EN_PLANTA'; newState = 'VACIO'; newVariety = ''; break;
+      case 'DEVOLUCION': newLocation = 'EN_PLANTA'; newVariety = data.variety; break;
     }
 
     try {
       await runTransaction(firestore, async (transaction) => {
-        const customerId = selectedCustomer ? selectedCustomer.id : lastEvents.get(scannedAsset.id)?.customer_id || '';
-        const customerName = selectedCustomer ? selectedCustomer.name : lastEvents.get(scannedAsset.id)?.customer_name || 'N/A';
+        const customerId = selectedCustomer?.id || lastEvents.get(scannedAsset.id)?.customer_id || 'INTERNAL';
+        const customerName = selectedCustomer?.name || lastEvents.get(scannedAsset.id)?.customer_name || 'Planta';
         
-        if (!customerId) {
-            throw new Error("No se pudo determinar el cliente para este movimiento.");
-        }
-
-        const eventData = { asset_id: scannedAsset.id, asset_code: scannedAsset.code, customer_id: customerId, customer_name: customerName, event_type: data.event_type, timestamp: Timestamp.now(), user_id: user.uid, variety: data.variety || "" };
+        const eventData: Omit<Event, 'id'> = { 
+            asset_id: scannedAsset.id, 
+            asset_code: scannedAsset.code, 
+            customer_id: customerId, 
+            customer_name: customerName, 
+            event_type: data.event_type, 
+            timestamp: Timestamp.now(), 
+            user_id: user.uid, 
+            variety: data.variety || "" 
+        };
         const newEventRef = doc(collection(firestore, "events"));
         transaction.set(newEventRef, eventData);
 
         const assetRef = doc(firestore, "assets", scannedAsset.id);
-        transaction.update(assetRef, { location: newLocation, state: newState });
+        transaction.update(assetRef, { location: newLocation, state: newState, variety: newVariety });
       });
 
       toast({ title: "Movimiento Registrado", description: `El activo ${scannedAsset.code} ha sido actualizado.` });
@@ -290,14 +301,24 @@ export default function MovementsPage() {
   }
   
   const currentEventType = form.watch('event_type');
-  const showVarietyField = scannedAsset?.type === 'BARRIL' && (currentEventType === 'SALIDA_A_REPARTO' || currentEventType === 'DEVOLUCION');
-  const requiresCustomerSelection = isManualOverride 
-      ? (
-          currentEventType === 'SALIDA_A_REPARTO' || 
-          currentEventType === 'SALIDA_VACIO' ||
-          currentEventType === 'DEVOLUCION'
-        )
-      : actionLogic?.requiresCustomerSelection;
+
+  const showVarietyField = useMemo(() => {
+    if (scannedAsset?.type !== 'BARRIL') return false;
+    const varietyEvents: MovementEventType[] = ['LLENADO_EN_PLANTA', 'DEVOLUCION'];
+    // Manual override logic for SALIDA_A_REPARTO (when coming from VACIO)
+    if (isManualOverride && scannedAsset.state === 'VACIO' && currentEventType === 'SALIDA_A_REPARTO') {
+        return true;
+    }
+    return varietyEvents.includes(currentEventType);
+  }, [scannedAsset, currentEventType, isManualOverride]);
+
+  const requiresCustomerSelection = useMemo(() => {
+    const customerEvents: MovementEventType[] = ['SALIDA_A_REPARTO', 'SALIDA_VACIO', 'DEVOLUCION'];
+     if (isManualOverride) {
+        return customerEvents.includes(currentEventType) || (currentEventType === 'ENTREGA_A_CLIENTE');
+     }
+     return actionLogic?.requiresCustomerSelection ?? false;
+  }, [actionLogic, currentEventType, isManualOverride]);
 
 
   return (
@@ -361,7 +382,14 @@ export default function MovementsPage() {
                                     render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>Acción Manual</FormLabel>
-                                            <Select onValueChange={field.onChange} value={field.value}>
+                                            <Select onValueChange={(value) => {
+                                                field.onChange(value);
+                                                // Reset customer if the new action doesn't autofill
+                                                const newLogic = stateLogic[scannedAsset!.location]?.[scannedAsset!.state];
+                                                if (newLogic && !newLogic.autoFillsCustomer) {
+                                                    form.resetField('customer_id');
+                                                }
+                                            }} value={field.value}>
                                                 <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                                                 <SelectContent>
                                                     <SelectItem value={actionLogic.primary}>{getEventTypeTranslation(actionLogic.primary)} (Sugerido)</SelectItem>
@@ -376,7 +404,7 @@ export default function MovementsPage() {
                                 />
                             ) : null}
 
-                            {requiresCustomerSelection && (
+                            {requiresCustomerSelection ? (
                                 <FormField
                                     control={form.control}
                                     name="customer_id"
@@ -393,13 +421,13 @@ export default function MovementsPage() {
                                         </FormItem>
                                     )}
                                 />
-                            )}
-
-                             {customerForMovement && !requiresCustomerSelection && (
-                                <div>
-                                    <Label>Cliente</Label>
-                                    <Input value={customerForMovement.name} disabled />
-                                </div>
+                            ) : (
+                                 customerForMovement && (
+                                    <div>
+                                        <Label>Cliente</Label>
+                                        <Input value={customerForMovement.name} disabled />
+                                    </div>
+                                 )
                             )}
 
                             {showVarietyField && (
@@ -436,5 +464,3 @@ export default function MovementsPage() {
     </div>
   );
 }
-
-    

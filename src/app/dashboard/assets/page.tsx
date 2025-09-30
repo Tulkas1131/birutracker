@@ -213,10 +213,11 @@ export default function AssetsPage() {
     const firestore = db();
     try {
       if (selectedAsset) {
-        // Editing existing asset - allow state, location, format, and type changes (only on unlocked assets)
+        // Editing existing asset
         const assetDataToUpdate: Partial<Asset> = {
           state: data.state,
           location: data.location,
+          variety: data.variety || "",
         };
         // Only allow changing format and type if asset is in plant
         if(selectedAsset.location === 'EN_PLANTA') {
@@ -240,7 +241,7 @@ export default function AssetsPage() {
         // Creating new asset
         const { prefix, nextNumber } = await generateNextCode(data.type);
         const newCode = `${prefix}-${String(nextNumber).padStart(3, '0')}`;
-        const newAssetData = { ...data, code: newCode, state: 'VACIO' as const, location: 'EN_PLANTA' as const };
+        const newAssetData = { ...data, code: newCode, state: 'VACIO' as const, location: 'EN_PLANTA' as const, variety: "" };
         const newDocRef = await addDoc(collection(firestore, "assets"), newAssetData);
         setAssets(prev => [...prev, { id: newDocRef.id, ...newAssetData }]);
         toast({
@@ -283,6 +284,7 @@ export default function AssetsPage() {
           code: newCode,
           state: 'VACIO' as const,
           location: 'EN_PLANTA' as const,
+          variety: '',
         };
         const newAssetRef = doc(collection(firestore, "assets"));
         batch.set(newAssetRef, newAssetData);
@@ -377,13 +379,16 @@ export default function AssetsPage() {
       <div className="flex flex-col gap-1">
         <span className="font-semibold">{asset.code}</span>
         <span className="text-sm text-muted-foreground">{asset.format}</span>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
            <Badge variant={asset.state === 'LLENO' ? 'default' : 'secondary'}>
               {asset.state === 'LLENO' ? 'Lleno' : 'Vacío'}
-            </Badge>
-            <Badge variant={getLocationVariant(asset.location)}>
+           </Badge>
+           {asset.state === 'LLENO' && asset.variety && (
+              <Badge variant="outline" className="font-mono">{asset.variety}</Badge>
+           )}
+           <Badge variant={getLocationVariant(asset.location)}>
               {getLocationText(asset.location)}
-            </Badge>
+           </Badge>
         </div>
       </div>
        <div className="flex items-center">
@@ -444,9 +449,14 @@ export default function AssetsPage() {
                 <TableCell className="font-medium">{asset.code}</TableCell>
                 <TableCell>{asset.format}</TableCell>
                 <TableCell>
-                  <Badge variant={asset.state === 'LLENO' ? 'default' : 'secondary'}>
-                    {asset.state === 'LLENO' ? 'Lleno' : 'Vacío'}
-                  </Badge>
+                  <div className="flex flex-col gap-1 items-start">
+                    <Badge variant={asset.state === 'LLENO' ? 'default' : 'secondary'}>
+                      {asset.state === 'LLENO' ? 'Lleno' : 'Vacío'}
+                    </Badge>
+                    {asset.state === 'LLENO' && asset.variety && (
+                      <Badge variant="outline" className="font-mono">{asset.variety}</Badge>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <Badge variant={getLocationVariant(asset.location)}>

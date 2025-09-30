@@ -27,6 +27,7 @@ export function AssetForm({ defaultValues, onSubmit, onCancel, isLocked = false 
       format: "",
       state: "VACIO",
       location: "EN_PLANTA",
+      variety: "",
     },
   });
 
@@ -40,7 +41,7 @@ export function AssetForm({ defaultValues, onSubmit, onCancel, isLocked = false 
                 <Lock className="h-4 w-4" />
                 <AlertTitle>Activo Bloqueado</AlertTitle>
                 <AlertDescription>
-                    El tipo y formato no se pueden cambiar porque el activo no está en planta.
+                    El tipo, formato y variedad no se pueden cambiar porque el activo no está en planta.
                 </AlertDescription>
             </Alert>
         )}
@@ -112,6 +113,21 @@ export function AssetForm({ defaultValues, onSubmit, onCancel, isLocked = false 
             </FormItem>
           )}
         />
+         {form.watch('state') === 'LLENO' && (
+             <FormField
+                control={form.control}
+                name="variety"
+                render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>Variedad</FormLabel>
+                    <FormControl>
+                        <Input placeholder="ej., IPA, Stout" {...field} disabled={isLocked} />
+                    </FormControl>
+                    <FormMessage />
+                    </FormItem>
+                )}
+             />
+         )}
         <FormField
           control={form.control}
           name="location"

@@ -9,6 +9,7 @@ export type Asset = {
   format: string;
   state: 'LLENO' | 'VACIO';
   location: 'EN_CLIENTE' | 'EN_PLANTA' | 'EN_REPARTO';
+  variety?: string;
 };
 
 export type Customer = {
@@ -20,6 +21,7 @@ export type Customer = {
 };
 
 export const movementEventTypes = [
+  'LLENADO_EN_PLANTA',
   'SALIDA_A_REPARTO', 
   'ENTREGA_A_CLIENTE', 
   'RECOLECCION_DE_CLIENTE', 
@@ -51,6 +53,7 @@ export const assetSchema = z.object({
   format: z.string().min(1, 'Format is required'),
   state: z.enum(['LLENO', 'VACIO']),
   location: z.enum(['EN_CLIENTE', 'EN_PLANTA', 'EN_REPARTO']),
+  variety: z.string().optional(),
 });
 
 export type AssetFormData = z.infer<typeof assetSchema>;
