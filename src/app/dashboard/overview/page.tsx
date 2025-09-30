@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { Timestamp } from "firebase/firestore/lite";
 import { db } from "@/lib/firebase";
@@ -367,4 +367,5 @@ export default function OverviewPage() {
         </Suspense>
     );
 }
+
 
