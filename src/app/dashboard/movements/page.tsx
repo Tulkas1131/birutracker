@@ -267,8 +267,17 @@ export default function MovementsPage() {
 
     try {
       await runTransaction(firestore, async (transaction) => {
-        const customerId = selectedCustomer?.id || lastEvents.get(scannedAsset.id)?.customer_id || 'INTERNAL';
-        const customerName = selectedCustomer?.name || lastEvents.get(scannedAsset.id)?.customer_name || 'Planta';
+        let customerId: string;
+        let customerName: string;
+
+        // Force internal customer for plant-only operations
+        if (data.event_type === 'LLENADO_EN_PLANTA') {
+            customerId = 'INTERNAL';
+            customerName = 'Planta';
+        } else {
+            customerId = selectedCustomer?.id || lastEvents.get(scannedAsset.id)?.customer_id || 'INTERNAL';
+            customerName = selectedCustomer?.name || lastEvents.get(scannedAsset.id)?.customer_name || 'Planta';
+        }
         
         const eventData: Omit<Event, 'id'> = { 
             asset_id: scannedAsset.id, 
@@ -422,7 +431,7 @@ export default function MovementsPage() {
                                     )}
                                 />
                             ) : (
-                                 customerForMovement && (
+                                 customerForMovement && customerForMovement.id !== 'INTERNAL' && (
                                     <div>
                                         <Label>Cliente</Label>
                                         <Input value={customerForMovement.name} disabled />
@@ -464,3 +473,5 @@ export default function MovementsPage() {
     </div>
   );
 }
+
+    

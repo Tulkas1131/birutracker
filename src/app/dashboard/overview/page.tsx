@@ -23,6 +23,7 @@ const ITEMS_PER_PAGE = 10;
 
 const formatEventType = (eventType: Event['event_type']) => {
     switch (eventType) {
+      case 'LLENADO_EN_PLANTA': return 'Llenado en Planta';
       case 'SALIDA_A_REPARTO': return 'Salida a Reparto';
       case 'ENTREGA_A_CLIENTE': return 'Entrega a Cliente';
       case 'RECOLECCION_DE_CLIENTE': return 'Recolección de Cliente';
@@ -242,6 +243,7 @@ export default function OverviewPage() {
                 </SelectTrigger>
                 <SelectContent>
                     <SelectItem value="ALL">Todos los Eventos</SelectItem>
+                    <SelectItem value="LLENADO_EN_PLANTA">Llenado en Planta</SelectItem>
                     <SelectItem value="SALIDA_A_REPARTO">Salida a Reparto</SelectItem>
                     <SelectItem value="ENTREGA_A_CLIENTE">Entrega a Cliente</SelectItem>
                     <SelectItem value="RECOLECCION_DE_CLIENTE">Recolección de Cliente</SelectItem>
@@ -329,3 +331,5 @@ export default function OverviewPage() {
     </div>
   );
 }
+
+    
