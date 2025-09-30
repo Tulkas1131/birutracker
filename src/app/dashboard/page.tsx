@@ -67,13 +67,17 @@ export default function DashboardPage() {
     const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
     const movimientosUltimas24h = events.filter(event => event.timestamp.toDate() > twentyFourHoursAgo).length;
 
+    // Create a set of asset IDs that are currently with a customer for quick lookup.
+    const assetsEnClienteIds = new Set(assetsEnCliente.map(a => a.id));
+    
     // Create a map of the most recent 'ENTREGA_A_CLIENTE' event for each asset.
     const lastDeliveryEventMap = new Map<string, Date>();
     events
         .filter(e => e.event_type === 'ENTREGA_A_CLIENTE')
         .forEach(e => {
-            // Since events are sorted descending by date, the first one we find for an asset is the latest one.
-            if (!lastDeliveryEventMap.has(e.asset_id)) {
+            // Since events are sorted descending, the first one we find is the latest.
+            // Crucially, we only consider it if the asset is STILL with a customer.
+            if (!lastDeliveryEventMap.has(e.asset_id) && assetsEnClienteIds.has(e.asset_id)) {
                 lastDeliveryEventMap.set(e.asset_id, e.timestamp.toDate());
             }
         });
