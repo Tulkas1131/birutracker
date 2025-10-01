@@ -316,12 +316,12 @@ export default function AssetsPage() {
     }
   };
   
-  const getLocationVariant = (location: Asset["location"]) => {
+  const getLocationVariant = (location: Asset["location"]): "success" | "default" | "warning" => {
     switch (location) {
       case "EN_CLIENTE":
-        return "outline";
+        return "warning";
       case "EN_PLANTA":
-        return "secondary";
+        return "success";
       case "EN_REPARTO":
         return "default";
       default:
@@ -551,8 +551,8 @@ export default function AssetsPage() {
       {Object.entries(counts).map(([format, data]) => (
         <div key={format} className="flex items-center gap-2">
           <span className="font-semibold">{format}:</span>
-          <span>En Planta: <Badge variant="secondary">{data.inPlant}</Badge></span>
-          <span>En Cliente: <Badge variant="outline">{data.inCustomer}</Badge></span>
+          <span>En Planta: <Badge variant="success">{data.inPlant}</Badge></span>
+          <span>En Cliente: <Badge variant="warning">{data.inCustomer}</Badge></span>
           <span>En Reparto: <Badge variant="default">{data.inDelivery}</Badge></span>
         </div>
       ))}
