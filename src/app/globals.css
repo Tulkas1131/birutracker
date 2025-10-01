@@ -133,7 +133,7 @@
 
 @media print {
   @page {
-    size: letter;
+    size: A4;
     margin: 0.5in;
   }
 
@@ -168,8 +168,9 @@
     gap: 0;
     grid-template-columns: repeat(3, 1fr);
     grid-template-rows: repeat(5, 1fr);
-    width: 7.5in;
-    height: 10in;
+    /* Dimensions for A4 with 0.5in margins */
+    width: 7.27in; 
+    height: 10.69in;
   }
 
   .print-item {
@@ -177,11 +178,40 @@
     justify-content: center;
     align-items: center;
     padding: 0.125in;
-    border: 1px dashed #999;
+    border: 1px dashed #ccc; /* Restore dotted border */
     box-sizing: border-box;
+    position: relative;
+    overflow: visible;
   }
+  
   .print-item .qr-label {
     border: none;
   }
   
+  /* Add solid cut lines that extend to the edge of the paper */
+  /* Vertical lines */
+  .print-item::before {
+    content: '';
+    position: absolute;
+    top: -0.5in;
+    bottom: -0.5in;
+    right: -1px; /* Align with the right border */
+    width: 1px;
+    background-color: black;
+  }
+  /* Horizontal lines */
+  .print-item::after {
+    content: '';
+    position: absolute;
+    left: -0.5in;
+    right: -0.5in;
+    bottom: -1px; /* Align with the bottom border */
+    height: 1px;
+    background-color: black;
+  }
+
+  /* Hide lines on the outer edges of the sheet */
+  .print-item:nth-child(3n)::before { display: none; } /* Hide right line on last column */
+  .print-item:nth-child(n+13)::after { display: none; } /* Hide bottom line on last row */
 }
+
