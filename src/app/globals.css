@@ -209,9 +209,6 @@
     height: 1px;
     background-color: black;
   }
-
-  /* Hide lines on the outer edges of the sheet */
-  .print-item:nth-child(3n)::before { display: none; } /* Hide right line on last column */
-  .print-item:nth-child(n+13)::after { display: none; } /* Hide bottom line on last row */
 }
+
 
