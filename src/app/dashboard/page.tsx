@@ -166,34 +166,7 @@ export default function DashboardPage() {
     <div className="flex flex-1 flex-col">
       <PageHeader title="Panel de Control" description="¡Bienvenido de nuevo! Aquí tienes un resumen rápido." />
       <main className="flex-1 p-4 md:p-6">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
-          <StatCard 
-              title="Movimientos (Últimas 24h)" 
-              value={metrics.movimientosUltimas24h} 
-              icon={<History className="h-4 w-4 text-muted-foreground" />} 
-              href="/dashboard/overview"
-          />
-          <StatCard 
-              title="Activos Críticos (>=30 días)" 
-              value={metrics.activosCriticos} 
-              icon={<AlertTriangle className="h-4 w-4 text-destructive" />} 
-              href="/dashboard/overview"
-          />
-          <StatCard 
-              title="Activos Totales" 
-              value={metrics.totalAssets} 
-              icon={<Package className="h-4 w-4 text-muted-foreground" />} 
-              href="/dashboard/assets"
-          />
-           <StatCard 
-              title="Clientes Totales" 
-              value={customers.length} 
-              icon={<Users className="h-4 w-4 text-muted-foreground" />} 
-              href="/dashboard/customers"
-          />
-        </div>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-6">
             <Card className="lg:col-span-2">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -268,7 +241,34 @@ export default function DashboardPage() {
                 </CardContent>
             </Card>
         </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <StatCard 
+              title="Movimientos (Últimas 24h)" 
+              value={metrics.movimientosUltimas24h} 
+              icon={<History className="h-4 w-4 text-muted-foreground" />} 
+              href="/dashboard/overview"
+          />
+          <StatCard 
+              title="Activos Críticos (>=30 días)" 
+              value={metrics.activosCriticos} 
+              icon={<AlertTriangle className="h-4 w-4 text-destructive" />} 
+              href="/dashboard/overview"
+          />
+          <StatCard 
+              title="Activos Totales" 
+              value={metrics.totalAssets} 
+              icon={<Package className="h-4 w-4 text-muted-foreground" />} 
+              href="/dashboard/assets"
+          />
+           <StatCard 
+              title="Clientes Totales" 
+              value={customers.length} 
+              icon={<Users className="h-4 w-4 text-muted-foreground" />} 
+              href="/dashboard/customers"
+          />
+        </div>
       </main>
     </div>
   );
 }
+
