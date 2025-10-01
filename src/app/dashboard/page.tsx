@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { History, Package, Truck, Users, PackageCheck, PackageSearch, Warehouse, AlertTriangle, PieChart as PieChartIcon, BarChartIcon } from "lucide-react";
+import { History, Package, Users, AlertTriangle, PieChart as PieChartIcon, BarChart as BarChartIcon } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { db } from "@/lib/firebase";
@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, XAxis, YAxis, Bar, Tooltip } from "recharts";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { differenceInDays } from 'date-fns';
 
 const chartConfig = {
   assets: {
