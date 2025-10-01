@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus, ChevronLeft, ChevronRight } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus, ChevronLeft, ChevronRight, PackageSearch } from "lucide-react";
 import { db } from "@/lib/firebase";
 import dynamic from "next/dynamic";
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -47,6 +47,7 @@ import { useUserRole } from "@/hooks/use-user-role";
 import { logAppEvent } from "@/lib/logging";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Logo } from "@/components/logo";
+import { EmptyState } from "@/components/empty-state";
 
 const QRCode = dynamic(() => import('qrcode.react'), {
   loading: () => <div className="flex h-[128px] w-[128px] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>,
@@ -217,7 +218,7 @@ export default function AssetsPage() {
         const assetDataToUpdate: Partial<Asset> = {
           state: data.state,
           location: data.location,
-          variety: data.variety || "",
+          variety: data.state === 'LLENO' ? data.variety || "" : "", // Clear variety if state is not LLENO
         };
         // Only allow changing format and type if asset is in plant
         if(selectedAsset.location === 'EN_PLANTA') {
@@ -431,65 +432,51 @@ export default function AssetsPage() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {isLoading ? (
-            <TableRow>
-              <TableCell colSpan={6} className="h-24 text-center">
-                <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
-              </TableCell>
-            </TableRow>
-          ) : assetList.length === 0 ? (
-            <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center">
-                No hay activos. ¡Añade uno para empezar!
-              </TableCell>
-            </TableRow>
-          ) : (
-            assetList.map((asset) => (
-              <TableRow key={asset.id}>
-                <TableCell className="font-medium">{asset.code}</TableCell>
-                <TableCell>{asset.format}</TableCell>
-                <TableCell>
-                  <div className="flex flex-col gap-1 items-start">
-                    <Badge variant={asset.state === 'LLENO' ? 'default' : 'secondary'}>
-                      {asset.state === 'LLENO' ? 'Lleno' : 'Vacío'}
-                    </Badge>
-                    {asset.state === 'LLENO' && asset.variety && (
-                      <Badge variant="outline" className="font-mono">{asset.variety}</Badge>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={getLocationVariant(asset.location)}>
-                    {getLocationText(asset.location)}
+          {assetList.map((asset) => (
+            <TableRow key={asset.id}>
+              <TableCell className="font-medium">{asset.code}</TableCell>
+              <TableCell>{asset.format}</TableCell>
+              <TableCell>
+                <div className="flex flex-col gap-1 items-start">
+                  <Badge variant={asset.state === 'LLENO' ? 'default' : 'secondary'}>
+                    {asset.state === 'LLENO' ? 'Lleno' : 'Vacío'}
                   </Badge>
-                </TableCell>
-                <TableCell>
-                  <Button variant="ghost" size="icon" onClick={() => handleShowQrCode(asset)}>
-                      <QrCode className="h-5 w-5" />
-                  </Button>
-                </TableCell>
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button aria-haspopup="true" size="icon" variant="ghost">
-                        <MoreHorizontal className="h-4 w-4" />
-                        <span className="sr-only">Toggle menu</span>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                      <DropdownMenuItem onSelect={() => handleEdit(asset)}>Editar</DropdownMenuItem>
-                      {userRole === 'Admin' && (
-                          <DropdownMenuItem onSelect={() => confirmDelete(asset)} className="text-destructive">
-                              Eliminar
-                          </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            ))
-          )}
+                  {asset.state === 'LLENO' && asset.variety && (
+                    <Badge variant="outline" className="font-mono">{asset.variety}</Badge>
+                  )}
+                </div>
+              </TableCell>
+              <TableCell>
+                <Badge variant={getLocationVariant(asset.location)}>
+                  {getLocationText(asset.location)}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                <Button variant="ghost" size="icon" onClick={() => handleShowQrCode(asset)}>
+                    <QrCode className="h-5 w-5" />
+                </Button>
+              </TableCell>
+              <TableCell>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button aria-haspopup="true" size="icon" variant="ghost">
+                      <MoreHorizontal className="h-4 w-4" />
+                      <span className="sr-only">Toggle menu</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                    <DropdownMenuItem onSelect={() => handleEdit(asset)}>Editar</DropdownMenuItem>
+                    {userRole === 'Admin' && (
+                        <DropdownMenuItem onSelect={() => confirmDelete(asset)} className="text-destructive">
+                            Eliminar
+                        </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TableCell>
+            </TableRow>
+          ))}
         </TableBody>
       </Table>
   );
@@ -502,26 +489,34 @@ export default function AssetsPage() {
             Un listado de todos los activos de tipo {type === 'BARRIL' ? 'barril' : 'CO2'} en tu inventario.
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-0 md:p-0">
-          {isMobile ? (
+        <CardContent className="p-0 md:p-6 md:pt-0">
+          {isLoading ? (
+             <div className="flex justify-center items-center py-20">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+          ) : assetList.length === 0 ? (
+            <EmptyState 
+                icon={<PackageSearch className="h-16 w-16" />}
+                title={`No hay ${type === 'BARRIL' ? 'barriles' : 'cilindros'} aún`}
+                description={`Crea tu primer activo para empezar a rastrear tu inventario de ${type === 'BARRIL' ? 'barriles' : 'cilindros'}.`}
+                action={
+                    <DialogTrigger asChild>
+                        <Button onClick={handleNew}>
+                          <PlusCircle className="mr-2 h-5 w-5" />
+                          Nuevo Activo
+                        </Button>
+                    </DialogTrigger>
+                }
+            />
+          ) : isMobile ? (
               <div className="space-y-4 p-4">
-                  {isLoading ? (
-                    <div className="flex justify-center items-center py-10">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    </div>
-                  ) : assetList.length === 0 ? (
-                    <div className="py-10 text-center text-muted-foreground">
-                       No hay activos. ¡Añade uno para empezar!
-                    </div>
-                  ) : (
-                    assetList.map(asset => <AssetCardMobile key={asset.id} asset={asset} />)
-                  )}
+                  {assetList.map(asset => <AssetCardMobile key={asset.id} asset={asset} />)}
               </div>
           ) : (
              <AssetTableDesktop assetList={assetList} />
           )}
         </CardContent>
-        {totalPages > 1 && (
+        {totalPages > 1 && !isLoading && assetList.length > 0 && (
           <CardFooter className="flex items-center justify-between py-4">
               <span className="text-sm text-muted-foreground">
                   Página {currentPage} de {totalPages}

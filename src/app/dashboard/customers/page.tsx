@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { MoreHorizontal, PlusCircle, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Loader2, ChevronLeft, ChevronRight, Users2 } from "lucide-react";
 import { db } from "@/lib/firebase";
 
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/hooks/use-user-role";
 import { logAppEvent } from "@/lib/logging";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { EmptyState } from "@/components/empty-state";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -209,20 +210,28 @@ export default function CustomersPage() {
         />
         <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
           <Card>
-            <CardContent className="p-0">
-              {isMobile ? (
+            <CardContent className="p-0 md:p-6 md:pt-0">
+              {isLoading ? (
+                <div className="flex justify-center items-center py-20 h-60">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : customers.length === 0 ? (
+                <EmptyState 
+                    icon={<Users2 className="h-16 w-16" />}
+                    title="Aún no tienes clientes"
+                    description="Registra tu primer cliente (bares, distribuidores, etc.) para poder asignarle activos."
+                    action={
+                        <DialogTrigger asChild>
+                            <Button onClick={handleNew}>
+                                <PlusCircle className="mr-2 h-5 w-5" />
+                                Nuevo Cliente
+                            </Button>
+                        </DialogTrigger>
+                    }
+                />
+              ) : isMobile ? (
                   <div className="space-y-4 p-4">
-                     {isLoading ? (
-                      <div className="flex justify-center items-center py-10">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                      </div>
-                    ) : paginatedCustomers.length === 0 ? (
-                       <div className="py-10 text-center text-muted-foreground">
-                          No hay clientes. ¡Añade uno para empezar!
-                       </div>
-                    ) : (
-                      paginatedCustomers.map(customer => <CustomerCardMobile key={customer.id} customer={customer} />)
-                    )}
+                     {paginatedCustomers.map(customer => <CustomerCardMobile key={customer.id} customer={customer} />)}
                   </div>
               ) : (
                 <Table>
@@ -238,54 +247,40 @@ export default function CustomersPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {isLoading ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="h-24 text-center">
-                          <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+                    {paginatedCustomers.map((customer) => (
+                      <TableRow key={customer.id}>
+                        <TableCell className="font-medium">{customer.name}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{customer.type}</Badge>
+                        </TableCell>
+                        <TableCell>{customer.address}</TableCell>
+                        <TableCell>{customer.contact}</TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button aria-haspopup="true" size="icon" variant="ghost">
+                                <MoreHorizontal className="h-4 w-4" />
+                                <span className="sr-only">Toggle menu</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                              <DropdownMenuItem onSelect={() => handleEdit(customer)}>Editar</DropdownMenuItem>
+                              {userRole === 'Admin' && (
+                                <DropdownMenuItem onSelect={() => handleDelete(customer.id)} className="text-destructive">
+                                  Eliminar
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </TableCell>
                       </TableRow>
-                    ) : paginatedCustomers.length === 0 ? (
-                       <TableRow>
-                          <TableCell colSpan={5} className="h-24 text-center">
-                            No hay clientes. ¡Añade uno para empezar!
-                          </TableCell>
-                        </TableRow>
-                    ) : (
-                      paginatedCustomers.map((customer) => (
-                        <TableRow key={customer.id}>
-                          <TableCell className="font-medium">{customer.name}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{customer.type}</Badge>
-                          </TableCell>
-                          <TableCell>{customer.address}</TableCell>
-                          <TableCell>{customer.contact}</TableCell>
-                          <TableCell>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button aria-haspopup="true" size="icon" variant="ghost">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                  <span className="sr-only">Toggle menu</span>
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                                <DropdownMenuItem onSelect={() => handleEdit(customer)}>Editar</DropdownMenuItem>
-                                {userRole === 'Admin' && (
-                                  <DropdownMenuItem onSelect={() => handleDelete(customer.id)} className="text-destructive">
-                                    Eliminar
-                                  </DropdownMenuItem>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
+                    ))}
                   </TableBody>
                 </Table>
               )}
             </CardContent>
-             {totalPages > 1 && (
+             {totalPages > 1 && !isLoading && customers.length > 0 && (
                 <CardFooter className="flex items-center justify-between py-4">
                     <span className="text-sm text-muted-foreground">
                         Página {currentPage} de {totalPages}

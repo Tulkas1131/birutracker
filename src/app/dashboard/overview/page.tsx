@@ -5,13 +5,13 @@ import { useState, useMemo, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { Timestamp } from "firebase/firestore/lite";
 import { db } from "@/lib/firebase";
-import { Loader2, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, Trash2, ChevronLeft, ChevronRight, SearchX } from "lucide-react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { Event, Asset, MovementEventType } from "@/lib/types";
+import type { Event, Asset } from "@/lib/types";
 import { useUserRole } from '@/hooks/use-user-role';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,7 @@ import { logAppEvent } from '@/lib/logging';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { EmptyState } from '@/components/empty-state';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -280,22 +281,22 @@ function OverviewPageContent() {
               <Label htmlFor="critical-only">Solo Críticos ({'>'}30 días)</Label>
             </div>
           </div>
-          <CardContent className="p-0">
+          <CardContent className="p-0 md:p-6 md:pt-0">
             {isLoading ? (
-                <div className="flex justify-center items-center py-10 h-60">
+                <div className="flex justify-center items-center py-20 h-60">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
+            ) : paginatedEvents.length === 0 ? (
+                <EmptyState 
+                    icon={<SearchX className="h-16 w-16" />}
+                    title="No se encontraron movimientos"
+                    description="Prueba a cambiar los filtros o busca por otro cliente para ver el historial de eventos."
+                />
             ) : isMobile ? (
                 <div className="space-y-4 p-4">
-                  {paginatedEvents.length > 0 ? (
-                      paginatedEvents.map((event) => (
-                          <EventCardMobile key={event.id} event={event} assetsMap={assetsMap} onDelete={handleDelete} />
-                      ))
-                  ) : (
-                      <div className="py-10 text-center text-muted-foreground">
-                          No se encontraron movimientos.
-                      </div>
-                  )}
+                    {paginatedEvents.map((event) => (
+                        <EventCardMobile key={event.id} event={event} assetsMap={assetsMap} onDelete={handleDelete} />
+                    ))}
                 </div>
             ) : (
               <Table>
@@ -311,22 +312,14 @@ function OverviewPageContent() {
                       </TableRow>
                   </TableHeader>
                   <TableBody>
-                      {paginatedEvents.length > 0 ? (
-                          paginatedEvents.map((event) => (
-                              <EventTableRow key={event.id} event={event} assetsMap={assetsMap} onDelete={handleDelete} />
-                          ))
-                      ) : (
-                          <TableRow>
-                              <TableCell colSpan={userRole === 'Admin' ? 7 : 6} className="h-24 text-center">
-                                  No se encontraron movimientos.
-                              </TableCell>
-                          </TableRow>
-                      )}
+                    {paginatedEvents.map((event) => (
+                        <EventTableRow key={event.id} event={event} assetsMap={assetsMap} onDelete={handleDelete} />
+                    ))}
                   </TableBody>
               </Table>
             )}
           </CardContent>
-           {totalPages > 1 && (
+           {totalPages > 1 && !isLoading && paginatedEvents.length > 0 && (
             <CardFooter className="flex items-center justify-between border-t py-4">
                 <span className="text-sm text-muted-foreground">
                     Página {currentPage} de {totalPages}
@@ -367,5 +360,3 @@ export default function OverviewPage() {
         </Suspense>
     );
 }
-
-
