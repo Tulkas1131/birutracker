@@ -18,7 +18,10 @@ interface CustomerFormProps {
 export function CustomerForm({ defaultValues, onSubmit, onCancel }: CustomerFormProps) {
   const form = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema),
-    defaultValues: defaultValues || {
+    defaultValues: defaultValues ? {
+      ...defaultValues,
+      phone: defaultValues.phone ?? "", // Ensure phone is always a string
+    } : {
       name: "",
       address: "",
       contact: "",
