@@ -18,6 +18,7 @@ export type Customer = {
   address: string;
   contact: string;
   type: 'BAR' | 'DISTRIBUIDOR' | 'OTRO';
+  phone?: string;
 };
 
 export const movementEventTypes = [
@@ -73,6 +74,20 @@ export const customerSchema = z.object({
   address: z.string().optional(),
   contact: z.string().optional(),
   type: z.enum(['BAR', 'DISTRIBUIDOR', 'OTRO']),
+  phone: z.string().optional().refine(
+    (phones) => {
+      if (!phones) return true; // Optional field is valid if empty
+      return phones.split(',').every(phone => {
+        const trimmedPhone = phone.trim();
+        if (trimmedPhone === '') return true; // Ignore empty strings between commas
+        const digits = trimmedPhone.replace(/\D/g, ''); // Remove non-digits
+        return digits.length >= 9;
+      });
+    },
+    {
+      message: "Cada número de teléfono debe tener al menos 9 dígitos (sin contar símbolos o espacios).",
+    }
+  ),
 });
 
 export type CustomerFormData = z.infer<typeof customerSchema>;

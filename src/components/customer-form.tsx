@@ -23,6 +23,7 @@ export function CustomerForm({ defaultValues, onSubmit, onCancel }: CustomerForm
       address: "",
       contact: "",
       type: "BAR",
+      phone: "",
     },
   });
 
@@ -85,6 +86,19 @@ export function CustomerForm({ defaultValues, onSubmit, onCancel }: CustomerForm
               <FormLabel>Contacto</FormLabel>
               <FormControl>
                 <Input placeholder="ej., Juan Pérez" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="phone"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Teléfono</FormLabel>
+              <FormControl>
+                <Input type="tel" placeholder="Separar con comas si hay varios" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>

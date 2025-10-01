@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { MoreHorizontal, PlusCircle, Loader2, ChevronLeft, ChevronRight, Users2 } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Loader2, ChevronLeft, ChevronRight, Users2, Phone } from "lucide-react";
 import { db } from "@/lib/firebase";
 
 import { Badge } from "@/components/ui/badge";
@@ -163,13 +163,35 @@ export default function CustomersPage() {
     }
   };
 
+  const PhoneLinks = ({ phone }: { phone?: string }) => {
+    if (!phone) return null;
+    const phoneNumbers = phone.split(',').map(p => p.trim()).filter(Boolean);
+
+    return (
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <Phone className="h-4 w-4 text-muted-foreground" />
+        {phoneNumbers.map((num, index) => (
+          <a
+            key={index}
+            href={`tel:${num.replace(/\D/g, '')}`}
+            className="text-sm text-primary hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {num}
+          </a>
+        ))}
+      </div>
+    )
+  };
+
   const CustomerCardMobile = ({ customer }: { customer: Customer }) => (
     <div className="flex items-center justify-between rounded-lg border bg-card p-4">
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1.5">
             <span className="font-semibold">{customer.name}</span>
             <Badge variant="outline" className="w-fit">{customer.type}</Badge>
             <span className="text-sm text-muted-foreground">{customer.address}</span>
             <span className="text-sm text-muted-foreground">{customer.contact}</span>
+            <PhoneLinks phone={customer.phone} />
         </div>
         <div className="flex items-center">
             <DropdownMenu>
@@ -241,6 +263,7 @@ export default function CustomersPage() {
                       <TableHead>Tipo</TableHead>
                       <TableHead>Dirección</TableHead>
                       <TableHead>Contacto</TableHead>
+                      <TableHead>Teléfono</TableHead>
                       <TableHead>
                         <span className="sr-only">Acciones</span>
                       </TableHead>
@@ -255,6 +278,7 @@ export default function CustomersPage() {
                         </TableCell>
                         <TableCell>{customer.address}</TableCell>
                         <TableCell>{customer.contact}</TableCell>
+                        <TableCell><PhoneLinks phone={customer.phone} /></TableCell>
                         <TableCell>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
