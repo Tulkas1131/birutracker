@@ -345,17 +345,11 @@ export default function AssetsPage() {
     const calculateCounts = (assetList: Asset[]) => {
       return assetList.reduce((acc, asset) => {
         if (!acc[asset.format]) {
-          acc[asset.format] = { inPlant: 0, inCustomer: 0, inDelivery: 0 };
+          acc[asset.format] = { EN_PLANTA: 0, EN_CLIENTE: 0, EN_REPARTO: 0 };
         }
-        if (asset.location === 'EN_PLANTA') {
-          acc[asset.format].inPlant++;
-        } else if (asset.location === 'EN_CLIENTE') {
-          acc[asset.format].inCustomer++;
-        } else if (asset.location === 'EN_REPARTO') {
-            acc[asset.format].inDelivery++;
-        }
+        acc[asset.format][asset.location]++;
         return acc;
-      }, {} as Record<string, { inPlant: number; inCustomer: number; inDelivery: number }>);
+      }, {} as Record<string, Record<Asset['location'], number>>);
     };
 
     return {
@@ -546,14 +540,14 @@ export default function AssetsPage() {
       </Card>
   );
 
-  const CountsDisplay = ({ counts }: { counts: Record<string, { inPlant: number; inCustomer: number; inDelivery: number }> }) => (
+  const CountsDisplay = ({ counts }: { counts: Record<string, Record<Asset['location'], number>> }) => (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
       {Object.entries(counts).map(([format, data]) => (
         <div key={format} className="flex items-center gap-2">
           <span className="font-semibold">{format}:</span>
-          <span>En Planta: <Badge variant="success">{data.inPlant}</Badge></span>
-          <span>En Cliente: <Badge variant="warning">{data.inCustomer}</Badge></span>
-          <span>En Reparto: <Badge variant="default">{data.inDelivery}</Badge></span>
+          <span>En Planta: <Badge variant="success">{data.EN_PLANTA}</Badge></span>
+          <span>En Cliente: <Badge variant="warning">{data.EN_CLIENTE}</Badge></span>
+          <span>En Reparto: <Badge variant="default">{data.EN_REPARTO}</Badge></span>
         </div>
       ))}
     </div>
@@ -688,3 +682,5 @@ export default function AssetsPage() {
     </>
   );
 }
+
+    

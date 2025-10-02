@@ -11,7 +11,7 @@ import { type Asset, type Event, type Customer } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, XAxis, YAxis, Bar, Tooltip } from "recharts";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 import { differenceInDays } from 'date-fns';
 
 const chartConfig = {
@@ -75,24 +75,23 @@ export default function DashboardPage() {
   }, []);
 
   const metrics = useMemo(() => {
+    const assetsByLocation = assets.reduce((acc, asset) => {
+      acc[asset.location] = (acc[asset.location] || 0) + 1;
+      return acc;
+    }, {} as Record<Asset['location'], number>);
+
     const assetsEnCliente = assets.filter(asset => asset.location === 'EN_CLIENTE');
-    const assetsEnPlanta = assets.filter(asset => asset.location === 'EN_PLANTA');
-    const assetsEnReparto = assets.filter(asset => asset.location === 'EN_REPARTO');
     
     const now = new Date();
     const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
     const movimientosUltimas24h = events.filter(event => event.timestamp.toDate() > twentyFourHoursAgo).length;
 
-    // Create a set of asset IDs that are currently with a customer for quick lookup.
     const assetsEnClienteIds = new Set(assetsEnCliente.map(a => a.id));
     
-    // Create a map of the most recent 'ENTREGA_A_CLIENTE' event for each asset.
     const lastDeliveryEventMap = new Map<string, Date>();
     events
         .filter(e => e.event_type === 'ENTREGA_A_CLIENTE')
         .forEach(e => {
-            // Since events are sorted descending, the first one we find is the latest.
-            // Crucially, we only consider it if the asset is STILL with a customer.
             if (!lastDeliveryEventMap.has(e.asset_id) && assetsEnClienteIds.has(e.asset_id)) {
                 lastDeliveryEventMap.set(e.asset_id, e.timestamp.toDate());
             }
@@ -107,9 +106,9 @@ export default function DashboardPage() {
     }).length;
     
     const assetDistribution = [
-      { name: "En Planta", value: assetsEnPlanta.length, fill: "var(--color-enPlanta)" },
-      { name: "En Reparto", value: assetsEnReparto.length, fill: "var(--color-enReparto)" },
-      { name: "En Cliente", value: assetsEnCliente.length, fill: "var(--color-enCliente)" },
+      { name: "En Planta", value: assetsByLocation['EN_PLANTA'] || 0, fill: "var(--color-enPlanta)" },
+      { name: "En Reparto", value: assetsByLocation['EN_REPARTO'] || 0, fill: "var(--color-enReparto)" },
+      { name: "En Cliente", value: assetsByLocation['EN_CLIENTE'] || 0, fill: "var(--color-enCliente)" },
     ];
     
     const customerAssetCount = assetsEnCliente.reduce((acc, asset) => {
@@ -272,3 +271,4 @@ export default function DashboardPage() {
   );
 }
 
+    
