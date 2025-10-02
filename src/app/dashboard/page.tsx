@@ -187,7 +187,6 @@ export default function DashboardPage() {
                                 <ChartTooltip 
                                     content={<ChartTooltipContent />} 
                                 />
-                                <Legend content={<></>} />
                                 <Bar dataKey="barriles50L" stackId="a" fill={chartConfig.barriles50L.color} radius={[4, 0, 0, 4]} />
                                 <Bar dataKey="barriles30L" stackId="a" fill={chartConfig.barriles30L.color} />
                                 <Bar dataKey="co2" stackId="a" fill={chartConfig.co2.color} radius={[0, 4, 4, 0]} />
@@ -269,3 +268,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    
