@@ -11,7 +11,7 @@ import { type Asset, type Event, type Customer } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, XAxis, YAxis, Bar, Tooltip } from "recharts";
-import { useIsMobile } from "@/hooks/use-is-mobile";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { differenceInDays } from 'date-fns';
 
 const chartConfig = {
@@ -86,21 +86,12 @@ export default function DashboardPage() {
     const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
     const movimientosUltimas24h = events.filter(event => event.timestamp.toDate() > twentyFourHoursAgo).length;
 
-    const assetsEnClienteIds = new Set(assetsEnCliente.map(a => a.id));
-    
-    const lastDeliveryEventMap = new Map<string, Date>();
-    events
-        .filter(e => e.event_type === 'ENTREGA_A_CLIENTE')
-        .forEach(e => {
-            if (!lastDeliveryEventMap.has(e.asset_id) && assetsEnClienteIds.has(e.asset_id)) {
-                lastDeliveryEventMap.set(e.asset_id, e.timestamp.toDate());
-            }
-        });
-
-    const activosCriticos = assetsEnCliente.filter(asset => {
-        const lastDeliveryDate = lastDeliveryEventMap.get(asset.id);
-        if (lastDeliveryDate) {
-            return differenceInDays(now, lastDeliveryDate) >= 30;
+    const activosCriticos = assets.filter(asset => {
+        if (asset.location !== 'EN_CLIENTE') return false;
+        
+        const lastDeliveryEvent = events.find(e => e.asset_id === asset.id && e.event_type === 'ENTREGA_A_CLIENTE');
+        if (lastDeliveryEvent) {
+             return differenceInDays(now, lastDeliveryEvent.timestamp.toDate()) >= 30;
         }
         return false;
     }).length;
@@ -271,4 +262,3 @@ export default function DashboardPage() {
   );
 }
 
-    
