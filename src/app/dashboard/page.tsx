@@ -3,30 +3,27 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { History, Package, Users, AlertTriangle, PieChart as PieChartIcon, BarChart as BarChartIcon } from "lucide-react";
+import { History, Package, Users, AlertTriangle, BarChart as BarChartIcon } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { db } from "@/lib/firebase";
 import { type Asset, type Event, type Customer } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, XAxis, YAxis, Bar, Tooltip } from "recharts";
+import { BarChart, XAxis, YAxis, Bar, Tooltip, Legend, CartesianGrid } from "recharts";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { differenceInDays } from 'date-fns';
 
 const chartConfig = {
-  assets: {
-    label: "Activos",
-  },
-  "Barriles 50L": {
+  barriles50L: {
     label: "Barriles 50L",
     color: "hsl(var(--chart-2))",
   },
-  "Barriles 30L": {
+  barriles30L: {
     label: "Barriles 30L",
     color: "hsl(var(--chart-3))",
   },
-  "CO2": {
+  co2: {
     label: "CO2",
     color: "hsl(var(--chart-5))",
   },
@@ -75,27 +72,6 @@ export default function DashboardPage() {
   }, []);
 
   const metrics = useMemo(() => {
-    const assetsByFormat = assets.reduce((acc, asset) => {
-        let key: keyof typeof acc;
-        if (asset.type === 'BARRIL') {
-            if (asset.format.includes('50')) {
-                key = 'barriles50L';
-            } else if (asset.format.includes('30')) {
-                key = 'barriles30L';
-            } else {
-                return acc; // Skip other barrel formats for now
-            }
-        } else if (asset.type === 'CO2') {
-            key = 'co2';
-        } else {
-            return acc;
-        }
-        acc[key] = (acc[key] || 0) + 1;
-        return acc;
-    }, { barriles50L: 0, barriles30L: 0, co2: 0 });
-
-    const assetsEnCliente = assets.filter(asset => asset.location === 'EN_CLIENTE');
-    
     const now = new Date();
     const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
     const movimientosUltimas24h = events.filter(event => event.timestamp.toDate() > twentyFourHoursAgo).length;
@@ -110,12 +86,23 @@ export default function DashboardPage() {
         return false;
     }).length;
     
-    const assetDistribution = [
-      { name: "Barriles 50L", value: assetsByFormat.barriles50L, fill: "var(--color-Barriles-50L)" },
-      { name: "Barriles 30L", value: assetsByFormat.barriles30L, fill: "var(--color-Barriles-30L)" },
-      { name: "CO2", value: assetsByFormat.co2, fill: "var(--color-CO2)" },
-    ].filter(item => item.value > 0);
+    const assetsByLocation = assets.reduce((acc, asset) => {
+        const location = asset.location.replace('_', ' ');
+        if (!acc[location]) {
+            acc[location] = { location, barriles50L: 0, barriles30L: 0, co2: 0 };
+        }
+        if (asset.type === 'BARRIL') {
+            if (asset.format.includes('50')) acc[location].barriles50L++;
+            else if (asset.format.includes('30')) acc[location].barriles30L++;
+        } else if (asset.type === 'CO2') {
+            acc[location].co2++;
+        }
+        return acc;
+    }, {} as Record<string, { location: string; barriles50L: number; barriles30L: number; co2: number }>);
     
+    const locationDistribution = Object.values(assetsByLocation);
+
+    const assetsEnCliente = assets.filter(asset => asset.location === 'EN_CLIENTE');
     const customerAssetCount = assetsEnCliente.reduce((acc, asset) => {
         const lastEvent = events.find(e => e.asset_id === asset.id && e.event_type === 'ENTREGA_A_CLIENTE');
         if (lastEvent) {
@@ -132,9 +119,9 @@ export default function DashboardPage() {
     return {
       movimientosUltimas24h,
       activosCriticos,
-      assetDistribution,
+      locationDistribution,
       topCustomers,
-      totalAssets: assets.length
+      totalAssets: assets.length,
     };
   }, [assets, events, isMobile]);
   
@@ -171,34 +158,40 @@ export default function DashboardPage() {
       <PageHeader title="Panel de Control" description="¡Bienvenido de nuevo! Aquí tienes un resumen rápido." />
       <main className="flex-1 p-4 md:p-6">
          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-6">
-            <Card className="lg:col-span-2">
+             <Card className="lg:col-span-2">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                        <PieChartIcon className="h-5 w-5 text-muted-foreground" />
-                        Distribución de Activos
+                        <BarChartIcon className="h-5 w-5 text-muted-foreground" />
+                        Distribución de Activos por Ubicación
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
                      {isLoading ? (
                         <div className="flex items-center justify-center h-60">
-                            <Skeleton className="h-48 w-48 rounded-full" />
+                           <Skeleton className="h-full w-full" />
                         </div>
                      ) : (
-                        <ChartContainer config={chartConfig} className="mx-auto aspect-square h-60">
-                            <PieChart>
-                                <ChartTooltip content={<ChartTooltipContent nameKey="value" hideLabel />} />
-                                <Pie
-                                    data={metrics.assetDistribution}
-                                    dataKey="value"
-                                    nameKey="name"
-                                    innerRadius={50}
-                                    strokeWidth={2}
-                                >
-                                {metrics.assetDistribution.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                                ))}
-                                </Pie>
-                            </PieChart>
+                        <ChartContainer config={chartConfig} className="h-60 w-full">
+                            <BarChart accessibilityLayer data={metrics.locationDistribution} layout="vertical" stackOffset="expand">
+                                <CartesianGrid vertical={false} />
+                                <XAxis type="number" hide />
+                                <YAxis 
+                                    dataKey="location" 
+                                    type="category" 
+                                    tickLine={false} 
+                                    axisLine={false} 
+                                    tickMargin={10}
+                                    width={isMobile ? 70 : 80}
+                                    className="text-xs truncate"
+                                />
+                                <ChartTooltip 
+                                    content={<ChartTooltipContent />} 
+                                />
+                                <Legend content={<></>} />
+                                <Bar dataKey="barriles50L" stackId="a" fill={chartConfig.barriles50L.color} radius={[4, 0, 0, 4]} />
+                                <Bar dataKey="barriles30L" stackId="a" fill={chartConfig.barriles30L.color} />
+                                <Bar dataKey="co2" stackId="a" fill={chartConfig.co2.color} radius={[0, 4, 4, 0]} />
+                            </BarChart>
                         </ChartContainer>
                      )}
                 </CardContent>
@@ -207,7 +200,7 @@ export default function DashboardPage() {
             <Card className="lg:col-span-3">
                 <CardHeader>
                      <CardTitle className="flex items-center gap-2">
-                        <BarChartIcon className="h-5 w-5 text-muted-foreground" />
+                        <Users className="h-5 w-5 text-muted-foreground" />
                         Top Clientes por Activos
                     </CardTitle>
                 </CardHeader>
@@ -222,9 +215,10 @@ export default function DashboardPage() {
                             ))}
                         </div>
                     ) : (
-                        <ChartContainer config={chartConfig} className="h-60 w-full">
+                        <ChartContainer config={{...chartConfig, assets: {label: "Activos"}}} className="h-60 w-full">
                             <BarChart accessibilityLayer data={metrics.topCustomers} layout="vertical" margin={{ left: 10, right: 30 }}>
-                                <XAxis type="number" hide />
+                                <CartesianGrid horizontal={false} />
+                                <XAxis type="number" dataKey="assets" />
                                 <YAxis 
                                     dataKey="name" 
                                     type="category" 
@@ -275,6 +269,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-
-    
