@@ -172,9 +172,9 @@ export default function DashboardPage() {
                         </div>
                      ) : (
                         <ChartContainer config={chartConfig} className="h-60 w-full">
-                            <BarChart accessibilityLayer data={metrics.locationDistribution} layout="vertical" stackOffset="expand">
+                            <BarChart accessibilityLayer data={metrics.locationDistribution} layout="vertical">
                                 <CartesianGrid vertical={false} />
-                                <XAxis type="number" hide />
+                                <XAxis type="number" />
                                 <YAxis 
                                     dataKey="location" 
                                     type="category" 
@@ -268,5 +268,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    
