@@ -18,16 +18,16 @@ const chartConfig = {
   assets: {
     label: "Activos",
   },
-  enPlanta: {
-    label: "En Planta",
+  "Barriles 50L": {
+    label: "Barriles 50L",
     color: "hsl(var(--chart-2))",
   },
-  enReparto: {
-    label: "En Reparto",
+  "Barriles 30L": {
+    label: "Barriles 30L",
     color: "hsl(var(--chart-3))",
   },
-  enCliente: {
-    label: "En Cliente",
+  "CO2": {
+    label: "CO2",
     color: "hsl(var(--chart-5))",
   },
 } satisfies ChartConfig;
@@ -75,10 +75,24 @@ export default function DashboardPage() {
   }, []);
 
   const metrics = useMemo(() => {
-    const assetsByLocation = assets.reduce((acc, asset) => {
-      acc[asset.location] = (acc[asset.location] || 0) + 1;
-      return acc;
-    }, {} as Record<Asset['location'], number>);
+    const assetsByFormat = assets.reduce((acc, asset) => {
+        let key: keyof typeof acc;
+        if (asset.type === 'BARRIL') {
+            if (asset.format.includes('50')) {
+                key = 'barriles50L';
+            } else if (asset.format.includes('30')) {
+                key = 'barriles30L';
+            } else {
+                return acc; // Skip other barrel formats for now
+            }
+        } else if (asset.type === 'CO2') {
+            key = 'co2';
+        } else {
+            return acc;
+        }
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+    }, { barriles50L: 0, barriles30L: 0, co2: 0 });
 
     const assetsEnCliente = assets.filter(asset => asset.location === 'EN_CLIENTE');
     
@@ -97,10 +111,10 @@ export default function DashboardPage() {
     }).length;
     
     const assetDistribution = [
-      { name: "En Planta", value: assetsByLocation['EN_PLANTA'] || 0, fill: "var(--color-enPlanta)" },
-      { name: "En Reparto", value: assetsByLocation['EN_REPARTO'] || 0, fill: "var(--color-enReparto)" },
-      { name: "En Cliente", value: assetsByLocation['EN_CLIENTE'] || 0, fill: "var(--color-enCliente)" },
-    ];
+      { name: "Barriles 50L", value: assetsByFormat.barriles50L, fill: "var(--color-Barriles-50L)" },
+      { name: "Barriles 30L", value: assetsByFormat.barriles30L, fill: "var(--color-Barriles-30L)" },
+      { name: "CO2", value: assetsByFormat.co2, fill: "var(--color-CO2)" },
+    ].filter(item => item.value > 0);
     
     const customerAssetCount = assetsEnCliente.reduce((acc, asset) => {
         const lastEvent = events.find(e => e.asset_id === asset.id && e.event_type === 'ENTREGA_A_CLIENTE');
@@ -156,7 +170,7 @@ export default function DashboardPage() {
     <div className="flex flex-1 flex-col">
       <PageHeader title="Panel de Control" description="¡Bienvenido de nuevo! Aquí tienes un resumen rápido." />
       <main className="flex-1 p-4 md:p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-6">
+         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-6">
             <Card className="lg:col-span-2">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -262,3 +276,5 @@ export default function DashboardPage() {
   );
 }
 
+
+    
