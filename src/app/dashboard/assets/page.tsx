@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus, ChevronLeft, ChevronRight, PackageSearch } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus, ChevronLeft, ChevronRight, PackageSearch, X } from "lucide-react";
 import { db } from "@/lib/firebase";
 import dynamic from "next/dynamic";
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -48,6 +48,7 @@ import { logAppEvent } from "@/lib/logging";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Logo } from "@/components/logo";
 import { EmptyState } from "@/components/empty-state";
+import { cn } from "@/lib/utils";
 
 const QRCode = dynamic(() => import('qrcode.react'), {
   loading: () => <div className="flex h-[128px] w-[128px] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>,
@@ -87,6 +88,8 @@ export default function AssetsPage() {
   const [activeTab, setActiveTab] = useState('barrels');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedAsset, setSelectedAsset] = useState<Asset | undefined>(undefined);
+  const [locationFilter, setLocationFilter] = useState<Asset['location'] | null>(null);
+  const [formatFilter, setFormatFilter] = useState<string | null>(null);
   const { toast } = useToast();
   const userRole = useUserRole();
   const isMobile = useIsMobile();
@@ -358,18 +361,40 @@ export default function AssetsPage() {
       barrels: calculateCounts(barrels),
       co2: calculateCounts(co2Cylinders),
     };
-  }, [barrels, co2Cylinders]);
+  }, [assets]);
   
   const assetsToPrint = activeTab === 'barrels' ? barrels : co2Cylinders;
 
-  const currentAssetList = activeTab === 'barrels' ? barrels : co2Cylinders;
+  const currentAssetList = useMemo(() => {
+    const baseList = activeTab === 'barrels' ? barrels : co2Cylinders;
+    if (!locationFilter || !formatFilter) {
+      return baseList;
+    }
+    return baseList.filter(asset => asset.location === locationFilter && asset.format === formatFilter);
+  }, [activeTab, barrels, co2Cylinders, locationFilter, formatFilter]);
+
   const totalPages = Math.ceil(currentAssetList.length / ITEMS_PER_PAGE);
   const paginatedAssets = currentAssetList.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
+    setFormatFilter(null);
+    setLocationFilter(null);
     setCurrentPage(1);
   };
+  
+  const handleFilterClick = (format: string, location: Asset['location']) => {
+    setFormatFilter(format);
+    setLocationFilter(location);
+    setCurrentPage(1);
+  };
+
+  const clearFilters = () => {
+    setFormatFilter(null);
+    setLocationFilter(null);
+    setCurrentPage(1);
+  };
+
 
   const AssetCardMobile = ({ asset }: { asset: Asset }) => (
     <div className="flex items-center justify-between rounded-lg border bg-card p-4">
@@ -488,7 +513,9 @@ export default function AssetsPage() {
         <CardHeader className="hidden md:flex">
           <CardTitle className="text-xl">{type === 'BARRIL' ? 'Barriles' : 'Cilindros de CO2'}</CardTitle>
           <CardDescription>
-            Un listado de todos los activos de tipo {type === 'BARRIL' ? 'barril' : 'CO2'} en tu inventario.
+            {locationFilter && formatFilter 
+                ? `Mostrando ${assetList.length} activos de formato "${formatFilter}" en "${getLocationText(locationFilter)}".`
+                : `Un listado de todos los activos de tipo ${type === 'BARRIL' ? 'barril' : 'CO2'} en tu inventario.`}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0 md:p-6 md:pt-0">
@@ -499,15 +526,22 @@ export default function AssetsPage() {
           ) : assetList.length === 0 ? (
             <EmptyState 
                 icon={<PackageSearch className="h-16 w-16" />}
-                title={`No hay ${type === 'BARRIL' ? 'barriles' : 'cilindros'} aún`}
-                description={`Crea tu primer activo para empezar a rastrear tu inventario de ${type === 'BARRIL' ? 'barriles' : 'cilindros'}.`}
+                title={locationFilter ? 'No hay activos para este filtro' : `No hay ${type === 'BARRIL' ? 'barriles' : 'cilindros'} aún`}
+                description={locationFilter ? 'Prueba a seleccionar otro filtro o límpialo para ver todos los activos.' : `Crea tu primer activo para empezar a rastrear tu inventario de ${type === 'BARRIL' ? 'barriles' : 'cilindros'}.`}
                 action={
-                    <DialogTrigger asChild>
-                        <Button onClick={handleNew}>
-                          <PlusCircle className="mr-2 h-5 w-5" />
-                          Nuevo Activo
+                    locationFilter ? (
+                         <Button onClick={clearFilters}>
+                          <X className="mr-2 h-5 w-5" />
+                          Limpiar Filtro
                         </Button>
-                    </DialogTrigger>
+                    ) : (
+                        <DialogTrigger asChild>
+                            <Button onClick={handleNew}>
+                              <PlusCircle className="mr-2 h-5 w-5" />
+                              Nuevo Activo
+                            </Button>
+                        </DialogTrigger>
+                    )
                 }
             />
           ) : isMobile ? (
@@ -548,14 +582,24 @@ export default function AssetsPage() {
       </Card>
   );
 
-  const CountsDisplay = ({ counts }: { counts: Record<string, Record<Asset['location'], number>> }) => (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+  const CountsDisplay = ({ counts, onFilter }: { counts: Record<string, Record<Asset['location'], number>>, onFilter: (format: string, location: Asset['location']) => void }) => (
+    <div className="flex flex-col gap-y-2 text-sm text-muted-foreground">
       {Object.entries(counts).map(([format, data]) => (
-        <div key={format} className="flex items-center gap-2">
+        <div key={format} className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <span className="font-semibold">{format}:</span>
-          <span>En Planta: <Badge variant="success">{data.EN_PLANTA}</Badge></span>
-          <span>En Cliente: <Badge variant="warning">{data.EN_CLIENTE}</Badge></span>
-          <span>En Reparto: <Badge variant="default">{data.EN_REPARTO}</Badge></span>
+          {(['EN_PLANTA', 'EN_CLIENTE', 'EN_REPARTO'] as Asset['location'][]).map(loc => (
+            data[loc] > 0 && (
+              <button key={loc} onClick={() => onFilter(format, loc)} className={cn("flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2", {
+                  'bg-success/20 text-success-foreground hover:bg-success/30 border-success/30': loc === 'EN_PLANTA',
+                  'bg-warning/20 text-warning-foreground hover:bg-warning/30 border-warning/30': loc === 'EN_CLIENTE',
+                  'bg-secondary text-secondary-foreground hover:bg-secondary/80 border-secondary': loc === 'EN_REPARTO',
+                  'ring-2 ring-primary': locationFilter === loc && formatFilter === format
+              })}>
+                <span>{getLocationText(loc)}:</span>
+                <span>{data[loc]}</span>
+              </button>
+            )
+          ))}
         </div>
       ))}
     </div>
@@ -594,8 +638,16 @@ export default function AssetsPage() {
                     <TabsTrigger value="barrels">Barriles ({barrels.length})</TabsTrigger>
                     <TabsTrigger value="co2">CO2 ({co2Cylinders.length})</TabsTrigger>
                   </TabsList>
-                  {activeTab === 'barrels' && <CountsDisplay counts={assetCountsByFormat.barrels} />}
-                  {activeTab === 'co2' && <CountsDisplay counts={assetCountsByFormat.co2} />}
+                  <div className="flex flex-col items-start sm:items-end gap-2">
+                    {activeTab === 'barrels' && <CountsDisplay counts={assetCountsByFormat.barrels} onFilter={handleFilterClick} />}
+                    {activeTab === 'co2' && <CountsDisplay counts={assetCountsByFormat.co2} onFilter={handleFilterClick} />}
+                    {locationFilter && (
+                       <Button variant="ghost" size="sm" onClick={clearFilters} className="text-destructive hover:text-destructive">
+                            <X className="mr-2 h-4 w-4" />
+                            Limpiar Filtro
+                        </Button>
+                    )}
+                  </div>
                 </div>
                 <TabsContent value="barrels">
                    <AssetList assetList={paginatedAssets} type="BARRIL" />
@@ -690,3 +742,5 @@ export default function AssetsPage() {
     </>
   );
 }
+
+    
