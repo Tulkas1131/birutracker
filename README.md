@@ -30,6 +30,12 @@ Antes de mover nada, necesitas registrar tus barriles y cilindros en el sistema.
 
 Este es el proceso completo que sigue un barril, gestionado desde la sección **"Registrar Movimiento"**.
 
+#### **Fase 0: Llenas un barril vacío en tu planta**
+
+*   **Acción**: Selecciona **"Llenar Activo"**.
+*   **¿Qué haces?**: Escanea el QR de un barril que esté `EN PLANTA` y `VACÍO`. La app te sugerirá llenarlo y te pedirá que introduzcas la variedad de cerveza.
+*   **Resultado**: El barril ahora figura como `EN PLANTA` y `LLENO`, listo para ser despachado.
+
 #### **Fase 1: El barril sale de la planta (Lleno)**
 
 *   **Acción**: Selecciona **"Salida a Reparto"**.
