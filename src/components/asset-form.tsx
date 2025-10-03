@@ -21,7 +21,11 @@ interface AssetFormProps {
 export function AssetForm({ defaultValues, onSubmit, onCancel, isLocked = false }: AssetFormProps) {
   const form = useForm<AssetFormData>({
     resolver: zodResolver(assetSchema),
-    defaultValues: defaultValues || {
+    defaultValues: defaultValues ? {
+      ...defaultValues,
+      variety: defaultValues.variety ?? "",
+      valveType: defaultValues.valveType ?? "",
+    } : {
       code: "Será autogenerado",
       type: "BARRIL",
       format: "",
