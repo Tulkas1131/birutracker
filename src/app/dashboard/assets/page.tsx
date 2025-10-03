@@ -672,7 +672,7 @@ export default function AssetsPage() {
                   setFormOpen(false);
                   setSelectedAsset(undefined);
                 }}
-                isLocked={selectedAsset?.location !== 'EN_PLANTA'}
+                isLocked={!!selectedAsset && selectedAsset.location !== 'EN_PLANTA'}
               />
           </DialogContent>
         </Dialog>
@@ -742,3 +742,5 @@ export default function AssetsPage() {
     </>
   );
 }
+
+    
