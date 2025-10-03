@@ -79,6 +79,26 @@ La aplicación está construida con un conjunto de tecnologías modernas y robus
 - **Iconos:** [Lucide React](https://lucide.dev/)
 - **Escaneo de QR:** [html5-qrcode](https://github.com/mebjas/html5-qrcode)
 
+### ¿Dónde se usó cada tecnología? (Ejemplos)
+
+1.  **Next.js (con React y App Router)**
+    *   **¿Qué es?** El esqueleto de la aplicación. Organiza las páginas y la navegación.
+    *   **Ejemplo:** La estructura de carpetas en `src/app/dashboard/` es un ejemplo directo. La carpeta `assets` crea automáticamente la página web en `.../dashboard/assets`. El archivo `page.tsx` dentro de esa carpeta (`src/app/dashboard/assets/page.tsx`) es el componente de React que define todo lo que ves en esa página: la tabla de activos, los botones, los filtros, etc.
+    *   **Hooks de React:** Dentro de `src/app/dashboard/assets/page.tsx`, usamos `useState` para controlar qué formulario está abierto, y `useEffect` para cargar la lista de activos desde la base de datos en cuanto la página se carga.
+
+2.  **Firebase (Firestore y Authentication)**
+    *   **¿Qué es?** El cerebro y la seguridad de la app. Es la base de datos en la nube y el sistema de inicio de sesión.
+    *   **Authentication (Autenticación):** El archivo `src/app/page.tsx` (la página de Login) usa la función `signInWithEmailAndPassword` de Firebase para verificar que tu usuario y contraseña son correctos. El archivo `src/app/signup/page.tsx` usa `createUserWithEmailAndPassword` para crear nuevos usuarios, pero solo si su correo está en la lista de permitidos.
+    *   **Firestore (Base de Datos):** En el archivo `src/app/dashboard/customers/page.tsx`, cuando se cargan los clientes, se está haciendo una consulta a la colección `customers` en Firestore. De igual manera, cuando creas un cliente nuevo, se usa la función `addDoc` para guardarlo en esa colección.
+
+3.  **Tailwind CSS**
+    *   **¿Qué es?** El kit de herramientas para dar estilo. En lugar de escribir CSS complejo, usamos "clases" predefinidas para aplicar estilos directamente.
+    *   **Ejemplo:** En el archivo `src/components/ui/button.tsx`, verás clases como `h-10`, `px-4`, `py-2`, `rounded-md`, `bg-primary`. Esto se traduce en: "haz que el botón tenga una altura de 10 unidades, un espaciado horizontal de 4, vertical de 2, con bordes redondeados y un color de fondo primario". Se usa en absolutamente todos los componentes visuales para definir su apariencia y espaciado.
+
+4.  **ShadCN UI**
+    *   **¿Qué es?** Una librería de componentes de interfaz listos para usar, construidos sobre Tailwind CSS. Nos da bloques de construcción como botones, tablas, menús, etc.
+    *   **Ejemplo:** Los componentes que ves en `src/components/ui/` como `card.tsx`, `table.tsx`, y `dialog.tsx` son la base. Por ejemplo, en `src/app/dashboard/page.tsx`, usamos el componente `<Card>` para crear cada una de las tarjetas de estadísticas. En `src/app/dashboard/assets/page.tsx`, usamos `<Table>` para mostrar la lista de activos de forma ordenada.
+
 ---
 
 ## 4. Estructura de la Base de Datos (Firestore)
