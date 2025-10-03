@@ -1,3 +1,4 @@
+
 # BiruTracker - Documentación del Proyecto
 
 ¡Bienvenido a la documentación de BiruTracker! Esta guía te ayudará a entender cómo funciona la aplicación, cómo está estructurada y cómo puedes realizar modificaciones o añadir nuevas funcionalidades en el futuro.
@@ -23,7 +24,7 @@ Para registrarte, un administrador primero debe añadir tu correo electrónico a
 Antes de mover nada, necesitas registrar tus barriles y cilindros en el sistema.
 
 1.  **Ve a la sección "Activos"**: Aquí puedes crear un barril individual o, si tienes muchos iguales, usar la opción **"Crear Lote"** para generar varios a la vez (por ejemplo, 20 barriles de 50L).
-2.  **Imprime los Códigos QR**: Cada barril creado tendrá un código QR único. Puedes imprimirlos individualmente o usar el botón **"Imprimir Lote de QR"** para obtener una hoja con todos los códigos de una categoría. Pega cada QR en su barril físico correspondiente.
+2.  **Imprime los Códigos QR**: Cada barril creado tendrá un código QR único. Puedes imprimirlos individualmente o usar el botón **"Imprimir Lote de QR"** para generar una hoja A4 con una cuadrícula de etiquetas. Cada etiqueta tiene un borde punteado para delimitarla visualmente, manteniendo los márgenes de la hoja simétricos. Pega cada QR en su barril físico correspondiente.
 
 ### Paso 3: El Ciclo de Vida de un Barril
 
@@ -115,7 +116,7 @@ La estructura de archivos clave se encuentra dentro de la carpeta `src/`.
 ### 5.2. Gestión de Activos (`src/app/dashboard/assets/page.tsx`)
 
 - **Creación Individual y por Lotes:** Permite crear un único activo o generar múltiples activos a la vez (ej., 50 barriles de 50L) con códigos autoincrementales.
-- **Generación e Impresión de QR:** Cada activo tiene un código QR único. La interfaz permite imprimir estos códigos, ya sea individualmente o en una hoja A4 para toda una categoría de activos. El diseño de impresión está optimizado con márgenes simétricos para facilitar el corte.
+- **Generación e Impresión de QR:** Cada activo tiene un código QR único. La interfaz permite imprimir estos códigos, ya sea individualmente o en una hoja A4 para toda una categoría de activos. El diseño de impresión está optimizado con bordes punteados individuales para cada etiqueta y márgenes simétricos.
 - **Contadores por Estado:** Muestra un resumen de cuántos activos de cada formato se encuentran `En Planta`, `En Cliente` y `En Reparto`.
 
 ### 5.3. Gestión de Clientes (`src/app/dashboard/customers/page.tsx`)
@@ -149,7 +150,7 @@ La estructura de archivos clave se encuentra dentro de la carpeta `src/`.
 
 La aplicación está configurada como una PWA, lo que significa que se puede "instalar" en la pantalla de inicio de un dispositivo móvil o en el escritorio de un ordenador para una experiencia similar a una app nativa.
 
-- **Instalación:** Un botón de "Instalar App" aparece automáticamente en la interfaz si el navegador es compatible. En iOS, se proporcionan instrucciones para añadirla manualmente desde Safari.
+- **Instalación:** Un botón de "Instalar App" aparece automáticamente en la interfaz si el navegador es compatible. En iOS, se proporcionan instrucciones para añadirla manually desde Safari.
 - **Service Worker:** Utiliza un Service Worker para gestionar el caché y las actualizaciones de la aplicación. Cuando hay una nueva versión disponible, el sistema la detecta y actualiza la app automáticamente en la siguiente recarga.
 
 ---
