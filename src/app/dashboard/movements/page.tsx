@@ -34,6 +34,7 @@ type ActionLogic = {
     description: string;
     requiresCustomerSelection: boolean;
     requiresVariety?: boolean;
+    requiresValveType?: boolean;
     autoFillsCustomer?: 'fromDelivery' | 'fromLastKnown';
 };
 
@@ -51,6 +52,7 @@ const stateLogic: Record<Asset['location'], Partial<Record<Asset['state'], Actio
             description: "El activo está vacío. Registra el llenado o una salida en préstamo.",
             requiresCustomerSelection: false,
             requiresVariety: true,
+            requiresValveType: true,
         }
     },
     EN_REPARTO: {
@@ -119,7 +121,7 @@ export default function MovementsPage() {
 
   const form = useForm<MovementFormData>({
     resolver: zodResolver(movementSchema),
-    defaultValues: { variety: "", customer_id: "INTERNAL" }, // Default customer for internal ops
+    defaultValues: { variety: "", valveType: "", customer_id: "INTERNAL" }, // Default customer for internal ops
   });
   
   const fetchData = useCallback(async () => {
@@ -174,7 +176,7 @@ export default function MovementsPage() {
     setScannedAsset(null);
     setActionLogic(null);
     setIsManualOverride(false);
-    form.reset({ variety: "", customer_id: "INTERNAL" });
+    form.reset({ variety: "", valveType: "", customer_id: "INTERNAL" });
   };
 
   const handleScanSuccess = async (decodedText: string) => {
@@ -254,15 +256,20 @@ export default function MovementsPage() {
     let newLocation: Asset['location'] = scannedAsset.location;
     let newState: Asset['state'] = scannedAsset.state;
     let newVariety: string | undefined = scannedAsset.variety;
+    let newValveType: string | undefined = scannedAsset.valveType;
 
     switch (data.event_type) {
-      case 'LLENADO_EN_PLANTA': newState = 'LLENO'; newVariety = data.variety; break;
+      case 'LLENADO_EN_PLANTA': 
+        newState = 'LLENO'; 
+        newVariety = data.variety; 
+        newValveType = data.valveType;
+        break;
       case 'SALIDA_A_REPARTO': newLocation = 'EN_REPARTO'; break;
       case 'ENTREGA_A_CLIENTE': newLocation = 'EN_CLIENTE'; break;
-      case 'SALIDA_VACIO': newLocation = 'EN_CLIENTE'; newState = 'VACIO'; newVariety = ''; break;
-      case 'RECOLECCION_DE_CLIENTE': newLocation = 'EN_REPARTO'; newState = 'VACIO'; newVariety = ''; break;
-      case 'RECEPCION_EN_PLANTA': newLocation = 'EN_PLANTA'; newState = 'VACIO'; newVariety = ''; break;
-      case 'DEVOLUCION': newLocation = 'EN_PLANTA'; newVariety = data.variety; break;
+      case 'SALIDA_VACIO': newLocation = 'EN_CLIENTE'; newState = 'VACIO'; newVariety = ''; newValveType = ''; break;
+      case 'RECOLECCION_DE_CLIENTE': newLocation = 'EN_REPARTO'; newState = 'VACIO'; newVariety = ''; newValveType = ''; break;
+      case 'RECEPCION_EN_PLANTA': newLocation = 'EN_PLANTA'; newState = 'VACIO'; newVariety = ''; newValveType = ''; break;
+      case 'DEVOLUCION': newLocation = 'EN_PLANTA'; newVariety = data.variety; newValveType = data.valveType; break;
     }
 
     try {
@@ -287,13 +294,14 @@ export default function MovementsPage() {
             event_type: data.event_type, 
             timestamp: Timestamp.now(), 
             user_id: user.uid, 
-            variety: data.variety || "" 
+            variety: data.variety || "",
+            valveType: data.valveType || "",
         };
         const newEventRef = doc(collection(firestore, "events"));
         transaction.set(newEventRef, eventData);
 
         const assetRef = doc(firestore, "assets", scannedAsset.id);
-        transaction.update(assetRef, { location: newLocation, state: newState, variety: newVariety });
+        transaction.update(assetRef, { location: newLocation, state: newState, variety: newVariety, valveType: newValveType });
       });
 
       toast({ title: "Movimiento Registrado", description: `El activo ${scannedAsset.code} ha sido actualizado.` });
@@ -320,6 +328,11 @@ export default function MovementsPage() {
     }
     return varietyEvents.includes(currentEventType);
   }, [scannedAsset, currentEventType, isManualOverride]);
+
+  const showValveTypeField = useMemo(() => {
+    if (scannedAsset?.type !== 'BARRIL') return false;
+    return actionLogic?.requiresValveType && currentEventType === 'LLENADO_EN_PLANTA';
+  }, [scannedAsset, actionLogic, currentEventType]);
 
   const requiresCustomerSelection = useMemo(() => {
     const customerEvents: MovementEventType[] = ['SALIDA_A_REPARTO', 'SALIDA_VACIO', 'DEVOLUCION'];
@@ -452,6 +465,20 @@ export default function MovementsPage() {
                                     )}
                                 />
                             )}
+                            
+                             {showValveTypeField && (
+                                <FormField
+                                    control={form.control}
+                                    name="valveType"
+                                    render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Tipo de Válvula</FormLabel>
+                                        <FormControl><Input placeholder="ej., A, G" {...field} maxLength={1} style={{ textTransform: 'uppercase' }} /></FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                    )}
+                                />
+                            )}
                         </div>
 
                         <DialogFooter className="grid grid-cols-2 gap-2 sm:flex">
@@ -473,5 +500,3 @@ export default function MovementsPage() {
     </div>
   );
 }
-
-    

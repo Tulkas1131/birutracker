@@ -61,6 +61,7 @@ function EventCardMobile({ event, assetsMap, onDelete }: { event: Event, assetsM
                     <span className="text-sm font-medium">{formatEventType(event.event_type)}</span>
                     <span className="text-sm text-muted-foreground">{event.customer_name}</span>
                     <span className="text-xs text-muted-foreground">{formatDate(event.timestamp)}</span>
+                     {event.valveType && <span className="text-xs text-muted-foreground">Válvula: {event.valveType}</span>}
                 </div>
                 <div className="flex flex-col items-end gap-2">
                     {daysAtCustomer !== null && (
@@ -114,6 +115,7 @@ function EventTableRow({ event, assetsMap, onDelete }: { event: Event, assetsMap
         )}
       </TableCell>
       <TableCell className="hidden lg:table-cell">{event.variety || 'N/A'}</TableCell>
+      <TableCell className="hidden lg:table-cell">{event.valveType || 'N/A'}</TableCell>
       {userRole === 'Admin' && (
         <TableCell>
           <Button
@@ -308,6 +310,7 @@ function OverviewPageContent() {
                           <TableHead>Cliente</TableHead>
                           <TableHead className="hidden md:table-cell">Días en Cliente</TableHead>
                           <TableHead className="hidden lg:table-cell">Variedad</TableHead>
+                          <TableHead className="hidden lg:table-cell">Válvula</TableHead>
                           {userRole === 'Admin' && <TableHead>Acciones</TableHead>}
                       </TableRow>
                   </TableHeader>

@@ -218,7 +218,8 @@ export default function AssetsPage() {
         const assetDataToUpdate: Partial<Asset> = {
           state: data.state,
           location: data.location,
-          variety: data.state === 'LLENO' ? data.variety || "" : "", // Clear variety if state is not LLENO
+          variety: data.state === 'LLENO' ? data.variety || "" : "",
+          valveType: data.state === 'LLENO' ? data.valveType || "" : "",
         };
         // Only allow changing format and type if asset is in plant
         if(selectedAsset.location === 'EN_PLANTA') {
@@ -242,7 +243,7 @@ export default function AssetsPage() {
         // Creating new asset
         const { prefix, nextNumber } = await generateNextCode(data.type);
         const newCode = `${prefix}-${String(nextNumber).padStart(3, '0')}`;
-        const newAssetData = { ...data, code: newCode, state: 'VACIO' as const, location: 'EN_PLANTA' as const, variety: "" };
+        const newAssetData = { ...data, code: newCode, state: 'VACIO' as const, location: 'EN_PLANTA' as const, variety: "", valveType: "" };
         const newDocRef = await addDoc(collection(firestore, "assets"), newAssetData);
         setAssets(prev => [...prev, { id: newDocRef.id, ...newAssetData }]);
         toast({
@@ -286,6 +287,7 @@ export default function AssetsPage() {
           state: 'VACIO' as const,
           location: 'EN_PLANTA' as const,
           variety: '',
+          valveType: '',
         };
         const newAssetRef = doc(collection(firestore, "assets"));
         batch.set(newAssetRef, newAssetData);
@@ -378,8 +380,11 @@ export default function AssetsPage() {
            <Badge variant={asset.state === 'LLENO' ? 'default' : 'secondary'}>
               {asset.state === 'LLENO' ? 'Lleno' : 'Vacío'}
            </Badge>
-           {asset.state === 'LLENO' && asset.variety && (
-              <Badge variant="outline" className="font-mono">{asset.variety}</Badge>
+           {asset.state === 'LLENO' && (asset.variety || asset.valveType) && (
+             <div className="flex items-center gap-2">
+                {asset.variety && <Badge variant="outline" className="font-mono">{asset.variety}</Badge>}
+                {asset.valveType && <Badge variant="outline" className="font-mono">V: {asset.valveType}</Badge>}
+             </div>
            )}
            <Badge variant={getLocationVariant(asset.location)}>
               {getLocationText(asset.location)}
@@ -435,8 +440,11 @@ export default function AssetsPage() {
                   <Badge variant={asset.state === 'LLENO' ? 'default' : 'secondary'}>
                     {asset.state === 'LLENO' ? 'Lleno' : 'Vacío'}
                   </Badge>
-                  {asset.state === 'LLENO' && asset.variety && (
-                    <Badge variant="outline" className="font-mono">{asset.variety}</Badge>
+                  {asset.state === 'LLENO' && (asset.variety || asset.valveType) && (
+                    <div className="flex items-center gap-2">
+                        {asset.variety && <Badge variant="outline" className="font-mono">{asset.variety}</Badge>}
+                        {asset.valveType && <Badge variant="outline" className="font-mono">V: {asset.valveType}</Badge>}
+                    </div>
                   )}
                 </div>
               </TableCell>
@@ -682,5 +690,3 @@ export default function AssetsPage() {
     </>
   );
 }
-
-    

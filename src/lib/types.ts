@@ -1,3 +1,4 @@
+
 import { z } from 'zod';
 import { Timestamp } from 'firebase/firestore/lite';
 
@@ -10,6 +11,7 @@ export type Asset = {
   state: 'LLENO' | 'VACIO';
   location: 'EN_CLIENTE' | 'EN_PLANTA' | 'EN_REPARTO';
   variety?: string;
+  valveType?: string;
 };
 
 export type Customer = {
@@ -44,6 +46,7 @@ export type Event = {
   user_id: string; // This would be the authenticated user's ID
   timestamp: Timestamp;
   variety?: string;
+  valveType?: string;
 };
 
 // Zod Schemas for form validation
@@ -55,6 +58,7 @@ export const assetSchema = z.object({
   state: z.enum(['LLENO', 'VACIO']),
   location: z.enum(['EN_CLIENTE', 'EN_PLANTA', 'EN_REPARTO']),
   variety: z.string().optional(),
+  valveType: z.string().optional(),
 });
 
 export type AssetFormData = z.infer<typeof assetSchema>;
@@ -97,6 +101,9 @@ export const movementSchema = z.object({
   event_type: z.enum(movementEventTypes),
   customer_id: z.string().min(1, "Por favor, selecciona un cliente."),
   variety: z.string().optional(),
+  valveType: z.string().optional().refine(val => !val || /^[A-Z]$/.test(val), {
+    message: "El tipo de válvula debe ser una única letra mayúscula.",
+  }),
 });
 
 export type MovementFormData = z.infer<typeof movementSchema>;

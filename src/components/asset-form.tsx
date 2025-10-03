@@ -28,6 +28,7 @@ export function AssetForm({ defaultValues, onSubmit, onCancel, isLocked = false 
       state: "VACIO",
       location: "EN_PLANTA",
       variety: "",
+      valveType: "",
     },
   });
 
@@ -114,19 +115,34 @@ export function AssetForm({ defaultValues, onSubmit, onCancel, isLocked = false 
           )}
         />
          {form.watch('state') === 'LLENO' && (
-             <FormField
-                control={form.control}
-                name="variety"
-                render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>Variedad</FormLabel>
-                    <FormControl>
-                        <Input placeholder="ej., IPA, Stout" {...field} disabled={isLocked} />
-                    </FormControl>
-                    <FormMessage />
-                    </FormItem>
-                )}
-             />
+             <div className="grid grid-cols-2 gap-4">
+                <FormField
+                    control={form.control}
+                    name="variety"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Variedad</FormLabel>
+                        <FormControl>
+                            <Input placeholder="ej., IPA" {...field} disabled={isLocked} />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                />
+                 <FormField
+                    control={form.control}
+                    name="valveType"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Válvula</FormLabel>
+                        <FormControl>
+                            <Input placeholder="ej., G" {...field} disabled={isLocked} maxLength={1} style={{ textTransform: 'uppercase' }} />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                />
+             </div>
          )}
         <FormField
           control={form.control}
