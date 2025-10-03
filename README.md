@@ -24,7 +24,9 @@ Para registrarte, un administrador primero debe añadir tu correo electrónico a
 Antes de mover nada, necesitas registrar tus barriles y cilindros en el sistema.
 
 1.  **Ve a la sección "Activos"**: Aquí puedes crear un barril individual o, si tienes muchos iguales, usar la opción **"Crear Lote"** para generar varios a la vez (por ejemplo, 20 barriles de 50L).
-2.  **Imprime los Códigos QR**: Cada barril creado tendrá un código QR único. Puedes imprimirlos individualmente o usar el botón **"Imprimir Lote de QR"** para generar una hoja A4 con una cuadrícula de etiquetas. Cada etiqueta tiene un borde punteado para delimitarla visualmente, manteniendo los márgenes de la hoja simétricos. Pega cada QR en su barril físico correspondiente.
+2.  **Imprime los Códigos QR**: Cada barril creado tendrá un código QR único. Puedes imprimirlos individualmente o usar el botón **"Imprimir Lote de QR"** para generar una hoja A4 con una cuadrícula de etiquetas. Cada etiqueta tiene un borde punteado para delimitarla visualmente, manteniendo los márgenes de la hoja simétricos.
+
+**Consejo para el portafolio y uso real:** Para asegurar la durabilidad, se debe recomendar imprimir las etiquetas en **papel adhesivo (sticker) resistente al agua y a la intemperie**. Esto es crucial para que los códigos QR sobrevivan la humedad, los lavados y el uso rudo típico en el entorno de una cervecería. Una vez impreso, pega cada QR en su barril físico correspondiente.
 
 ### Paso 3: El Ciclo de Vida de un Barril
 
@@ -33,7 +35,7 @@ Este es el proceso completo que sigue un barril, gestionado desde la sección **
 #### **Fase 0: Llenas un barril vacío en tu planta**
 
 *   **Acción**: Selecciona **"Llenar Activo"**.
-*   **¿Qué haces?**: Escanea el QR de un barril que esté `EN PLANTA` y `VACÍO`. La app te sugerirá llenarlo y te pedirá que introduzcas la variedad de cerveza.
+*   **¿Qué haces?**: Escanea el QR de un barril que esté `EN PLANTA` y `VACÍO`. La app te sugerirá llenarlo y te pedirá que introduzcas la variedad de cerveza y el tipo de válvula (ej. 'A' o 'G').
 *   **Resultado**: El barril ahora figura como `EN PLANTA` y `LLENO`, listo para ser despachado.
 
 #### **Fase 1: El barril sale de la planta (Lleno)**
@@ -93,7 +95,7 @@ La base de datos en Firestore es el corazón de la aplicación. Se organiza en l
 
 - **`assets`**:
   - **Propósito:** Contiene un documento por cada activo físico (barril o cilindro de CO₂).
-  - **Campos:** `code`, `type`, `format`, `state`, `location`, `variety`.
+  - **Campos:** `code`, `type`, `format`, `state`, `location`, `variety`, `valveType`.
 
 - **`customers`**:
   - **Propósito:** Almacena la información de los clientes (bares, distribuidores, etc.).
@@ -101,7 +103,7 @@ La base de datos en Firestore es el corazón de la aplicación. Se organiza en l
 
 - **`events`**:
   - **Propósito:** Es el historial de todos los movimientos. Cada vez que se registra una salida o un retorno, se crea un nuevo documento en esta colección.
-  - **Campos:** `asset_code`, `asset_id`, `customer_id`, `customer_name`, `event_type`, `timestamp`, `user_id`, `variety`.
+  - **Campos:** `asset_code`, `asset_id`, `customer_id`, `customer_name`, `event_type`, `timestamp`, `user_id`, `variety`, `valveType`.
 
 - **`app_logs`**:
   - **Propósito:** Guarda un registro de eventos importantes y errores que ocurren en la aplicación. Solo es visible para los administradores y ayuda a diagnosticar problemas.
@@ -115,7 +117,7 @@ La estructura de archivos clave se encuentra dentro de la carpeta `src/`.
 
 ### 5.1. Panel de Control (`src/app/dashboard/page.tsx`)
 
-- **Resumen Visual del Inventario:** Muestra un gráfico de barras apiladas que visualiza dónde se encuentran los activos (`En Planta`, `En Cliente`, `En Reparto`) y desglosa cada barra por tipo de activo (Barriles 50L, 30L y CO2), ofreciendo una visión completa de la distribución.
+- **Resumen Visual del Inventario:** Muestra un gráfico de barras apiladas que visualiza dónde se encuentran los activos (`En Planta`, `En Cliente`, `En Reparto`) y desglosa cada barra por tipo de activo (Barriles 50L, 30L SLIM, 30L y CO2), ofreciendo una visión completa de la distribución.
 - **Top Clientes:** Incluye un gráfico de barras que clasifica a los clientes con la mayor cantidad de activos en su posesión, permitiendo identificar rápidamente a los clientes más importantes.
 - **Tarjetas de Métricas Rápidas:** Presenta indicadores clave como el total de movimientos en las últimas 24 horas, el número de activos críticos (más de 30 días en un cliente) y los totales de activos y clientes.
 
@@ -123,7 +125,7 @@ La estructura de archivos clave se encuentra dentro de la carpeta `src/`.
 
 - **Creación Individual y por Lotes:** Permite crear un único activo o generar múltiples activos a la vez (ej., 50 barriles de 50L) con códigos autoincrementales.
 - **Generación e Impresión de QR:** Cada activo tiene un código QR único. La interfaz permite imprimir estos códigos, ya sea individualmente o en una hoja A4 para toda una categoría de activos. El diseño de impresión está optimizado con bordes punteados individuales para cada etiqueta y márgenes simétricos.
-- **Contadores por Estado:** Muestra un resumen de cuántos activos de cada formato se encuentran `En Planta`, `En Cliente` y `En Reparto`.
+- **Contadores por Estado:** Muestra un resumen de cuántos activos de cada formato se encuentran `En Planta`, `En Cliente` y `En Reparto`. Estos contadores funcionan como filtros interactivos.
 
 ### 5.3. Gestión de Clientes (`src/app/dashboard/customers/page.tsx`)
 
@@ -156,7 +158,7 @@ La estructura de archivos clave se encuentra dentro de la carpeta `src/`.
 
 La aplicación está configurada como una PWA, lo que significa que se puede "instalar" en la pantalla de inicio de un dispositivo móvil o en el escritorio de un ordenador para una experiencia similar a una app nativa.
 
-- **Instalación:** Un botón de "Instalar App" aparece automáticamente en la interfaz si el navegador es compatible. En iOS, se proporcionan instrucciones para añadirla manually desde Safari.
+- **Instalación:** Un botón de "Instalar App" aparece automáticamente en la interfaz si el navegador es compatible. En iOS, se proporcionan instrucciones para añadirla manualmente desde Safari.
 - **Service Worker:** Utiliza un Service Worker para gestionar el caché y las actualizaciones de la aplicación. Cuando hay una nueva versión disponible, el sistema la detecta y actualiza la app automáticamente en la siguiente recarga.
 
 ---
