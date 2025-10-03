@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { assetSchema, type AssetFormData } from "@/lib/types";
+import { assetSchema, type AssetFormData, barrelFormats, co2Formats } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Lock } from "lucide-react";
 
@@ -37,6 +37,9 @@ export function AssetForm({ defaultValues, onSubmit, onCancel, isLocked = false 
   });
 
   const isCreating = !defaultValues;
+  const assetType = form.watch('type');
+  
+  const formatOptions = assetType === 'BARRIL' ? barrelFormats : co2Formats;
 
   return (
     <Form {...form}>
@@ -69,7 +72,14 @@ export function AssetForm({ defaultValues, onSubmit, onCancel, isLocked = false 
           render={({ field }) => (
             <FormItem>
               <FormLabel>Tipo</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLocked}>
+              <Select 
+                onValueChange={(value) => {
+                    field.onChange(value);
+                    form.resetField('format'); // Reset format when type changes
+                }} 
+                defaultValue={field.value} 
+                disabled={isLocked}
+              >
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecciona el tipo de activo" />
@@ -90,9 +100,18 @@ export function AssetForm({ defaultValues, onSubmit, onCancel, isLocked = false 
           render={({ field }) => (
             <FormItem>
               <FormLabel>Formato</FormLabel>
-              <FormControl>
-                <Input placeholder="ej., 50L o 6kg" {...field} disabled={isLocked}/>
-              </FormControl>
+              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLocked}>
+                 <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona un formato" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {formatOptions.map(option => (
+                    <SelectItem key={option} value={option}>{option}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}

@@ -2,7 +2,11 @@
 import { z } from 'zod';
 import { Timestamp } from 'firebase/firestore/lite';
 
-// Data types
+// --- ASSET ---
+
+export const barrelFormats = ['50L', '30L SLIM', '30L NORMAL'] as const;
+export const co2Formats = ['6kg', '10kg', '15kg'] as const;
+
 export type Asset = {
   id: string;
   code: string;
@@ -14,47 +18,11 @@ export type Asset = {
   valveType?: string;
 };
 
-export type Customer = {
-  id: string;
-  name: string;
-  address: string;
-  contact: string;
-  type: 'BAR' | 'DISTRIBUIDOR' | 'OTRO';
-  phone?: string;
-};
-
-export const movementEventTypes = [
-  'LLENADO_EN_PLANTA',
-  'SALIDA_A_REPARTO', 
-  'ENTREGA_A_CLIENTE', 
-  'RECOLECCION_DE_CLIENTE', 
-  'RECEPCION_EN_PLANTA', 
-  'SALIDA_VACIO', 
-  'DEVOLUCION'
-] as const;
-
-export type MovementEventType = typeof movementEventTypes[number];
-
-
-export type Event = {
-  id: string;
-  asset_id: string;
-  asset_code: string;
-  event_type: MovementEventType;
-  customer_id: string;
-  customer_name: string;
-  user_id: string; // This would be the authenticated user's ID
-  timestamp: Timestamp;
-  variety?: string;
-  valveType?: string;
-};
-
-// Zod Schemas for form validation
 export const assetSchema = z.object({
   id: z.string().optional(),
   code: z.string(),
   type: z.enum(['BARRIL', 'CO2']),
-  format: z.string().min(1, 'Format is required'),
+  format: z.string().min(1, 'El formato es requerido.'), // Now a string from a select
   state: z.enum(['LLENO', 'VACIO']),
   location: z.enum(['EN_CLIENTE', 'EN_PLANTA', 'EN_REPARTO']),
   variety: z.string().optional(),
@@ -62,6 +30,7 @@ export const assetSchema = z.object({
 });
 
 export type AssetFormData = z.infer<typeof assetSchema>;
+
 
 export const assetBatchSchema = z.object({
   type: z.enum(['BARRIL', 'CO2'], { required_error: 'Debes seleccionar un tipo.' }),
@@ -71,6 +40,17 @@ export const assetBatchSchema = z.object({
 
 export type AssetBatchFormData = z.infer<typeof assetBatchSchema>;
 
+
+// --- CUSTOMER ---
+
+export type Customer = {
+  id: string;
+  name: string;
+  address: string;
+  contact: string;
+  type: 'BAR' | 'DISTRIBUIDOR' | 'OTRO';
+  phone?: string;
+};
 
 export const customerSchema = z.object({
   id: z.string().optional(),
@@ -95,6 +75,34 @@ export const customerSchema = z.object({
 });
 
 export type CustomerFormData = z.infer<typeof customerSchema>;
+
+
+// --- EVENT ---
+
+export const movementEventTypes = [
+  'LLENADO_EN_PLANTA',
+  'SALIDA_A_REPARTO', 
+  'ENTREGA_A_CLIENTE', 
+  'RECOLECCION_DE_CLIENTE', 
+  'RECEPCION_EN_PLANTA', 
+  'SALIDA_VACIO', 
+  'DEVOLUCION'
+] as const;
+
+export type MovementEventType = typeof movementEventTypes[number];
+
+export type Event = {
+  id: string;
+  asset_id: string;
+  asset_code: string;
+  event_type: MovementEventType;
+  customer_id: string;
+  customer_name: string;
+  user_id: string; // This would be the authenticated user's ID
+  timestamp: Timestamp;
+  variety?: string;
+  valveType?: string;
+};
 
 export const movementSchema = z.object({
   asset_id: z.string().min(1, "Por favor, selecciona un activo."),

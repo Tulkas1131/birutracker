@@ -584,15 +584,15 @@ export default function AssetsPage() {
 
   const CountsDisplay = ({ counts, onFilter }: { counts: Record<string, Record<Asset['location'], number>>, onFilter: (format: string, location: Asset['location']) => void }) => (
     <div className="flex flex-col gap-y-2 text-sm text-muted-foreground">
-      {Object.entries(counts).map(([format, data]) => (
+      {Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)).map(([format, data]) => (
         <div key={format} className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <span className="font-semibold">{format}:</span>
           {(['EN_PLANTA', 'EN_CLIENTE', 'EN_REPARTO'] as Asset['location'][]).map(loc => (
             data[loc] > 0 && (
               <button key={loc} onClick={() => onFilter(format, loc)} className={cn("flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2", {
-                  'bg-success/20 text-green-800 hover:bg-success/30 border-success/30 dark:text-success-foreground': loc === 'EN_PLANTA',
-                  'bg-warning/20 text-amber-800 hover:bg-warning/30 border-warning/30 dark:text-warning-foreground': loc === 'EN_CLIENTE',
-                  'bg-secondary text-secondary-foreground hover:bg-secondary/80 border-secondary': loc === 'EN_REPARTO',
+                  'bg-success/20 text-green-800 hover:bg-success/30 border-success/30 dark:text-green-300 dark:hover:bg-green-800/50 dark:border-green-800': loc === 'EN_PLANTA',
+                  'bg-warning/20 text-amber-800 hover:bg-warning/30 border-warning/30 dark:text-amber-300 dark:hover:bg-amber-800/50 dark:border-amber-800': loc === 'EN_CLIENTE',
+                  'bg-secondary text-secondary-foreground hover:bg-secondary/80 border-secondary dark:hover:bg-slate-700': loc === 'EN_REPARTO',
                   'ring-2 ring-primary': locationFilter === loc && formatFilter === format
               })}>
                 <span>{getLocationText(loc)}:</span>
@@ -742,4 +742,3 @@ export default function AssetsPage() {
     </>
   );
 }
-

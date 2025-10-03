@@ -19,9 +19,13 @@ const chartConfig = {
     label: "Barriles 50L",
     color: "hsl(var(--chart-2))",
   },
-  barriles30L: {
-    label: "Barriles 30L",
+  barriles30LSLIM: {
+    label: "Barriles 30L SLIM",
     color: "hsl(var(--chart-3))",
+  },
+  barriles30LNORMAL: {
+    label: "Barriles 30L NORMAL",
+    color: "hsl(var(--chart-4))",
   },
   co2: {
     label: "CO2",
@@ -89,16 +93,17 @@ export default function DashboardPage() {
     const assetsByLocation = assets.reduce((acc, asset) => {
         const location = asset.location.replace('_', ' ');
         if (!acc[location]) {
-            acc[location] = { location, barriles50L: 0, barriles30L: 0, co2: 0 };
+            acc[location] = { location, barriles50L: 0, barriles30LSLIM: 0, barriles30LNORMAL: 0, co2: 0 };
         }
         if (asset.type === 'BARRIL') {
-            if (asset.format.includes('50')) acc[location].barriles50L++;
-            else if (asset.format.includes('30')) acc[location].barriles30L++;
+            if (asset.format === '50L') acc[location].barriles50L++;
+            else if (asset.format === '30L SLIM') acc[location].barriles30LSLIM++;
+            else if (asset.format === '30L NORMAL') acc[location].barriles30LNORMAL++;
         } else if (asset.type === 'CO2') {
             acc[location].co2++;
         }
         return acc;
-    }, {} as Record<string, { location: string; barriles50L: number; barriles30L: number; co2: number }>);
+    }, {} as Record<string, { location: string; barriles50L: number; barriles30LSLIM: number; barriles30LNORMAL: number; co2: number }>);
     
     const locationDistribution = Object.values(assetsByLocation);
 
@@ -187,9 +192,10 @@ export default function DashboardPage() {
                                 <ChartTooltip 
                                     content={<ChartTooltipContent />} 
                                 />
-                                <Bar dataKey="barriles50L" stackId="a" fill={chartConfig.barriles50L.color} radius={[4, 0, 0, 4]} />
-                                <Bar dataKey="barriles30L" stackId="a" fill={chartConfig.barriles30L.color} />
-                                <Bar dataKey="co2" stackId="a" fill={chartConfig.co2.color} radius={[0, 4, 4, 0]} />
+                                <Bar dataKey="barriles50L" stackId="a" fill={chartConfig.barriles50L.color} />
+                                <Bar dataKey="barriles30LSLIM" stackId="a" fill={chartConfig.barriles30LSLIM.color} />
+                                <Bar dataKey="barriles30LNORMAL" stackId="a" fill={chartConfig.barriles30LNORMAL.color} />
+                                <Bar dataKey="co2" stackId="a" fill={chartConfig.co2.color} />
                             </BarChart>
                         </ChartContainer>
                      )}
