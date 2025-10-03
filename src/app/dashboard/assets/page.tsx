@@ -590,8 +590,8 @@ export default function AssetsPage() {
           {(['EN_PLANTA', 'EN_CLIENTE', 'EN_REPARTO'] as Asset['location'][]).map(loc => (
             data[loc] > 0 && (
               <button key={loc} onClick={() => onFilter(format, loc)} className={cn("flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2", {
-                  'bg-success/20 text-success-foreground hover:bg-success/30 border-success/30': loc === 'EN_PLANTA',
-                  'bg-warning/20 text-warning-foreground hover:bg-warning/30 border-warning/30': loc === 'EN_CLIENTE',
+                  'bg-success/20 text-green-800 hover:bg-success/30 border-success/30 dark:text-success-foreground': loc === 'EN_PLANTA',
+                  'bg-warning/20 text-amber-800 hover:bg-warning/30 border-warning/30 dark:text-warning-foreground': loc === 'EN_CLIENTE',
                   'bg-secondary text-secondary-foreground hover:bg-secondary/80 border-secondary': loc === 'EN_REPARTO',
                   'ring-2 ring-primary': locationFilter === loc && formatFilter === format
               })}>
@@ -743,4 +743,3 @@ export default function AssetsPage() {
   );
 }
 
-    
