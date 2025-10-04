@@ -38,7 +38,11 @@ export function AssetBatchForm({ onSubmit, onCancel }: AssetBatchFormProps) {
               <FormLabel>Tipo de Activo</FormLabel>
               <Select onValueChange={(value) => {
                   field.onChange(value);
-                  form.resetField('format'); // Reset format when type changes
+                  if (value === 'CO2') {
+                    form.setValue('format', '9L');
+                  } else {
+                    form.resetField('format');
+                  }
               }} defaultValue={field.value}>
                 <FormControl>
                   <SelectTrigger>
@@ -60,7 +64,7 @@ export function AssetBatchForm({ onSubmit, onCancel }: AssetBatchFormProps) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Formato</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                  <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecciona un formato" />

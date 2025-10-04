@@ -75,7 +75,11 @@ export function AssetForm({ defaultValues, onSubmit, onCancel, isLocked = false 
               <Select 
                 onValueChange={(value) => {
                     field.onChange(value);
-                    form.resetField('format'); // Reset format when type changes
+                    if (value === 'CO2') {
+                        form.setValue('format', '9L');
+                    } else {
+                        form.resetField('format');
+                    }
                 }} 
                 defaultValue={field.value} 
                 disabled={isLocked}
@@ -100,7 +104,7 @@ export function AssetForm({ defaultValues, onSubmit, onCancel, isLocked = false 
           render={({ field }) => (
             <FormItem>
               <FormLabel>Formato</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLocked}>
+              <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value} disabled={isLocked}>
                  <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecciona un formato" />

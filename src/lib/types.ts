@@ -5,7 +5,7 @@ import { Timestamp } from 'firebase/firestore/lite';
 // --- ASSET ---
 
 export const barrelFormats = ['50L', '30L SLIM', '30L'] as const;
-export const co2Formats = ['9L'] as const;
+export const co2Formats = ['2.5kg', '6kg', '9L', '10kg'] as const;
 
 export type Asset = {
   id: string;
