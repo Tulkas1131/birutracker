@@ -417,13 +417,17 @@ export default function AssetsPage() {
 
   const AssetCustomerInfo = ({ asset }: { asset: Asset }) => {
       const lastEvent = lastEventsMap.get(asset.id);
-      if ((asset.location === 'EN_CLIENTE' || asset.location === 'EN_REPARTO') && lastEvent?.customer_name && lastEvent.customer_name !== 'Planta') {
-          return (
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
-                  <User className="h-3 w-3" />
-                  <span>{lastEvent.customer_name}</span>
-              </div>
-          );
+      if (lastEvent?.customer_name && lastEvent.customer_name !== 'Planta') {
+          const showForReparto = asset.location === 'EN_REPARTO' && lastEvent.event_type === 'SALIDA_A_REPARTO';
+          const showForCliente = asset.location === 'EN_CLIENTE';
+          if (showForReparto || showForCliente) {
+              return (
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
+                      <User className="h-3 w-3" />
+                      <span>{lastEvent.customer_name}</span>
+                  </div>
+              );
+          }
       }
       return null;
   };
@@ -781,3 +785,5 @@ export default function AssetsPage() {
     </>
   );
 }
+
+    

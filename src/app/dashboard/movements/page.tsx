@@ -108,7 +108,6 @@ export default function MovementsPage() {
   const [user] = useAuthState(auth());
   const [assets, setAssets] = useState<Asset[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [pendingDeliveryEvents, setPendingDeliveryEvents] = useState<Event[]>([]);
   const [lastEvents, setLastEvents] = useState<Map<string, Event>>(new Map());
 
   const [isLoading, setIsLoading] = useState(true);
@@ -143,9 +142,6 @@ export default function MovementsPage() {
       const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
       const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
 
-      // Events for assets currently on delivery
-      const deliveryEvents = eventsData.filter(e => e.event_type === "SALIDA_A_REPARTO");
-      
       // A map of the last known event for every asset
       const lastEventsMap = new Map<string, Event>();
       eventsData.forEach(event => {
@@ -156,7 +152,6 @@ export default function MovementsPage() {
 
       setAssets(assetsData);
       setCustomers(customersData);
-      setPendingDeliveryEvents(deliveryEvents);
       setLastEvents(lastEventsMap);
 
     } catch (error: any) {
@@ -209,12 +204,13 @@ export default function MovementsPage() {
 
     // Autofill customer if logic dictates
     if (logic.autoFillsCustomer) {
-        let eventToUse: Event | undefined;
-        if (logic.autoFillsCustomer === 'fromDelivery') {
-            eventToUse = pendingDeliveryEvents.find(e => e.asset_id === asset.id);
-        } else { // fromLastKnown
-            eventToUse = lastEvents.get(asset.id);
+        let eventToUse: Event | undefined = lastEvents.get(asset.id);
+        
+        // Ensure for delivery, the event is SALIDA_A_REPARTO
+        if (logic.autoFillsCustomer === 'fromDelivery' && eventToUse?.event_type !== 'SALIDA_A_REPARTO') {
+             eventToUse = undefined;
         }
+
         if (eventToUse) {
             form.setValue('customer_id', eventToUse.customer_id);
         }
@@ -274,17 +270,9 @@ export default function MovementsPage() {
 
     try {
       await runTransaction(firestore, async (transaction) => {
-        let customerId: string;
-        let customerName: string;
-
-        // Force internal customer for plant-only operations
-        if (data.event_type === 'LLENADO_EN_PLANTA') {
-            customerId = 'INTERNAL';
-            customerName = 'Planta';
-        } else {
-            customerId = selectedCustomer?.id || lastEvents.get(scannedAsset.id)?.customer_id || 'INTERNAL';
-            customerName = selectedCustomer?.name || lastEvents.get(scannedAsset.id)?.customer_name || 'Planta';
-        }
+        const lastEvent = lastEvents.get(scannedAsset.id);
+        const customerId = selectedCustomer?.id || lastEvent?.customer_id || 'INTERNAL';
+        const customerName = selectedCustomer?.name || lastEvent?.customer_name || 'Planta';
         
         const eventData: Omit<Event, 'id'> = { 
             asset_id: scannedAsset.id, 
@@ -500,3 +488,5 @@ export default function MovementsPage() {
     </div>
   );
 }
+
+    
