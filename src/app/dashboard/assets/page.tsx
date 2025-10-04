@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus, ChevronLeft, ChevronRight, PackageSearch, X } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus, ChevronLeft, ChevronRight, PackageSearch, X, User } from "lucide-react";
 import { db } from "@/lib/firebase";
 import dynamic from "next/dynamic";
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/page-header";
-import type { Asset, AssetBatchFormData } from "@/lib/types";
+import type { Asset, AssetBatchFormData, Event, Customer } from "@/lib/types";
 import { AssetForm } from "@/components/asset-form";
 import { AssetBatchForm } from "@/components/asset-batch-form";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -79,6 +79,7 @@ const QrLabel = ({ asset }: { asset: Asset }) => {
 
 export default function AssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setFormOpen] = useState(false);
   const [isBatchFormOpen, setBatchFormOpen] = useState(false);
@@ -95,34 +96,53 @@ export default function AssetsPage() {
   const isMobile = useIsMobile();
   
   useEffect(() => {
-    const fetchAssets = async () => {
+    const fetchData = async () => {
       setIsLoading(true);
       try {
         const { collection, query, orderBy, getDocs } = await import("firebase/firestore/lite");
         const firestore = db();
         const assetsQuery = query(collection(firestore, "assets"), orderBy("code"));
-        const assetsSnapshot = await getDocs(assetsQuery);
+        const eventsQuery = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
+        
+        const [assetsSnapshot, eventsSnapshot] = await Promise.all([
+          getDocs(assetsQuery),
+          getDocs(eventsQuery),
+        ]);
+
         const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
+        const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
+        
         setAssets(assetsData);
+        setEvents(eventsData);
       } catch (error: any) {
-        console.error("Error fetching assets: ", error);
+        console.error("Error fetching data: ", error);
         logAppEvent({
             level: 'ERROR',
-            message: 'Failed to fetch assets',
+            message: 'Failed to fetch assets or events',
             component: 'AssetsPage',
             stack: error.stack,
         });
         toast({
           title: "Error de Carga",
-          description: "No se pudieron cargar los activos.",
+          description: "No se pudieron cargar los activos o eventos.",
           variant: "destructive"
         });
       } finally {
         setIsLoading(false);
       }
     };
-    fetchAssets();
+    fetchData();
   }, [toast]);
+
+  const lastEventsMap = useMemo(() => {
+      const map = new Map<string, Event>();
+      for (const event of events) {
+          if (!map.has(event.asset_id)) {
+              map.set(event.asset_id, event);
+          }
+      }
+      return map;
+  }, [events]);
 
   const handleEdit = (asset: Asset) => {
     setSelectedAsset(asset);
@@ -395,6 +415,19 @@ export default function AssetsPage() {
     setCurrentPage(1);
   };
 
+  const AssetCustomerInfo = ({ asset }: { asset: Asset }) => {
+      const lastEvent = lastEventsMap.get(asset.id);
+      if ((asset.location === 'EN_CLIENTE' || asset.location === 'EN_REPARTO') && lastEvent?.customer_name && lastEvent.customer_name !== 'Planta') {
+          return (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
+                  <User className="h-3 w-3" />
+                  <span>{lastEvent.customer_name}</span>
+              </div>
+          );
+      }
+      return null;
+  };
+
 
   const AssetCardMobile = ({ asset }: { asset: Asset }) => (
     <div className="flex items-center justify-between rounded-lg border bg-card p-4">
@@ -411,9 +444,12 @@ export default function AssetsPage() {
                 {asset.valveType && <Badge variant="outline" className="font-mono">V: {asset.valveType}</Badge>}
              </div>
            )}
-           <Badge variant={getLocationVariant(asset.location)}>
-              {getLocationText(asset.location)}
-           </Badge>
+           <div className="flex flex-col items-start">
+             <Badge variant={getLocationVariant(asset.location)}>
+                {getLocationText(asset.location)}
+             </Badge>
+             <AssetCustomerInfo asset={asset} />
+           </div>
         </div>
       </div>
        <div className="flex items-center">
@@ -474,9 +510,12 @@ export default function AssetsPage() {
                 </div>
               </TableCell>
               <TableCell>
-                <Badge variant={getLocationVariant(asset.location)}>
-                  {getLocationText(asset.location)}
-                </Badge>
+                 <div className="flex flex-col items-start">
+                    <Badge variant={getLocationVariant(asset.location)}>
+                    {getLocationText(asset.location)}
+                    </Badge>
+                    <AssetCustomerInfo asset={asset} />
+                </div>
               </TableCell>
               <TableCell>
                 <Button variant="ghost" size="icon" onClick={() => handleShowQrCode(asset)}>
@@ -742,5 +781,3 @@ export default function AssetsPage() {
     </>
   );
 }
-
-    
