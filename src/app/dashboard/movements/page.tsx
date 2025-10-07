@@ -226,10 +226,10 @@ export default function MovementsPage() {
     console.error("QR Scan Error:", errorMessage);
   };
   
+  const customerId = form.watch('customer_id');
   const customerForMovement = useMemo(() => {
-    const customerId = form.watch('customer_id');
     return customers.find(c => c.id === customerId);
-  }, [form, customers]);
+  }, [customerId, customers]);
 
   async function onSubmit(data: MovementFormData) {
     setIsSubmitting(true);
@@ -242,9 +242,8 @@ export default function MovementsPage() {
        return;
     }
     
-    // Use `customerForMovement` as the source of truth for the selected customer.
-     if (actionLogic?.requiresCustomerSelection && (!customerForMovement || customerForMovement.id === 'INTERNAL')) {
-      toast({ title: "Error", description: "Debes seleccionar un cliente.", variant: "destructive" });
+    if (actionLogic?.requiresCustomerSelection && (!data.customer_id || data.customer_id === 'INTERNAL')) {
+      toast({ title: "Error de Validación", description: "Debes seleccionar un cliente para esta acción.", variant: "destructive" });
       setIsSubmitting(false);
       return;
     }
@@ -270,8 +269,9 @@ export default function MovementsPage() {
 
     try {
       await runTransaction(firestore, async (transaction) => {
-        const customerId = customerForMovement?.id || 'INTERNAL';
-        const customerName = customerForMovement?.name || 'Planta';
+        const selectedCustomer = customers.find(c => c.id === data.customer_id);
+        const customerId = selectedCustomer?.id || 'INTERNAL';
+        const customerName = selectedCustomer?.name || 'Planta';
         
         const eventData: Omit<Event, 'id'> = { 
             asset_id: scannedAsset.id, 
@@ -485,3 +485,5 @@ export default function MovementsPage() {
     </div>
   );
 }
+
+    
