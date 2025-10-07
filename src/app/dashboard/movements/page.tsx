@@ -91,7 +91,8 @@ const stateLogic: Record<Asset['location'], Partial<Record<Asset['state'], Actio
 
 const getEventTypeTranslation = (eventType: MovementEventType): string => {
     const translations: Record<MovementEventType, string> = {
-        LLENADO_EN_PLANTA: "Llenar Activo",
+        LLENADO_EN_PLANTA: "Llenar Activo (Barril)",
+        RECEPCION_CO2_LLENO: "Recepción CO₂ Lleno",
         SALIDA_A_REPARTO: "Salida a Reparto",
         ENTREGA_A_CLIENTE: "Entrega a Cliente",
         RECOLECCION_DE_CLIENTE: "Recolección de Cliente",
@@ -190,7 +191,25 @@ export default function MovementsPage() {
         return;
     }
 
-    const logic = stateLogic[asset.location]?.[asset.state];
+    let logic: ActionLogic | undefined = stateLogic[asset.location]?.[asset.state];
+
+    // Special logic for CO2
+    if (asset.type === 'CO2' && asset.location === 'EN_PLANTA' && asset.state === 'VACIO') {
+        logic = {
+            primary: 'RECEPCION_CO2_LLENO',
+            manualOverrides: [],
+            description: "El cilindro de CO₂ está vacío. Registra su recepción como lleno del proveedor.",
+            requiresCustomerSelection: false,
+        };
+    } else if (asset.type === 'CO2' && logic) {
+        logic.requiresVariety = false;
+        logic.requiresValveType = false;
+        if (logic.primary === 'LLENADO_EN_PLANTA') {
+            logic.primary = 'SALIDA_A_REPARTO';
+            logic.description = "El activo está lleno en planta, listo para ser despachado.";
+            logic.requiresCustomerSelection = true;
+        }
+    }
 
     if (!logic) {
         toast({ title: "Movimiento No Definido", description: `No hay una acción lógica para un activo ${asset.state} que está ${asset.location}.`, variant: "destructive", duration: 6000 });
@@ -204,13 +223,8 @@ export default function MovementsPage() {
 
     // Autofill customer if logic dictates
     if (logic.autoFillsCustomer) {
-        let eventToUse: Event | undefined = lastEvents.get(asset.id);
+        const eventToUse: Event | undefined = lastEvents.get(asset.id);
         
-        // Ensure for delivery, the event is SALIDA_A_REPARTO, and the asset is LLENO
-        if (logic.autoFillsCustomer === 'fromDelivery' && (eventToUse?.event_type !== 'SALIDA_A_REPARTO' || asset.state !== 'LLENO')) {
-             eventToUse = undefined;
-        }
-
         if (eventToUse) {
             form.setValue('customer_id', eventToUse.customer_id);
         }
@@ -242,7 +256,12 @@ export default function MovementsPage() {
        return;
     }
     
-    if (actionLogic?.requiresCustomerSelection && (!data.customer_id || data.customer_id === 'INTERNAL')) {
+    const selectedCustomer = customers.find(c => c.id === data.customer_id);
+    
+    // Use the actionLogic from state which is determined on scan
+    const currentActionLogic = actionLogic; 
+    if (currentActionLogic?.requiresCustomerSelection && (!data.customer_id || data.customer_id === 'INTERNAL')) {
+      form.setError("customer_id", { type: "manual", message: "Debes seleccionar un cliente." });
       toast({ title: "Error de Validación", description: "Debes seleccionar un cliente para esta acción.", variant: "destructive" });
       setIsSubmitting(false);
       return;
@@ -259,6 +278,11 @@ export default function MovementsPage() {
         newVariety = data.variety; 
         newValveType = data.valveType;
         break;
+      case 'RECEPCION_CO2_LLENO':
+        newState = 'LLENO';
+        newVariety = '';
+        newValveType = '';
+        break;
       case 'SALIDA_A_REPARTO': newLocation = 'EN_REPARTO'; break;
       case 'ENTREGA_A_CLIENTE': newLocation = 'EN_CLIENTE'; break;
       case 'SALIDA_VACIO': newLocation = 'EN_CLIENTE'; newState = 'VACIO'; newVariety = ''; newValveType = ''; break;
@@ -269,7 +293,6 @@ export default function MovementsPage() {
 
     try {
       await runTransaction(firestore, async (transaction) => {
-        const selectedCustomer = customers.find(c => c.id === data.customer_id);
         const customerId = selectedCustomer?.id || 'INTERNAL';
         const customerName = selectedCustomer?.name || 'Planta';
         
@@ -309,12 +332,8 @@ export default function MovementsPage() {
   const showVarietyField = useMemo(() => {
     if (scannedAsset?.type !== 'BARRIL') return false;
     const varietyEvents: MovementEventType[] = ['LLENADO_EN_PLANTA', 'DEVOLUCION'];
-    // Manual override logic for SALIDA_A_REPARTO (when coming from VACIO)
-    if (isManualOverride && scannedAsset.state === 'VACIO' && currentEventType === 'SALIDA_A_REPARTO') {
-        return true;
-    }
     return varietyEvents.includes(currentEventType);
-  }, [scannedAsset, currentEventType, isManualOverride]);
+  }, [scannedAsset, currentEventType]);
 
   const showValveTypeField = useMemo(() => {
     if (scannedAsset?.type !== 'BARRIL') return false;
@@ -328,7 +347,6 @@ export default function MovementsPage() {
      }
      return actionLogic?.requiresCustomerSelection ?? false;
   }, [actionLogic, currentEventType, isManualOverride]);
-
 
   return (
     <div className="flex flex-1 flex-col">

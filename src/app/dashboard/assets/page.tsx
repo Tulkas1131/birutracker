@@ -442,7 +442,7 @@ export default function AssetsPage() {
            <Badge variant={asset.state === 'LLENO' ? 'default' : 'secondary'}>
               {asset.state === 'LLENO' ? 'Lleno' : 'Vacío'}
            </Badge>
-           {asset.state === 'LLENO' && (asset.variety || asset.valveType) && (
+           {asset.state === 'LLENO' && asset.type === 'BARRIL' && (asset.variety || asset.valveType) && (
              <div className="flex items-center gap-2">
                 {asset.variety && <Badge variant="outline" className="font-mono">{asset.variety}</Badge>}
                 {asset.valveType && <Badge variant="outline" className="font-mono">V: {asset.valveType}</Badge>}
@@ -505,7 +505,7 @@ export default function AssetsPage() {
                   <Badge variant={asset.state === 'LLENO' ? 'default' : 'secondary'}>
                     {asset.state === 'LLENO' ? 'Lleno' : 'Vacío'}
                   </Badge>
-                  {asset.state === 'LLENO' && (asset.variety || asset.valveType) && (
+                  {asset.state === 'LLENO' && asset.type === 'BARRIL' && (asset.variety || asset.valveType) && (
                     <div className="flex items-center gap-2">
                         {asset.variety && <Badge variant="outline" className="font-mono">{asset.variety}</Badge>}
                         {asset.valveType && <Badge variant="outline" className="font-mono">V: {asset.valveType}</Badge>}

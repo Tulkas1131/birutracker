@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PageHeader } from "@/components/page-header";
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { Event, Asset } from "@/lib/types";
+import type { Event, Asset, MovementEventType } from "@/lib/types";
 import { useUserRole } from '@/hooks/use-user-role';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -26,16 +26,17 @@ import { EmptyState } from '@/components/empty-state';
 const ITEMS_PER_PAGE = 10;
 
 const formatEventType = (eventType: Event['event_type']) => {
-    switch (eventType) {
-      case 'LLENADO_EN_PLANTA': return 'Llenado en Planta';
-      case 'SALIDA_A_REPARTO': return 'Salida a Reparto';
-      case 'ENTREGA_A_CLIENTE': return 'Entrega a Cliente';
-      case 'RECOLECCION_DE_CLIENTE': return 'Recolección de Cliente';
-      case 'RECEPCION_EN_PLANTA': return 'Recepción en Planta';
-      case 'SALIDA_VACIO': return 'Salida Vacío (Préstamo)';
-      case 'DEVOLUCION': return 'Devolución (Lleno)';
-      default: return eventType;
-    }
+    const translations: Record<MovementEventType, string> = {
+        LLENADO_EN_PLANTA: "Llenar Activo (Barril)",
+        RECEPCION_CO2_LLENO: "Recepción CO₂ Lleno",
+        SALIDA_A_REPARTO: "Salida a Reparto",
+        ENTREGA_A_CLIENTE: "Entrega a Cliente",
+        RECOLECCION_DE_CLIENTE: "Recolección de Cliente",
+        RECEPCION_EN_PLANTA: "Recepción en Planta",
+        SALIDA_VACIO: "Préstamo (Salida Vacío)",
+        DEVOLUCION: "Devolución (Lleno)",
+    };
+    return translations[eventType] || eventType;
 };
 
 const formatDate = (timestamp: Timestamp) => {
@@ -45,13 +46,13 @@ const formatDate = (timestamp: Timestamp) => {
 
 function EventCardMobile({ event, assetsMap, onDelete }: { event: Event, assetsMap: Map<string, Asset>, onDelete: (id: string) => void }) {
     const userRole = useUserRole();
+    const asset = assetsMap.get(event.asset_id);
     const daysAtCustomer = useMemo(() => {
-        const asset = assetsMap.get(event.asset_id);
         if (event.event_type === 'ENTREGA_A_CLIENTE' && asset && asset.location === 'EN_CLIENTE') {
             return differenceInDays(new Date(), event.timestamp.toDate());
         }
         return null;
-    }, [event, assetsMap]);
+    }, [event, asset]);
 
     return (
         <div className="rounded-lg border bg-card p-4">
@@ -61,7 +62,7 @@ function EventCardMobile({ event, assetsMap, onDelete }: { event: Event, assetsM
                     <span className="text-sm font-medium">{formatEventType(event.event_type)}</span>
                     <span className="text-sm text-muted-foreground">{event.customer_name}</span>
                     <span className="text-xs text-muted-foreground">{formatDate(event.timestamp)}</span>
-                     {event.valveType && <span className="text-xs text-muted-foreground">Válvula: {event.valveType}</span>}
+                     {asset?.type === 'BARRIL' && event.valveType && <span className="text-xs text-muted-foreground">Válvula: {event.valveType}</span>}
                 </div>
                 <div className="flex flex-col items-end gap-2">
                     {daysAtCustomer !== null && (
@@ -87,15 +88,15 @@ function EventCardMobile({ event, assetsMap, onDelete }: { event: Event, assetsM
     );
 }
 
-function EventTableRow({ event, assetsMap, onDelete }: { event: Event, assetsMap: Map<string, Asset>, onDelete: (id: string) => void }) {
+function EventTableRow({ event, assetsMap, onDelete, showBeerColumns }: { event: Event, assetsMap: Map<string, Asset>, onDelete: (id: string) => void, showBeerColumns: boolean }) {
   const userRole = useUserRole();
+  const asset = assetsMap.get(event.asset_id);
   const daysAtCustomer = useMemo(() => {
-    const asset = assetsMap.get(event.asset_id);
     if (event.event_type === 'ENTREGA_A_CLIENTE' && asset && asset.location === 'EN_CLIENTE') {
       return differenceInDays(new Date(), event.timestamp.toDate());
     }
     return null;
-  }, [event, assetsMap]);
+  }, [event, asset]);
 
   return (
     <TableRow>
@@ -114,8 +115,8 @@ function EventTableRow({ event, assetsMap, onDelete }: { event: Event, assetsMap
           '--'
         )}
       </TableCell>
-      <TableCell className="hidden lg:table-cell">{event.variety || 'N/A'}</TableCell>
-      <TableCell className="hidden lg:table-cell">{event.valveType || 'N/A'}</TableCell>
+      {showBeerColumns && <TableCell className="hidden lg:table-cell">{event.variety || 'N/A'}</TableCell>}
+      {showBeerColumns && <TableCell className="hidden lg:table-cell">{event.valveType || 'N/A'}</TableCell>}
       {userRole === 'Admin' && (
         <TableCell>
           <Button
@@ -189,14 +190,14 @@ function OverviewPageContent() {
 
   const filteredEvents = useMemo(() => {
     return allEvents.filter(event => {
+        const asset = assetsMap.get(event.asset_id);
         const customerMatch = event.customer_name.toLowerCase().includes(filters.customer.toLowerCase());
-        const assetCodePrefix = event.asset_code.startsWith('KEG') ? 'BARRIL' : 'CO2';
-        const assetTypeMatch = filters.assetType === 'ALL' || (assetCodePrefix === filters.assetType);
+        
+        const assetTypeMatch = filters.assetType === 'ALL' || (asset?.type === filters.assetType);
         const eventTypeMatch = filters.eventType === 'ALL' || event.event_type === filters.eventType;
 
         let criticalMatch = true;
         if (filters.criticalOnly) {
-          const asset = assetsMap.get(event.asset_id);
           criticalMatch = false; // Assume not a match unless proven otherwise
           if (event.event_type === 'ENTREGA_A_CLIENTE' && asset && asset.location === 'EN_CLIENTE') {
               const days = differenceInDays(new Date(), event.timestamp.toDate());
@@ -234,6 +235,8 @@ function OverviewPageContent() {
     }
   };
 
+  const showBeerColumns = filters.assetType === 'ALL' || filters.assetType === 'BARRIL';
+
   return (
     <div className="flex flex-1 flex-col">
       <PageHeader
@@ -265,7 +268,8 @@ function OverviewPageContent() {
                 </SelectTrigger>
                 <SelectContent>
                     <SelectItem value="ALL">Todos los Eventos</SelectItem>
-                    <SelectItem value="LLENADO_EN_PLANTA">Llenado en Planta</SelectItem>
+                    <SelectItem value="LLENADO_EN_PLANTA">Llenado (Barril)</SelectItem>
+                    <SelectItem value="RECEPCION_CO2_LLENO">Recepción CO₂ Lleno</SelectItem>
                     <SelectItem value="SALIDA_A_REPARTO">Salida a Reparto</SelectItem>
                     <SelectItem value="ENTREGA_A_CLIENTE">Entrega a Cliente</SelectItem>
                     <SelectItem value="RECOLECCION_DE_CLIENTE">Recolección de Cliente</SelectItem>
@@ -309,14 +313,14 @@ function OverviewPageContent() {
                           <TableHead className="hidden sm:table-cell">Evento</TableHead>
                           <TableHead>Cliente</TableHead>
                           <TableHead className="hidden md:table-cell">Días en Cliente</TableHead>
-                          <TableHead className="hidden lg:table-cell">Variedad</TableHead>
-                          <TableHead className="hidden lg:table-cell">Válvula</TableHead>
+                          {showBeerColumns && <TableHead className="hidden lg:table-cell">Variedad</TableHead>}
+                          {showBeerColumns && <TableHead className="hidden lg:table-cell">Válvula</TableHead>}
                           {userRole === 'Admin' && <TableHead>Acciones</TableHead>}
                       </TableRow>
                   </TableHeader>
                   <TableBody>
                     {paginatedEvents.map((event) => (
-                        <EventTableRow key={event.id} event={event} assetsMap={assetsMap} onDelete={handleDelete} />
+                        <EventTableRow key={event.id} event={event} assetsMap={assetsMap} onDelete={handleDelete} showBeerColumns={showBeerColumns} />
                     ))}
                   </TableBody>
               </Table>
@@ -363,3 +367,5 @@ export default function OverviewPage() {
         </Suspense>
     );
 }
+
+    

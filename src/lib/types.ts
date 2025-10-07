@@ -81,6 +81,7 @@ export type CustomerFormData = z.infer<typeof customerSchema>;
 
 export const movementEventTypes = [
   'LLENADO_EN_PLANTA',
+  'RECEPCION_CO2_LLENO',
   'SALIDA_A_REPARTO', 
   'ENTREGA_A_CLIENTE', 
   'RECOLECCION_DE_CLIENTE', 
@@ -115,3 +116,5 @@ export const movementSchema = z.object({
 });
 
 export type MovementFormData = z.infer<typeof movementSchema>;
+
+    
