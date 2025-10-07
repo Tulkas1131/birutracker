@@ -434,7 +434,7 @@ export default function MovementsPage() {
                             ) : (
                                  customerForMovement && customerForMovement.id !== 'INTERNAL' && (
                                     <div>
-                                        <Label>Cliente</Label>
+                                        <Label>Cliente Asignado</Label>
                                         <Input value={customerForMovement.name} disabled />
                                     </div>
                                  )
@@ -488,5 +488,3 @@ export default function MovementsPage() {
     </div>
   );
 }
-
-    
