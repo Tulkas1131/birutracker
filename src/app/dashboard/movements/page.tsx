@@ -206,8 +206,8 @@ export default function MovementsPage() {
     if (logic.autoFillsCustomer) {
         let eventToUse: Event | undefined = lastEvents.get(asset.id);
         
-        // Ensure for delivery, the event is SALIDA_A_REPARTO
-        if (logic.autoFillsCustomer === 'fromDelivery' && eventToUse?.event_type !== 'SALIDA_A_REPARTO') {
+        // Ensure for delivery, the event is SALIDA_A_REPARTO, and the asset is LLENO
+        if (logic.autoFillsCustomer === 'fromDelivery' && (eventToUse?.event_type !== 'SALIDA_A_REPARTO' || asset.state !== 'LLENO')) {
              eventToUse = undefined;
         }
 
@@ -242,8 +242,8 @@ export default function MovementsPage() {
        return;
     }
     
-    const selectedCustomer = customers.find(c => c.id === data.customer_id);
-     if (actionLogic?.requiresCustomerSelection && !selectedCustomer) {
+    // Use `customerForMovement` as the source of truth for the selected customer.
+     if (actionLogic?.requiresCustomerSelection && (!customerForMovement || customerForMovement.id === 'INTERNAL')) {
       toast({ title: "Error", description: "Debes seleccionar un cliente.", variant: "destructive" });
       setIsSubmitting(false);
       return;
@@ -270,9 +270,8 @@ export default function MovementsPage() {
 
     try {
       await runTransaction(firestore, async (transaction) => {
-        const lastEvent = lastEvents.get(scannedAsset.id);
-        const customerId = selectedCustomer?.id || lastEvent?.customer_id || 'INTERNAL';
-        const customerName = selectedCustomer?.name || lastEvent?.customer_name || 'Planta';
+        const customerId = customerForMovement?.id || 'INTERNAL';
+        const customerName = customerForMovement?.name || 'Planta';
         
         const eventData: Omit<Event, 'id'> = { 
             asset_id: scannedAsset.id, 
@@ -431,14 +430,12 @@ export default function MovementsPage() {
                                         </FormItem>
                                     )}
                                 />
-                            ) : (
-                                 customerForMovement && customerForMovement.id !== 'INTERNAL' && (
-                                    <div>
-                                        <Label>Cliente Asignado</Label>
-                                        <Input value={customerForMovement.name} disabled />
-                                    </div>
-                                 )
-                            )}
+                            ) : customerForMovement && customerForMovement.name !== 'Planta' ? (
+                                <div>
+                                    <Label>Cliente Asignado</Label>
+                                    <Input value={customerForMovement.name} disabled />
+                                </div>
+                            ) : null}
 
                             {showVarietyField && (
                                 <FormField
