@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { MoreHorizontal, PlusCircle, Loader2, ChevronLeft, ChevronRight, Users2, Phone } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Loader2, ChevronLeft, ChevronRight, Users2, Phone, Package } from "lucide-react";
 import { db } from "@/lib/firebase";
 
 import { Badge } from "@/components/ui/badge";
@@ -24,7 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
-import type { Customer } from "@/lib/types";
+import type { Customer, Asset, Event } from "@/lib/types";
 import { CustomerForm } from "@/components/customer-form";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -35,8 +35,16 @@ import { EmptyState } from "@/components/empty-state";
 
 const ITEMS_PER_PAGE = 10;
 
+type CustomerAssetCounts = {
+    [format: string]: number;
+    total: number;
+};
+
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
+
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setFormOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | undefined>(undefined);
@@ -46,34 +54,85 @@ export default function CustomersPage() {
   const isMobile = useIsMobile();
 
   useEffect(() => {
-    const fetchCustomers = async () => {
+    const fetchData = async () => {
       setIsLoading(true);
       try {
         const { collection, query, orderBy, getDocs } = await import("firebase/firestore/lite");
         const firestore = db();
+        
         const customersQuery = query(collection(firestore, "customers"), orderBy("name"));
-        const customersSnapshot = await getDocs(customersQuery);
+        const assetsQuery = query(collection(firestore, "assets"));
+        const eventsQuery = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
+        
+        const [customersSnapshot, assetsSnapshot, eventsSnapshot] = await Promise.all([
+          getDocs(customersQuery),
+          getDocs(assetsQuery),
+          getDocs(eventsQuery),
+        ]);
+        
         const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
+        const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
+        const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
+
         setCustomers(customersData);
+        setAssets(assetsData);
+        setEvents(eventsData);
+
       } catch (error: any) {
-        console.error("Error fetching customers: ", error);
+        console.error("Error fetching customers data: ", error);
         logAppEvent({
             level: 'ERROR',
-            message: 'Failed to fetch customers',
+            message: 'Failed to fetch comprehensive customer data',
             component: 'CustomersPage',
             stack: error.stack,
         });
         toast({
           title: "Error de Carga",
-          description: "No se pudieron cargar los clientes.",
+          description: "No se pudieron cargar todos los datos de clientes.",
           variant: "destructive"
         });
       } finally {
         setIsLoading(false);
       }
     };
-    fetchCustomers();
+    fetchData();
   }, [toast]);
+  
+  const customerAssetCounts = useMemo(() => {
+    const counts = new Map<string, CustomerAssetCounts>();
+    if (!assets.length || !events.length) {
+      return counts;
+    }
+
+    const assetsInClient = assets.filter(asset => asset.location === 'EN_CLIENTE');
+    const lastDeliveryEvents = new Map<string, Event>();
+
+    // Find the last delivery event for each asset
+    for (const event of events) {
+        if (event.event_type === 'ENTREGA_A_CLIENTE' && !lastDeliveryEvents.has(event.asset_id)) {
+            lastDeliveryEvents.set(event.asset_id, event);
+        }
+    }
+    
+    for (const asset of assetsInClient) {
+        const lastDelivery = lastDeliveryEvents.get(asset.id);
+
+        if (lastDelivery) {
+            const customerId = lastDelivery.customer_id;
+            if (!counts.has(customerId)) {
+                counts.set(customerId, { total: 0 });
+            }
+
+            const customerCounts = counts.get(customerId)!;
+            const formatKey = asset.type === 'CO2' ? `${asset.format} (CO2)` : asset.format;
+
+            customerCounts[formatKey] = (customerCounts[formatKey] || 0) + 1;
+            customerCounts.total += 1;
+        }
+    }
+
+    return counts;
+  }, [assets, events]);
   
   const totalPages = Math.ceil(customers.length / ITEMS_PER_PAGE);
   const paginatedCustomers = useMemo(() => {
@@ -184,16 +243,40 @@ export default function CustomersPage() {
     )
   };
 
-  const CustomerCardMobile = ({ customer }: { customer: Customer }) => (
-    <div className="flex items-center justify-between rounded-lg border bg-card p-4">
-        <div className="flex flex-col gap-1.5">
+  const AssetCountDisplay = ({ counts }: { counts?: CustomerAssetCounts }) => {
+    if (!counts || counts.total === 0) {
+        return <span className="text-sm text-muted-foreground">0 Activos</span>
+    }
+    const { total, ...formats } = counts;
+    const formatEntries = Object.entries(formats);
+
+    return (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
+            {formatEntries.map(([format, count]) => (
+                <Badge key={format} variant="secondary" className="text-xs">
+                    {format}: <span className="font-bold ml-1">{count}</span>
+                </Badge>
+            ))}
+            <Badge variant="default" className="text-xs">
+                Total: <span className="font-bold ml-1">{total}</span>
+            </Badge>
+        </div>
+    );
+  };
+
+  const CustomerCardMobile = ({ customer, counts }: { customer: Customer, counts?: CustomerAssetCounts }) => (
+    <div className="flex items-start justify-between rounded-lg border bg-card p-4">
+        <div className="flex flex-col gap-1.5 flex-grow">
             <span className="font-semibold">{customer.name}</span>
             <Badge variant="outline" className="w-fit">{customer.type}</Badge>
             <span className="text-sm text-muted-foreground">{customer.address}</span>
             <span className="text-sm text-muted-foreground">{customer.contact}</span>
             <PhoneLinks phone={customer.phone} />
+            <div className="pt-2">
+              <AssetCountDisplay counts={counts} />
+            </div>
         </div>
-        <div className="flex items-center">
+        <div className="flex items-center flex-shrink-0">
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button aria-haspopup="true" size="icon" variant="ghost">
@@ -220,7 +303,7 @@ export default function CustomersPage() {
        <Dialog open={isFormOpen} onOpenChange={setFormOpen}>
         <PageHeader
           title="Clientes"
-          description="Gestiona tus clientes y distribuidores."
+          description="Gestiona tus clientes y su inventario de activos."
           action={
             <DialogTrigger asChild>
                 <Button size="lg" onClick={handleNew}>
@@ -253,7 +336,7 @@ export default function CustomersPage() {
                 />
               ) : isMobile ? (
                   <div className="space-y-4 p-4">
-                     {paginatedCustomers.map(customer => <CustomerCardMobile key={customer.id} customer={customer} />)}
+                     {paginatedCustomers.map(customer => <CustomerCardMobile key={customer.id} customer={customer} counts={customerAssetCounts.get(customer.id)} />)}
                   </div>
               ) : (
                 <Table>
@@ -261,7 +344,7 @@ export default function CustomersPage() {
                     <TableRow>
                       <TableHead>Nombre</TableHead>
                       <TableHead>Tipo</TableHead>
-                      <TableHead>Dirección</TableHead>
+                      <TableHead>Activos en Posesión</TableHead>
                       <TableHead>Contacto</TableHead>
                       <TableHead>Teléfono</TableHead>
                       <TableHead>
@@ -276,7 +359,9 @@ export default function CustomersPage() {
                         <TableCell>
                           <Badge variant="outline">{customer.type}</Badge>
                         </TableCell>
-                        <TableCell>{customer.address}</TableCell>
+                        <TableCell>
+                           <AssetCountDisplay counts={customerAssetCounts.get(customer.id)} />
+                        </TableCell>
                         <TableCell>{customer.contact}</TableCell>
                         <TableCell><PhoneLinks phone={customer.phone} /></TableCell>
                         <TableCell>
@@ -353,3 +438,5 @@ export default function CustomersPage() {
     </div>
   );
 }
+
+    
