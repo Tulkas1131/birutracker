@@ -48,7 +48,7 @@ const stateLogic: Record<Asset['location'], Partial<Record<Asset['state'], Actio
         },
         VACIO: {
             primary: 'LLENADO_EN_PLANTA',
-            manualOverrides: ['SALIDA_VACIO'],
+            manualOverrides: ['SALIDA_VACIO'], // This will be filtered for CO2
             description: "El activo está vacío. Registra el llenado o una salida en préstamo.",
             requiresCustomerSelection: false,
             requiresVariety: true,
@@ -72,6 +72,7 @@ const stateLogic: Record<Asset['location'], Partial<Record<Asset['state'], Actio
         }
     },
     EN_CLIENTE: {
+        // Now handles both LLENO and VACIO states for recollection
         LLENO: {
             primary: 'RECOLECCION_DE_CLIENTE',
             manualOverrides: ['DEVOLUCION'],
@@ -194,26 +195,35 @@ export default function MovementsPage() {
     let logic: ActionLogic | undefined = stateLogic[asset.location]?.[asset.state];
 
     // Special logic for CO2
-    if (asset.type === 'CO2' && asset.location === 'EN_PLANTA' && asset.state === 'VACIO') {
-        logic = {
-            primary: 'RECEPCION_CO2_LLENO',
-            manualOverrides: [],
-            description: "El cilindro de CO₂ está vacío. Registra su recepción como lleno del proveedor.",
-            requiresCustomerSelection: false,
-        };
-    } else if (asset.type === 'CO2' && logic) {
-        logic.requiresVariety = false;
-        logic.requiresValveType = false;
-        if (logic.primary === 'LLENADO_EN_PLANTA') {
+    if (asset.type === 'CO2') {
+        if (logic?.primary === 'LLENADO_EN_PLANTA') {
+            // Replace 'LLENADO' with 'SALIDA A REPARTO' for CO2, as it's more logical.
             logic.primary = 'SALIDA_A_REPARTO';
-            logic.description = "El activo está lleno en planta, listo para ser despachado.";
+            logic.description = "El cilindro de CO₂ está lleno en planta, listo para ser despachado.";
             logic.requiresCustomerSelection = true;
+        }
+        // Remove 'SALIDA_VACIO' from manual overrides for CO2, as it's not a valid operation.
+        if (logic?.manualOverrides.includes('SALIDA_VACIO')) {
+            logic.manualOverrides = logic.manualOverrides.filter(o => o !== 'SALIDA_VACIO');
+        }
+        // CO2 doesn't have variety or valve type.
+        if(logic) {
+            logic.requiresVariety = false;
+            logic.requiresValveType = false;
         }
     }
 
+
     if (!logic) {
-        toast({ title: "Movimiento No Definido", description: `No hay una acción lógica para un activo ${asset.state} que está ${asset.location}.`, variant: "destructive", duration: 6000 });
-        return;
+        toast({ title: "Movimiento No Definido", description: `No hay una acción lógica para un activo ${asset.state} que está ${asset.location.replace('_', ' ')}. Considera realizar una acción manual.`, variant: "destructive", duration: 8000 });
+        // Instead of returning, we set a minimal logic to allow manual override.
+        logic = {
+            primary: 'SALIDA_A_REPARTO', // A neutral default
+            manualOverrides: ['SALIDA_A_REPARTO', 'RECEPCION_EN_PLANTA', 'DEVOLUCION', 'SALIDA_VACIO'],
+            description: "El estado actual del activo no tiene una acción sugerida. Por favor, selecciona una acción manual.",
+            requiresCustomerSelection: true,
+        };
+        setIsManualOverride(true); // Force manual override
     }
     
     setScannedAsset(asset);
@@ -258,9 +268,7 @@ export default function MovementsPage() {
     
     const selectedCustomer = customers.find(c => c.id === data.customer_id);
     
-    // Use the actionLogic from state which is determined on scan
-    const currentActionLogic = actionLogic; 
-    if (currentActionLogic?.requiresCustomerSelection && (!data.customer_id || data.customer_id === 'INTERNAL')) {
+    if (requiresCustomerSelection && (!data.customer_id || data.customer_id === 'INTERNAL')) {
       form.setError("customer_id", { type: "manual", message: "Debes seleccionar un cliente." });
       toast({ title: "Error de Validación", description: "Debes seleccionar un cliente para esta acción.", variant: "destructive" });
       setIsSubmitting(false);
@@ -272,23 +280,42 @@ export default function MovementsPage() {
     let newVariety: string | undefined = scannedAsset.variety;
     let newValveType: string | undefined = scannedAsset.valveType;
 
+    // This is the core of the fix: infer state from the action, not the other way around.
     switch (data.event_type) {
       case 'LLENADO_EN_PLANTA': 
         newState = 'LLENO'; 
         newVariety = data.variety; 
         newValveType = data.valveType;
         break;
-      case 'RECEPCION_CO2_LLENO':
+      case 'SALIDA_A_REPARTO':
+      case 'DEVOLUCION':
+        // If we are performing these actions, the asset MUST be full.
         newState = 'LLENO';
-        newVariety = '';
+        newLocation = data.event_type === 'SALIDA_A_REPARTO' ? 'EN_REPARTO' : 'EN_PLANTA';
+        // Keep variety if it exists, update it if provided.
+        newVariety = data.variety || newVariety;
+        newValveType = data.valveType || newValveType;
+        break;
+      case 'RECOLECCION_DE_CLIENTE':
+      case 'RECEPCION_EN_PLANTA':
+        // If we are performing these actions, the asset MUST be empty.
+        newState = 'VACIO';
+        newLocation = data.event_type === 'RECOLECCION_DE_CLIENTE' ? 'EN_REPARTO' : 'EN_PLANTA';
+        newVariety = ''; // Empty assets don't have variety
         newValveType = '';
         break;
-      case 'SALIDA_A_REPARTO': newLocation = 'EN_REPARTO'; break;
-      case 'ENTREGA_A_CLIENTE': newLocation = 'EN_CLIENTE'; break;
-      case 'SALIDA_VACIO': newLocation = 'EN_CLIENTE'; newState = 'VACIO'; newVariety = ''; newValveType = ''; break;
-      case 'RECOLECCION_DE_CLIENTE': newLocation = 'EN_REPARTO'; newState = 'VACIO'; newVariety = ''; newValveType = ''; break;
-      case 'RECEPCION_EN_PLANTA': newLocation = 'EN_PLANTA'; newState = 'VACIO'; newVariety = ''; newValveType = ''; break;
-      case 'DEVOLUCION': newLocation = 'EN_PLANTA'; newVariety = data.variety; newValveType = data.valveType; break;
+      case 'ENTREGA_A_CLIENTE': 
+        newLocation = 'EN_CLIENTE'; 
+        break;
+      case 'SALIDA_VACIO': 
+        newLocation = 'EN_CLIENTE'; 
+        newState = 'VACIO'; 
+        newVariety = ''; 
+        newValveType = '';
+        break;
+      case 'RECEPCION_CO2_LLENO': // Kept for legacy, can be removed if not used
+        newState = 'LLENO';
+        break;
     }
 
     try {
@@ -331,22 +358,20 @@ export default function MovementsPage() {
 
   const showVarietyField = useMemo(() => {
     if (scannedAsset?.type !== 'BARRIL') return false;
-    const varietyEvents: MovementEventType[] = ['LLENADO_EN_PLANTA', 'DEVOLUCION'];
+    const varietyEvents: MovementEventType[] = ['LLENADO_EN_PLANTA', 'DEVOLUCION', 'SALIDA_A_REPARTO'];
     return varietyEvents.includes(currentEventType);
   }, [scannedAsset, currentEventType]);
 
   const showValveTypeField = useMemo(() => {
     if (scannedAsset?.type !== 'BARRIL') return false;
-    return actionLogic?.requiresValveType && currentEventType === 'LLENADO_EN_PLANTA';
-  }, [scannedAsset, actionLogic, currentEventType]);
+    const valveEvents: MovementEventType[] = ['LLENADO_EN_PLANTA', 'DEVOLUCION', 'SALIDA_A_REPARTO'];
+    return valveEvents.includes(currentEventType);
+  }, [scannedAsset, currentEventType]);
 
   const requiresCustomerSelection = useMemo(() => {
-    const customerEvents: MovementEventType[] = ['SALIDA_A_REPARTO', 'SALIDA_VACIO', 'DEVOLUCION'];
-     if (isManualOverride) {
-        return customerEvents.includes(currentEventType) || (currentEventType === 'ENTREGA_A_CLIENTE');
-     }
-     return actionLogic?.requiresCustomerSelection ?? false;
-  }, [actionLogic, currentEventType, isManualOverride]);
+    const customerEvents: MovementEventType[] = ['SALIDA_A_REPARTO', 'SALIDA_VACIO', 'DEVOLUCION', 'ENTREGA_A_CLIENTE'];
+    return customerEvents.includes(currentEventType);
+  }, [currentEventType]);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -409,14 +434,7 @@ export default function MovementsPage() {
                                     render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>Acción Manual</FormLabel>
-                                            <Select onValueChange={(value) => {
-                                                field.onChange(value);
-                                                // Reset customer if the new action doesn't autofill
-                                                const newLogic = stateLogic[scannedAsset!.location]?.[scannedAsset!.state];
-                                                if (newLogic && !newLogic.autoFillsCustomer) {
-                                                    form.resetField('customer_id');
-                                                }
-                                            }} value={field.value}>
+                                            <Select onValueChange={field.onChange} value={field.value}>
                                                 <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                                                 <SelectContent>
                                                     <SelectItem value={actionLogic.primary}>{getEventTypeTranslation(actionLogic.primary)} (Sugerido)</SelectItem>
@@ -485,7 +503,7 @@ export default function MovementsPage() {
                         </div>
 
                         <DialogFooter className="grid grid-cols-2 gap-2 sm:flex">
-                           {actionLogic?.manualOverrides.length && !isManualOverride ? (
+                           {actionLogic?.manualOverrides && actionLogic.manualOverrides.length > 0 && !isManualOverride ? (
                                 <Button type="button" variant="ghost" onClick={() => setIsManualOverride(true)}>Realizar otra acción</Button>
                            ) : <div />}
                            <div className="flex col-start-2 gap-2">
