@@ -208,18 +208,17 @@ export default function MovementsPage() {
     
     // --- CO2 Specific Logic ---
     if (asset.type === 'CO2') {
-        // CO2 can't be loaned empty, nor can it go to a customer empty.
         logic.manualOverrides = logic.manualOverrides.filter(o => o !== 'SALIDA_VACIO');
-        
-        // CO2 doesn't have variety/valve
         logic.requiresVariety = false;
         logic.requiresValveType = false;
-        
-        // If CO2 is VACIO, the primary action is Llenado, not Salida en prestamo.
-        if(asset.state === 'VACIO') {
+
+        if (asset.state === 'VACIO' && asset.location === 'EN_PLANTA') {
             logic.primary = 'LLENADO_EN_PLANTA';
-            // Allow manual override for other actions if needed, except for loaning it empty
             logic.manualOverrides = ['RECEPCION_EN_PLANTA', 'DEVOLUCION'];
+        }
+
+        if (asset.state === 'LLENO' && asset.location === 'EN_PLANTA') {
+            logic.manualOverrides.push('LLENADO_EN_PLANTA');
         }
     }
 
@@ -254,7 +253,6 @@ export default function MovementsPage() {
   }, [customerId, customers]);
 
   async function onSubmit(data: MovementFormData) {
-    // --- Validation for CO2 state ---
     if (scannedAsset?.type === 'CO2' && scannedAsset.state === 'VACIO' && data.event_type === 'SALIDA_A_REPARTO') {
         setShowCorrectionDialog(true);
         return;
@@ -266,7 +264,7 @@ export default function MovementsPage() {
   const handleCorrectionAndSubmit = async () => {
       setShowCorrectionDialog(false);
       const formData = form.getValues();
-      await executeMovementTransaction(formData, true); // Pass a flag to force state correction
+      await executeMovementTransaction(formData, true);
   };
 
   async function executeMovementTransaction(data: MovementFormData, forceStateCorrection = false) {
@@ -290,9 +288,9 @@ export default function MovementsPage() {
     }
     
     let newLocation: Asset['location'] = scannedAsset.location;
-    let newState: Asset['state'] = forceStateCorrection ? 'LLENO' : scannedAsset.state; // Correct state if forced
-    let newVariety: string | undefined = scannedAsset.variety;
-    let newValveType: string | undefined = scannedAsset.valveType;
+    let newState: Asset['state'] = forceStateCorrection ? 'LLENO' : scannedAsset.state;
+    let newVariety = scannedAsset.variety;
+    let newValveType = scannedAsset.valveType;
 
     switch (data.event_type) {
       case 'LLENADO_EN_PLANTA': 
@@ -302,7 +300,7 @@ export default function MovementsPage() {
         break;
       case 'SALIDA_A_REPARTO':
       case 'DEVOLUCION':
-        if (scannedAsset.state === 'VACIO') newState = 'LLENO'; // Implicit correction
+        if (scannedAsset.state === 'VACIO') newState = 'LLENO';
         newLocation = data.event_type === 'SALIDA_A_REPARTO' ? 'EN_REPARTO' : 'EN_PLANTA';
         newVariety = data.variety || newVariety;
         newValveType = data.valveType || newValveType;
@@ -345,7 +343,12 @@ export default function MovementsPage() {
         transaction.set(newEventRef, eventData);
 
         const assetRef = doc(firestore, "assets", scannedAsset.id);
-        transaction.update(assetRef, { location: newLocation, state: newState, variety: newVariety, valveType: newValveType });
+        transaction.update(assetRef, { 
+            location: newLocation, 
+            state: newState, 
+            variety: newVariety || "", 
+            valveType: newValveType || "" 
+        });
       });
 
       toast({ title: "Movimiento Registrado", description: `El activo ${scannedAsset.code} ha sido actualizado.` });
