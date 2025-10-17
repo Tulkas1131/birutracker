@@ -363,8 +363,9 @@ export default function AssetsPage() {
     }
   };
   
-  const barrels = assets.filter(asset => asset.type === 'BARRIL');
-  const co2Cylinders = assets.filter(asset => asset.type === 'CO2');
+  const barrels = useMemo(() => assets.filter(asset => asset.type === 'BARRIL'), [assets]);
+  const co2Cylinders = useMemo(() => assets.filter(asset => asset.type === 'CO2'), [assets]);
+
 
   const assetCountsByFormat = useMemo(() => {
     const calculateCounts = (assetList: Asset[]) => {
@@ -387,10 +388,26 @@ export default function AssetsPage() {
 
   const currentAssetList = useMemo(() => {
     const baseList = activeTab === 'barrels' ? barrels : co2Cylinders;
-    if (!locationFilter || !formatFilter) {
-      return baseList;
+    
+    let filteredList = baseList;
+    if (locationFilter && formatFilter) {
+      filteredList = baseList.filter(asset => asset.location === locationFilter && asset.format === formatFilter);
     }
-    return baseList.filter(asset => asset.location === locationFilter && asset.format === formatFilter);
+    
+    // Nueva lógica de ordenamiento
+    return filteredList.sort((a, b) => {
+      // Prioridad 1: Estado ('LLENO' antes que 'VACIO')
+      if (a.state === 'LLENO' && b.state === 'VACIO') {
+        return -1;
+      }
+      if (a.state === 'VACIO' && b.state === 'LLENO') {
+        return 1;
+      }
+      
+      // Prioridad 2: Código correlativo (orden natural)
+      return a.code.localeCompare(b.code, undefined, { numeric: true });
+    });
+    
   }, [activeTab, barrels, co2Cylinders, locationFilter, formatFilter]);
 
   const totalPages = Math.ceil(currentAssetList.length / ITEMS_PER_PAGE);
@@ -786,4 +803,3 @@ export default function AssetsPage() {
   );
 }
 
-    
