@@ -27,7 +27,7 @@ const ITEMS_PER_PAGE = 10;
 
 const formatEventType = (eventType: Event['event_type']) => {
     const translations: Record<MovementEventType, string> = {
-        LLENADO_EN_PLANTA: "Llenar Activo (Barril)",
+        LLENADO_EN_PLANTA: "Llenar Activo",
         SALIDA_A_REPARTO: "Salida a Reparto",
         ENTREGA_A_CLIENTE: "Entrega a Cliente",
         RECOLECCION_DE_CLIENTE: "Recolección de Cliente",
@@ -159,7 +159,7 @@ function OverviewPageContent() {
         
         const [eventsSnapshot, assetsSnapshot] = await Promise.all([
             getDocs(eventsQuery),
-            getDocs(assetsSnapshot)
+            getDocs(assetsQuery)
         ]);
 
         const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
@@ -267,7 +267,7 @@ function OverviewPageContent() {
                 </SelectTrigger>
                 <SelectContent>
                     <SelectItem value="ALL">Todos los Eventos</SelectItem>
-                    <SelectItem value="LLENADO_EN_PLANTA">Llenado (Barril)</SelectItem>
+                    <SelectItem value="LLENADO_EN_PLANTA">Llenado</SelectItem>
                     <SelectItem value="SALIDA_A_REPARTO">Salida a Reparto</SelectItem>
                     <SelectItem value="ENTREGA_A_CLIENTE">Entrega a Cliente</SelectItem>
                     <SelectItem value="RECOLECCION_DE_CLIENTE">Recolección de Cliente</SelectItem>
