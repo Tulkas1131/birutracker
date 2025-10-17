@@ -341,16 +341,13 @@ export default function AssetsPage() {
     }
   };
   
-  const getLocationVariant = (location: Asset["location"]): "success" | "default" | "warning" => {
+  const getLocationVariant = (location: Asset["location"]): "success" | "default" | "warning" | "destructive" => {
     switch (location) {
-      case "EN_CLIENTE":
-        return "warning";
-      case "EN_PLANTA":
-        return "success";
-      case "EN_REPARTO":
-        return "default";
-      default:
-        return "default";
+      case "EN_CLIENTE": return "warning";
+      case "EN_PLANTA": return "success";
+      case "EN_REPARTO": return "default";
+      case "EN_PROVEEDOR": return "destructive"; // O un color que lo distinga
+      default: return "default";
     }
   };
 
@@ -359,6 +356,7 @@ export default function AssetsPage() {
         case "EN_CLIENTE": return "En Cliente";
         case "EN_PLANTA": return "En Planta";
         case "EN_REPARTO": return "En Reparto";
+        case "EN_PROVEEDOR": return "En Proveedor";
         default: return location;
     }
   };
@@ -371,9 +369,11 @@ export default function AssetsPage() {
     const calculateCounts = (assetList: Asset[]) => {
       return assetList.reduce((acc, asset) => {
         if (!acc[asset.format]) {
-          acc[asset.format] = { EN_PLANTA: 0, EN_CLIENTE: 0, EN_REPARTO: 0 };
+          acc[asset.format] = { EN_PLANTA: 0, EN_CLIENTE: 0, EN_REPARTO: 0, EN_PROVEEDOR: 0 };
         }
-        acc[asset.format][asset.location]++;
+        if (asset.location in acc[asset.format]) {
+           acc[asset.format][asset.location]++;
+        }
         return acc;
       }, {} as Record<string, Record<Asset['location'], number>>);
     };
@@ -434,7 +434,7 @@ export default function AssetsPage() {
 
   const AssetCustomerInfo = ({ asset }: { asset: Asset }) => {
       const lastEvent = lastEventsMap.get(asset.id);
-      if (lastEvent?.customer_name && lastEvent.customer_name !== 'Planta') {
+      if (lastEvent?.customer_name && lastEvent.customer_name !== 'Planta' && lastEvent.customer_name !== 'Proveedor') {
           const showForReparto = asset.location === 'EN_REPARTO' && lastEvent.event_type === 'SALIDA_A_REPARTO';
           const showForCliente = asset.location === 'EN_CLIENTE';
           if (showForReparto || showForCliente) {
@@ -574,7 +574,7 @@ export default function AssetsPage() {
           <CardTitle className="text-xl">{type === 'BARRIL' ? 'Barriles' : 'Cilindros de CO2'}</CardTitle>
           <CardDescription>
             {locationFilter && formatFilter 
-                ? `Mostrando ${assetList.length} activos de formato "${formatFilter}" en "${getLocationText(locationFilter)}".`
+                ? `Mostrando ${assetList.length} activos de formato "${formatFilter}" en "${getLocationText(locationFilter as Asset['location'])}".`
                 : `Un listado de todos los activos de tipo ${type === 'BARRIL' ? 'barril' : 'CO2'} en tu inventario.`}
           </CardDescription>
         </CardHeader>
@@ -647,12 +647,13 @@ export default function AssetsPage() {
       {Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)).map(([format, data]) => (
         <div key={format} className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <span className="font-semibold">{format}:</span>
-          {(['EN_PLANTA', 'EN_CLIENTE', 'EN_REPARTO'] as Asset['location'][]).map(loc => (
+          {(['EN_PLANTA', 'EN_CLIENTE', 'EN_REPARTO', 'EN_PROVEEDOR'] as Asset['location'][]).map(loc => (
             data[loc] > 0 && (
               <button key={loc} onClick={() => onFilter(format, loc)} className={cn("flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2", {
                   'bg-success/20 text-green-800 hover:bg-success/30 border-success/30 dark:text-green-300 dark:hover:bg-green-800/50 dark:border-green-800': loc === 'EN_PLANTA',
                   'bg-warning/20 text-amber-800 hover:bg-warning/30 border-warning/30 dark:text-amber-300 dark:hover:bg-amber-800/50 dark:border-amber-800': loc === 'EN_CLIENTE',
                   'bg-secondary text-secondary-foreground hover:bg-secondary/80 border-secondary dark:hover:bg-slate-700': loc === 'EN_REPARTO',
+                  'bg-destructive/20 text-red-800 hover:bg-destructive/30 border-destructive/30 dark:text-red-300 dark:hover:bg-red-800/50 dark:border-red-800': loc === 'EN_PROVEEDOR',
                   'ring-2 ring-primary': locationFilter === loc && formatFilter === format
               })}>
                 <span>{getLocationText(loc)}:</span>
@@ -803,3 +804,4 @@ export default function AssetsPage() {
   );
 }
 
+    

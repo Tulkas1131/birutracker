@@ -48,7 +48,7 @@ const stateLogic: Record<Asset['location'], Partial<Record<Asset['state'], Actio
         },
         VACIO: {
             primary: 'LLENADO_EN_PLANTA',
-            manualOverrides: ['SALIDA_VACIO'], // This will be filtered for CO2
+            manualOverrides: ['SALIDA_VACIO'],
             description: "El activo está vacío. Registra el llenado o una salida en préstamo.",
             requiresCustomerSelection: false,
             requiresVariety: true,
@@ -72,7 +72,6 @@ const stateLogic: Record<Asset['location'], Partial<Record<Asset['state'], Actio
         }
     },
     EN_CLIENTE: {
-        // Now handles both LLENO and VACIO states for recollection
         LLENO: {
             primary: 'RECOLECCION_DE_CLIENTE',
             manualOverrides: ['DEVOLUCION'],
@@ -87,21 +86,30 @@ const stateLogic: Record<Asset['location'], Partial<Record<Asset['state'], Actio
             requiresCustomerSelection: false,
             autoFillsCustomer: 'fromLastKnown'
         }
+    },
+    EN_PROVEEDOR: { // Nueva ubicación
+        VACIO: {
+            primary: 'RECEPCION_DE_PROVEEDOR',
+            manualOverrides: [],
+            description: "El activo está en el proveedor. Confirma su recepción (ya lleno).",
+            requiresCustomerSelection: false,
+        }
     }
 };
 
 const getEventTypeTranslation = (eventType: MovementEventType): string => {
     const translations: Record<MovementEventType, string> = {
         LLENADO_EN_PLANTA: "Llenar Activo (Barril)",
-        RECEPCION_CO2_LLENO: "Recepción CO₂ Lleno",
         SALIDA_A_REPARTO: "Salida a Reparto",
         ENTREGA_A_CLIENTE: "Entrega a Cliente",
         RECOLECCION_DE_CLIENTE: "Recolección de Cliente",
         RECEPCION_EN_PLANTA: "Recepción en Planta",
         SALIDA_VACIO: "Préstamo (Salida Vacío)",
         DEVOLUCION: "Devolución (Lleno)",
+        SALIDA_A_PROVEEDOR: "Salida a Proveedor (CO₂)",
+        RECEPCION_DE_PROVEEDOR: "Recepción de Proveedor (CO₂)",
     };
-    return translations[eventType];
+    return translations[eventType] || eventType;
 };
 
 
@@ -128,7 +136,7 @@ export default function MovementsPage() {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const { collection, query, where, orderBy, getDocs } = await import("firebase/firestore/lite");
+      const { collection, query, orderBy, getDocs } = await import("firebase/firestore/lite");
       const firestore = db();
       const assetsQuery = query(collection(firestore, "assets"), orderBy("code"));
       const customersQuery = query(collection(firestore, "customers"), orderBy("name"));
@@ -192,22 +200,19 @@ export default function MovementsPage() {
         return;
     }
 
-    let logic: ActionLogic | undefined = stateLogic[asset.location]?.[asset.state];
+    let logic: ActionLogic | undefined | null = stateLogic[asset.location]?.[asset.state];
 
     // Special logic for CO2
     if (asset.type === 'CO2') {
-        if (logic?.primary === 'LLENADO_EN_PLANTA') {
-            // Replace 'LLENADO' with 'SALIDA A REPARTO' for CO2, as it's more logical.
-            logic.primary = 'SALIDA_A_REPARTO';
-            logic.description = "El cilindro de CO₂ está lleno en planta, listo para ser despachado.";
-            logic.requiresCustomerSelection = true;
-        }
-        // Remove 'SALIDA_VACIO' from manual overrides for CO2, as it's not a valid operation.
-        if (logic?.manualOverrides.includes('SALIDA_VACIO')) {
-            logic.manualOverrides = logic.manualOverrides.filter(o => o !== 'SALIDA_VACIO');
-        }
-        // CO2 doesn't have variety or valve type.
-        if(logic) {
+        if (asset.location === 'EN_PLANTA' && asset.state === 'VACIO') {
+            logic = {
+                primary: 'SALIDA_A_PROVEEDOR',
+                manualOverrides: ['SALIDA_A_REPARTO'], // Permitir override por si está lleno realmente
+                description: "El cilindro de CO₂ está vacío. La acción sugerida es enviarlo al proveedor para recarga.",
+                requiresCustomerSelection: false,
+            };
+        } else if (logic) {
+            // For other CO2 states, ensure no variety/valve fields are required
             logic.requiresVariety = false;
             logic.requiresValveType = false;
         }
@@ -216,16 +221,20 @@ export default function MovementsPage() {
 
     if (!logic) {
         toast({ title: "Movimiento No Definido", description: `No hay una acción lógica para un activo ${asset.state} que está ${asset.location.replace('_', ' ')}. Considera realizar una acción manual.`, variant: "destructive", duration: 8000 });
-        // Instead of returning, we set a minimal logic to allow manual override.
         logic = {
             primary: 'SALIDA_A_REPARTO', // A neutral default
-            manualOverrides: ['SALIDA_A_REPARTO', 'RECEPCION_EN_PLANTA', 'DEVOLUCION', 'SALIDA_VACIO'],
+            manualOverrides: ['SALIDA_A_REPARTO', 'RECEPCION_EN_PLANTA', 'DEVOLUCION', 'SALIDA_VACIO', 'SALIDA_A_PROVEEDOR', 'RECEPCION_DE_PROVEEDOR'],
             description: "El estado actual del activo no tiene una acción sugerida. Por favor, selecciona una acción manual.",
             requiresCustomerSelection: true,
         };
-        setIsManualOverride(true); // Force manual override
+        setIsManualOverride(true); 
     }
     
+    // Filter out SALIDA_VACIO for CO2 type in manual overrides
+    if (asset.type === 'CO2' && logic.manualOverrides.includes('SALIDA_VACIO')) {
+      logic.manualOverrides = logic.manualOverrides.filter(o => o !== 'SALIDA_VACIO');
+    }
+
     setScannedAsset(asset);
     setActionLogic(logic);
     form.setValue('asset_id', asset.id);
@@ -280,7 +289,6 @@ export default function MovementsPage() {
     let newVariety: string | undefined = scannedAsset.variety;
     let newValveType: string | undefined = scannedAsset.valveType;
 
-    // This is the core of the fix: infer state from the action, not the other way around.
     switch (data.event_type) {
       case 'LLENADO_EN_PLANTA': 
         newState = 'LLENO'; 
@@ -289,19 +297,16 @@ export default function MovementsPage() {
         break;
       case 'SALIDA_A_REPARTO':
       case 'DEVOLUCION':
-        // If we are performing these actions, the asset MUST be full.
         newState = 'LLENO';
         newLocation = data.event_type === 'SALIDA_A_REPARTO' ? 'EN_REPARTO' : 'EN_PLANTA';
-        // Keep variety if it exists, update it if provided.
         newVariety = data.variety || newVariety;
         newValveType = data.valveType || newValveType;
         break;
       case 'RECOLECCION_DE_CLIENTE':
       case 'RECEPCION_EN_PLANTA':
-        // If we are performing these actions, the asset MUST be empty.
         newState = 'VACIO';
         newLocation = data.event_type === 'RECOLECCION_DE_CLIENTE' ? 'EN_REPARTO' : 'EN_PLANTA';
-        newVariety = ''; // Empty assets don't have variety
+        newVariety = ''; 
         newValveType = '';
         break;
       case 'ENTREGA_A_CLIENTE': 
@@ -313,8 +318,13 @@ export default function MovementsPage() {
         newVariety = ''; 
         newValveType = '';
         break;
-      case 'RECEPCION_CO2_LLENO': // Kept for legacy, can be removed if not used
-        newState = 'LLENO';
+      case 'SALIDA_A_PROVEEDOR':
+        newLocation = 'EN_PROVEEDOR';
+        newState = 'VACIO'; // Sale vacío
+        break;
+      case 'RECEPCION_DE_PROVEEDOR':
+        newLocation = 'EN_PLANTA';
+        newState = 'LLENO'; // Vuelve lleno
         break;
     }
 
@@ -327,7 +337,7 @@ export default function MovementsPage() {
             asset_id: scannedAsset.id, 
             asset_code: scannedAsset.code, 
             customer_id: customerId, 
-            customer_name: customerName, 
+            customer_name: data.event_type === 'SALIDA_A_PROVEEDOR' || data.event_type === 'RECEPCION_DE_PROVEEDOR' ? 'Proveedor' : customerName,
             event_type: data.event_type, 
             timestamp: Timestamp.now(), 
             user_id: user.uid, 
@@ -466,7 +476,7 @@ export default function MovementsPage() {
                                         </FormItem>
                                     )}
                                 />
-                            ) : customerForMovement && customerForMovement.name !== 'Planta' ? (
+                            ) : customerForMovement && customerForMovement.name !== 'Planta' && !['SALIDA_A_PROVEEDOR', 'RECEPCION_DE_PROVEEDOR'].includes(currentEventType) ? (
                                 <div>
                                     <Label>Cliente Asignado</Label>
                                     <Input value={customerForMovement.name} disabled />

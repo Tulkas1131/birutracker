@@ -13,7 +13,7 @@ export type Asset = {
   type: 'BARRIL' | 'CO2';
   format: string;
   state: 'LLENO' | 'VACIO';
-  location: 'EN_CLIENTE' | 'EN_PLANTA' | 'EN_REPARTO';
+  location: 'EN_CLIENTE' | 'EN_PLANTA' | 'EN_REPARTO' | 'EN_PROVEEDOR';
   variety?: string;
   valveType?: string;
 };
@@ -24,7 +24,7 @@ export const assetSchema = z.object({
   type: z.enum(['BARRIL', 'CO2']),
   format: z.string().min(1, 'El formato es requerido.'), // Now a string from a select
   state: z.enum(['LLENO', 'VACIO']),
-  location: z.enum(['EN_CLIENTE', 'EN_PLANTA', 'EN_REPARTO']),
+  location: z.enum(['EN_CLIENTE', 'EN_PLANTA', 'EN_REPARTO', 'EN_PROVEEDOR']),
   variety: z.string().optional(),
   valveType: z.string().optional(),
 });
@@ -81,13 +81,14 @@ export type CustomerFormData = z.infer<typeof customerSchema>;
 
 export const movementEventTypes = [
   'LLENADO_EN_PLANTA',
-  'RECEPCION_CO2_LLENO',
   'SALIDA_A_REPARTO', 
   'ENTREGA_A_CLIENTE', 
   'RECOLECCION_DE_CLIENTE', 
   'RECEPCION_EN_PLANTA', 
   'SALIDA_VACIO', 
-  'DEVOLUCION'
+  'DEVOLUCION',
+  'SALIDA_A_PROVEEDOR',
+  'RECEPCION_DE_PROVEEDOR'
 ] as const;
 
 export type MovementEventType = typeof movementEventTypes[number];

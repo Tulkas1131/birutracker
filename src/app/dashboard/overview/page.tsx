@@ -28,13 +28,14 @@ const ITEMS_PER_PAGE = 10;
 const formatEventType = (eventType: Event['event_type']) => {
     const translations: Record<MovementEventType, string> = {
         LLENADO_EN_PLANTA: "Llenar Activo (Barril)",
-        RECEPCION_CO2_LLENO: "Recepción CO₂ Lleno",
         SALIDA_A_REPARTO: "Salida a Reparto",
         ENTREGA_A_CLIENTE: "Entrega a Cliente",
         RECOLECCION_DE_CLIENTE: "Recolección de Cliente",
         RECEPCION_EN_PLANTA: "Recepción en Planta",
         SALIDA_VACIO: "Préstamo (Salida Vacío)",
         DEVOLUCION: "Devolución (Lleno)",
+        SALIDA_A_PROVEEDOR: "Salida a Proveedor",
+        RECEPCION_DE_PROVEEDOR: "Recepción de Proveedor",
     };
     return translations[eventType] || eventType;
 };
@@ -269,13 +270,14 @@ function OverviewPageContent() {
                 <SelectContent>
                     <SelectItem value="ALL">Todos los Eventos</SelectItem>
                     <SelectItem value="LLENADO_EN_PLANTA">Llenado (Barril)</SelectItem>
-                    <SelectItem value="RECEPCION_CO2_LLENO">Recepción CO₂ Lleno</SelectItem>
                     <SelectItem value="SALIDA_A_REPARTO">Salida a Reparto</SelectItem>
                     <SelectItem value="ENTREGA_A_CLIENTE">Entrega a Cliente</SelectItem>
                     <SelectItem value="RECOLECCION_DE_CLIENTE">Recolección de Cliente</SelectItem>
                     <SelectItem value="RECEPCION_EN_PLANTA">Recepción en Planta</SelectItem>
                     <SelectItem value="SALIDA_VACIO">Salida Vacío (Préstamo)</SelectItem>
                     <SelectItem value="DEVOLUCION">Devolución (Lleno)</SelectItem>
+                    <SelectItem value="SALIDA_A_PROVEEDOR">Salida a Proveedor</SelectItem>
+                    <SelectItem value="RECEPCION_DE_PROVEEDOR">Recepción de Proveedor</SelectItem>
                 </SelectContent>
             </Select>
             <div className="flex items-center space-x-2">
