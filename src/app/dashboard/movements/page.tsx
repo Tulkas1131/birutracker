@@ -209,7 +209,8 @@ export default function MovementsPage() {
     // --- CO2 Specific Logic ---
     if (asset.type === 'CO2') {
         // CO2 can't be loaned empty, nor can it go to a customer empty.
-        logic.manualOverrides = logic.manualOverrides.filter(o => o !== 'SALIDA_VACIO' && o !== 'ENTREGA_A_CLIENTE');
+        logic.manualOverrides = logic.manualOverrides.filter(o => o !== 'SALIDA_VACIO');
+        
         // CO2 doesn't have variety/valve
         logic.requiresVariety = false;
         logic.requiresValveType = false;
@@ -217,7 +218,8 @@ export default function MovementsPage() {
         // If CO2 is VACIO, the primary action is Llenado, not Salida en prestamo.
         if(asset.state === 'VACIO') {
             logic.primary = 'LLENADO_EN_PLANTA';
-            logic.manualOverrides = logic.manualOverrides.filter(o => o !== 'SALIDA_VACIO');
+            // Allow manual override for other actions if needed, except for loaning it empty
+            logic.manualOverrides = ['RECEPCION_EN_PLANTA', 'DEVOLUCION'];
         }
     }
 
