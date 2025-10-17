@@ -92,7 +92,7 @@ const stateLogic: Record<Asset['location'], Partial<Record<Asset['state'], Actio
 
 const getEventTypeTranslation = (eventType: MovementEventType): string => {
     const translations: Record<MovementEventType, string> = {
-        LLENADO_EN_PLANTA: "Llenar Activo (Barril)",
+        LLENADO_EN_PLANTA: "Llenar Activo",
         SALIDA_A_REPARTO: "Salida a Reparto",
         ENTREGA_A_CLIENTE: "Entrega a Cliente",
         RECOLECCION_DE_CLIENTE: "Recolección de Cliente",
@@ -193,29 +193,31 @@ export default function MovementsPage() {
         return;
     }
 
-    let logic: ActionLogic | undefined | null = stateLogic[asset.location]?.[asset.state];
+    let logic: ActionLogic | undefined | null = JSON.parse(JSON.stringify(stateLogic[asset.location]?.[asset.state]));
 
     if (!logic) {
         toast({ title: "Movimiento No Definido", description: `No hay una acción lógica para un activo ${asset.state} que está ${asset.location.replace('_', ' ')}. Considera realizar una acción manual.`, variant: "destructive", duration: 8000 });
         logic = {
             primary: 'SALIDA_A_REPARTO', // A neutral default
-            manualOverrides: ['SALIDA_A_REPARTO', 'RECEPCION_EN_PLANTA', 'DEVOLUCION', 'SALIDA_VACIO'],
+            manualOverrides: ['SALIDA_A_REPARTO', 'RECEPCION_EN_PLANTA', 'DEVOLUCION', 'SALIDA_VACIO', 'LLENADO_EN_PLANTA'],
             description: "El estado actual del activo no tiene una acción sugerida. Por favor, selecciona una acción manual.",
             requiresCustomerSelection: true,
         };
         setIsManualOverride(true); 
     }
     
+    // --- CO2 Specific Logic ---
     if (asset.type === 'CO2') {
-        // CO2 can't be loaned empty
-        logic.manualOverrides = logic.manualOverrides.filter(o => o !== 'SALIDA_VACIO');
+        // CO2 can't be loaned empty, nor can it go to a customer empty.
+        logic.manualOverrides = logic.manualOverrides.filter(o => o !== 'SALIDA_VACIO' && o !== 'ENTREGA_A_CLIENTE');
         // CO2 doesn't have variety/valve
         logic.requiresVariety = false;
         logic.requiresValveType = false;
-
-        // If it's a CO2 and empty, it can't be delivered to a customer
-        if (asset.state === 'VACIO') {
-          logic.manualOverrides = logic.manualOverrides.filter(o => o !== 'SALIDA_A_REPARTO');
+        
+        // If CO2 is VACIO, the primary action is Llenado, not Salida en prestamo.
+        if(asset.state === 'VACIO') {
+            logic.primary = 'LLENADO_EN_PLANTA';
+            logic.manualOverrides = logic.manualOverrides.filter(o => o !== 'SALIDA_VACIO');
         }
     }
 
@@ -298,7 +300,7 @@ export default function MovementsPage() {
         break;
       case 'SALIDA_A_REPARTO':
       case 'DEVOLUCION':
-        if (!forceStateCorrection) newState = 'LLENO'; // Normally becomes full
+        if (scannedAsset.state === 'VACIO') newState = 'LLENO'; // Implicit correction
         newLocation = data.event_type === 'SALIDA_A_REPARTO' ? 'EN_REPARTO' : 'EN_PLANTA';
         newVariety = data.variety || newVariety;
         newValveType = data.valveType || newValveType;
@@ -430,7 +432,7 @@ export default function MovementsPage() {
                                 </AlertDescription>
                             </Alert>
                             
-                            {actionLogic?.manualOverrides && actionLogic.manualOverrides.length > 0 && (
+                            {actionLogic?.manualOverrides && actionLogic.manualOverrides.length > 0 && isManualOverride && (
                                 <FormField
                                     control={form.control}
                                     name="event_type"
@@ -440,7 +442,7 @@ export default function MovementsPage() {
                                             <Select onValueChange={field.onChange} value={field.value}>
                                                 <FormControl><SelectTrigger><SelectValue placeholder="Selecciona una acción..."/></SelectTrigger></FormControl>
                                                 <SelectContent>
-                                                    {isManualOverride && <SelectItem value={actionLogic.primary}>{getEventTypeTranslation(actionLogic.primary)} (Sugerido)</SelectItem>}
+                                                    <SelectItem value={actionLogic.primary}>{getEventTypeTranslation(actionLogic.primary)} (Sugerido)</SelectItem>
                                                     {actionLogic.manualOverrides.map(type => (
                                                         <SelectItem key={type} value={type}>{getEventTypeTranslation(type)}</SelectItem>
                                                     ))}
