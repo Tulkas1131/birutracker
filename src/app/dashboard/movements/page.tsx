@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import dynamic from "next/dynamic";
 import { auth, db } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { Loader2, QrCode, ArrowRight } from "lucide-react";
+import { Loader2, QrCode, ArrowRight, AlertTriangle } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { logAppEvent } from "@/lib/logging";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 const QrScanner = dynamic(() => import('@/components/qr-scanner').then(mod => mod.QrScanner), {
   ssr: false,
@@ -86,14 +87,6 @@ const stateLogic: Record<Asset['location'], Partial<Record<Asset['state'], Actio
             requiresCustomerSelection: false,
             autoFillsCustomer: 'fromLastKnown'
         }
-    },
-    EN_PROVEEDOR: { // Nueva ubicación
-        VACIO: {
-            primary: 'RECEPCION_DE_PROVEEDOR',
-            manualOverrides: [],
-            description: "El activo está en el proveedor. Confirma su recepción (ya lleno).",
-            requiresCustomerSelection: false,
-        }
     }
 };
 
@@ -106,8 +99,6 @@ const getEventTypeTranslation = (eventType: MovementEventType): string => {
         RECEPCION_EN_PLANTA: "Recepción en Planta",
         SALIDA_VACIO: "Préstamo (Salida Vacío)",
         DEVOLUCION: "Devolución (Lleno)",
-        SALIDA_A_PROVEEDOR: "Salida a Proveedor (CO₂)",
-        RECEPCION_DE_PROVEEDOR: "Recepción de Proveedor (CO₂)",
     };
     return translations[eventType] || eventType;
 };
@@ -127,6 +118,7 @@ export default function MovementsPage() {
   const [scannedAsset, setScannedAsset] = useState<Asset | null>(null);
   const [actionLogic, setActionLogic] = useState<ActionLogic | null>(null);
   const [isManualOverride, setIsManualOverride] = useState(false);
+  const [showCorrectionDialog, setShowCorrectionDialog] = useState(false);
 
   const form = useForm<MovementFormData>({
     resolver: zodResolver(movementSchema),
@@ -181,6 +173,7 @@ export default function MovementsPage() {
     setScannedAsset(null);
     setActionLogic(null);
     setIsManualOverride(false);
+    setShowCorrectionDialog(false);
     form.reset({ variety: "", valveType: "", customer_id: "INTERNAL" });
   };
 
@@ -202,38 +195,30 @@ export default function MovementsPage() {
 
     let logic: ActionLogic | undefined | null = stateLogic[asset.location]?.[asset.state];
 
-    // Special logic for CO2
-    if (asset.type === 'CO2') {
-        if (asset.location === 'EN_PLANTA' && asset.state === 'VACIO') {
-            logic = {
-                primary: 'SALIDA_A_PROVEEDOR',
-                manualOverrides: ['SALIDA_A_REPARTO'], // Permitir override por si está lleno realmente
-                description: "El cilindro de CO₂ está vacío. La acción sugerida es enviarlo al proveedor para recarga.",
-                requiresCustomerSelection: false,
-            };
-        } else if (logic) {
-            // For other CO2 states, ensure no variety/valve fields are required
-            logic.requiresVariety = false;
-            logic.requiresValveType = false;
-        }
-    }
-
-
     if (!logic) {
         toast({ title: "Movimiento No Definido", description: `No hay una acción lógica para un activo ${asset.state} que está ${asset.location.replace('_', ' ')}. Considera realizar una acción manual.`, variant: "destructive", duration: 8000 });
         logic = {
             primary: 'SALIDA_A_REPARTO', // A neutral default
-            manualOverrides: ['SALIDA_A_REPARTO', 'RECEPCION_EN_PLANTA', 'DEVOLUCION', 'SALIDA_VACIO', 'SALIDA_A_PROVEEDOR', 'RECEPCION_DE_PROVEEDOR'],
+            manualOverrides: ['SALIDA_A_REPARTO', 'RECEPCION_EN_PLANTA', 'DEVOLUCION', 'SALIDA_VACIO'],
             description: "El estado actual del activo no tiene una acción sugerida. Por favor, selecciona una acción manual.",
             requiresCustomerSelection: true,
         };
         setIsManualOverride(true); 
     }
     
-    // Filter out SALIDA_VACIO for CO2 type in manual overrides
-    if (asset.type === 'CO2' && logic.manualOverrides.includes('SALIDA_VACIO')) {
-      logic.manualOverrides = logic.manualOverrides.filter(o => o !== 'SALIDA_VACIO');
+    if (asset.type === 'CO2') {
+        // CO2 can't be loaned empty
+        logic.manualOverrides = logic.manualOverrides.filter(o => o !== 'SALIDA_VACIO');
+        // CO2 doesn't have variety/valve
+        logic.requiresVariety = false;
+        logic.requiresValveType = false;
+
+        // If it's a CO2 and empty, it can't be delivered to a customer
+        if (asset.state === 'VACIO') {
+          logic.manualOverrides = logic.manualOverrides.filter(o => o !== 'SALIDA_A_REPARTO');
+        }
     }
+
 
     setScannedAsset(asset);
     setActionLogic(logic);
@@ -265,6 +250,22 @@ export default function MovementsPage() {
   }, [customerId, customers]);
 
   async function onSubmit(data: MovementFormData) {
+    // --- Validation for CO2 state ---
+    if (scannedAsset?.type === 'CO2' && scannedAsset.state === 'VACIO' && data.event_type === 'SALIDA_A_REPARTO') {
+        setShowCorrectionDialog(true);
+        return;
+    }
+    
+    await executeMovementTransaction(data);
+  }
+
+  const handleCorrectionAndSubmit = async () => {
+      setShowCorrectionDialog(false);
+      const formData = form.getValues();
+      await executeMovementTransaction(formData, true); // Pass a flag to force state correction
+  };
+
+  async function executeMovementTransaction(data: MovementFormData, forceStateCorrection = false) {
     setIsSubmitting(true);
     const { Timestamp, doc, runTransaction, collection } = await import("firebase/firestore/lite");
     const firestore = db();
@@ -285,7 +286,7 @@ export default function MovementsPage() {
     }
     
     let newLocation: Asset['location'] = scannedAsset.location;
-    let newState: Asset['state'] = scannedAsset.state;
+    let newState: Asset['state'] = forceStateCorrection ? 'LLENO' : scannedAsset.state; // Correct state if forced
     let newVariety: string | undefined = scannedAsset.variety;
     let newValveType: string | undefined = scannedAsset.valveType;
 
@@ -297,7 +298,7 @@ export default function MovementsPage() {
         break;
       case 'SALIDA_A_REPARTO':
       case 'DEVOLUCION':
-        newState = 'LLENO';
+        if (!forceStateCorrection) newState = 'LLENO'; // Normally becomes full
         newLocation = data.event_type === 'SALIDA_A_REPARTO' ? 'EN_REPARTO' : 'EN_PLANTA';
         newVariety = data.variety || newVariety;
         newValveType = data.valveType || newValveType;
@@ -318,14 +319,6 @@ export default function MovementsPage() {
         newVariety = ''; 
         newValveType = '';
         break;
-      case 'SALIDA_A_PROVEEDOR':
-        newLocation = 'EN_PROVEEDOR';
-        newState = 'VACIO'; // Sale vacío
-        break;
-      case 'RECEPCION_DE_PROVEEDOR':
-        newLocation = 'EN_PLANTA';
-        newState = 'LLENO'; // Vuelve lleno
-        break;
     }
 
     try {
@@ -337,7 +330,7 @@ export default function MovementsPage() {
             asset_id: scannedAsset.id, 
             asset_code: scannedAsset.code, 
             customer_id: customerId, 
-            customer_name: data.event_type === 'SALIDA_A_PROVEEDOR' || data.event_type === 'RECEPCION_DE_PROVEEDOR' ? 'Proveedor' : customerName,
+            customer_name: customerName,
             event_type: data.event_type, 
             timestamp: Timestamp.now(), 
             user_id: user.uid, 
@@ -416,7 +409,7 @@ export default function MovementsPage() {
             </DialogContent>
         </Dialog>
 
-        <Dialog open={!!scannedAsset} onOpenChange={(open) => !open && resetMovementState()}>
+        <Dialog open={!!scannedAsset && !showCorrectionDialog} onOpenChange={(open) => !open && resetMovementState()}>
             <DialogContent>
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -437,7 +430,7 @@ export default function MovementsPage() {
                                 </AlertDescription>
                             </Alert>
                             
-                            {isManualOverride && actionLogic?.manualOverrides.length ? (
+                            {actionLogic?.manualOverrides && actionLogic.manualOverrides.length > 0 && (
                                 <FormField
                                     control={form.control}
                                     name="event_type"
@@ -445,9 +438,9 @@ export default function MovementsPage() {
                                         <FormItem>
                                             <FormLabel>Acción Manual</FormLabel>
                                             <Select onValueChange={field.onChange} value={field.value}>
-                                                <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                                                <FormControl><SelectTrigger><SelectValue placeholder="Selecciona una acción..."/></SelectTrigger></FormControl>
                                                 <SelectContent>
-                                                    <SelectItem value={actionLogic.primary}>{getEventTypeTranslation(actionLogic.primary)} (Sugerido)</SelectItem>
+                                                    {isManualOverride && <SelectItem value={actionLogic.primary}>{getEventTypeTranslation(actionLogic.primary)} (Sugerido)</SelectItem>}
                                                     {actionLogic.manualOverrides.map(type => (
                                                         <SelectItem key={type} value={type}>{getEventTypeTranslation(type)}</SelectItem>
                                                     ))}
@@ -457,7 +450,7 @@ export default function MovementsPage() {
                                         </FormItem>
                                     )}
                                 />
-                            ) : null}
+                            )}
 
                             {requiresCustomerSelection ? (
                                 <FormField
@@ -476,7 +469,7 @@ export default function MovementsPage() {
                                         </FormItem>
                                     )}
                                 />
-                            ) : customerForMovement && customerForMovement.name !== 'Planta' && !['SALIDA_A_PROVEEDOR', 'RECEPCION_DE_PROVEEDOR'].includes(currentEventType) ? (
+                            ) : customerForMovement && customerForMovement.name !== 'Planta' ? (
                                 <div>
                                     <Label>Cliente Asignado</Label>
                                     <Input value={customerForMovement.name} disabled />
@@ -528,8 +521,28 @@ export default function MovementsPage() {
                 </Form>
             </DialogContent>
         </Dialog>
+        
+        <AlertDialog open={showCorrectionDialog} onOpenChange={setShowCorrectionDialog}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle className="flex items-center gap-2">
+                        <AlertTriangle className="h-6 w-6 text-yellow-500" />
+                        Confirmación Requerida
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Este cilindro de CO₂ figura como VACÍO. Para enviarlo a un cliente, su estado debe ser LLENO.
+                        <br/><br/>
+                        ¿Confirmas que el activo está físicamente lleno y deseas corregir su estado para continuar?
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel onClick={resetMovementState}>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleCorrectionAndSubmit}>
+                        Corregir y Continuar
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
     </div>
   );
 }
-
-    

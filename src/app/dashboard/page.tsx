@@ -105,10 +105,6 @@ export default function DashboardPage() {
         return acc;
     }, {} as Record<string, { location: string; barriles50L: number; barriles30LSLIM: number; barriles30L: number; co2: number }>);
     
-    // Rename "EN PROVEEDOR" to "Proveedor" for display
-    if (assetsByLocation['EN PROVEEDOR']) {
-        assetsByLocation['EN PROVEEDOR'].location = 'Proveedor';
-    }
     const locationDistribution = Object.values(assetsByLocation);
 
     const assetsEnCliente = assets.filter(asset => asset.location === 'EN_CLIENTE');
@@ -278,5 +274,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    

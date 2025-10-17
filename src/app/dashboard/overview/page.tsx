@@ -34,8 +34,6 @@ const formatEventType = (eventType: Event['event_type']) => {
         RECEPCION_EN_PLANTA: "Recepción en Planta",
         SALIDA_VACIO: "Préstamo (Salida Vacío)",
         DEVOLUCION: "Devolución (Lleno)",
-        SALIDA_A_PROVEEDOR: "Salida a Proveedor",
-        RECEPCION_DE_PROVEEDOR: "Recepción de Proveedor",
     };
     return translations[eventType] || eventType;
 };
@@ -161,7 +159,7 @@ function OverviewPageContent() {
         
         const [eventsSnapshot, assetsSnapshot] = await Promise.all([
             getDocs(eventsQuery),
-            getDocs(assetsQuery)
+            getDocs(assetsSnapshot)
         ]);
 
         const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
@@ -276,8 +274,6 @@ function OverviewPageContent() {
                     <SelectItem value="RECEPCION_EN_PLANTA">Recepción en Planta</SelectItem>
                     <SelectItem value="SALIDA_VACIO">Salida Vacío (Préstamo)</SelectItem>
                     <SelectItem value="DEVOLUCION">Devolución (Lleno)</SelectItem>
-                    <SelectItem value="SALIDA_A_PROVEEDOR">Salida a Proveedor</SelectItem>
-                    <SelectItem value="RECEPCION_DE_PROVEEDOR">Recepción de Proveedor</SelectItem>
                 </SelectContent>
             </Select>
             <div className="flex items-center space-x-2">
@@ -369,5 +365,3 @@ export default function OverviewPage() {
         </Suspense>
     );
 }
-
-    
