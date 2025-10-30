@@ -1,8 +1,7 @@
-
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { MoreHorizontal, PlusCircle, Loader2, ChevronLeft, ChevronRight, Users2, Phone, Package } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Loader2, ChevronLeft, ChevronRight, Users2, Phone, History } from "lucide-react";
 import { db } from "@/lib/firebase";
 
 import { Badge } from "@/components/ui/badge";
@@ -134,6 +133,32 @@ export default function CustomersPage() {
     return counts;
   }, [assets, events]);
   
+  const customerAssetHistory = useMemo(() => {
+    const history = new Map<string, number>();
+    const deliveredAssetsByCustomer = new Map<string, Set<string>>();
+
+    if (!events.length) {
+        return history;
+    }
+
+    // Iterate through all events to build the history
+    for (const event of events) {
+        if (event.event_type === 'ENTREGA_A_CLIENTE' && event.customer_id) {
+            if (!deliveredAssetsByCustomer.has(event.customer_id)) {
+                deliveredAssetsByCustomer.set(event.customer_id, new Set());
+            }
+            deliveredAssetsByCustomer.get(event.customer_id)!.add(event.asset_id);
+        }
+    }
+
+    // Count the unique assets for each customer
+    for (const [customerId, assetSet] of deliveredAssetsByCustomer.entries()) {
+        history.set(customerId, assetSet.size);
+    }
+
+    return history;
+  }, [events]);
+
   const totalPages = Math.ceil(customers.length / ITEMS_PER_PAGE);
   const paginatedCustomers = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -243,28 +268,46 @@ export default function CustomersPage() {
     )
   };
 
-  const AssetCountDisplay = ({ counts }: { counts?: CustomerAssetCounts }) => {
-    if (!counts || counts.total === 0) {
-        return <span className="text-sm text-muted-foreground">0 Activos</span>
+  const AssetCountDisplay = ({ counts, historyCount }: { counts?: CustomerAssetCounts, historyCount?: number }) => {
+    const hasCurrentAssets = counts && counts.total > 0;
+    const hasHistory = historyCount !== undefined && historyCount > 0;
+
+    if (!hasCurrentAssets && !hasHistory) {
+      return <span className="text-sm text-muted-foreground">0 Activos</span>;
     }
-    const { total, ...formats } = counts;
+    
+    const { total, ...formats } = counts || { total: 0 };
     const formatEntries = Object.entries(formats);
 
     return (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
-            {formatEntries.map(([format, count]) => (
-                <Badge key={format} variant="secondary" className="text-xs">
-                    {format}: <span className="font-bold ml-1">{count}</span>
-                </Badge>
-            ))}
-            <Badge variant="default" className="text-xs">
-                Total: <span className="font-bold ml-1">{total}</span>
-            </Badge>
-        </div>
+      <div className="flex flex-col gap-2">
+        {hasCurrentAssets && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="text-sm font-semibold mr-2">En Posesión:</span>
+              {formatEntries.map(([format, count]) => (
+                  <Badge key={format} variant="secondary" className="text-xs">
+                      {format}: <span className="font-bold ml-1">{count}</span>
+                  </Badge>
+              ))}
+              <Badge variant="default" className="text-xs">
+                  Total: <span className="font-bold ml-1">{total}</span>
+              </Badge>
+          </div>
+        )}
+        {hasHistory && (
+           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="text-sm font-semibold mr-2 flex items-center gap-1.5"><History className="h-4 w-4"/>Histórico:</span>
+              <Badge variant="outline" className="text-xs">
+                  Total: <span className="font-bold ml-1">{historyCount}</span>
+              </Badge>
+          </div>
+        )}
+      </div>
     );
   };
 
-  const CustomerCardMobile = ({ customer, counts }: { customer: Customer, counts?: CustomerAssetCounts }) => (
+
+  const CustomerCardMobile = ({ customer, counts, historyCount }: { customer: Customer, counts?: CustomerAssetCounts, historyCount?: number }) => (
     <div className="flex items-start justify-between rounded-lg border bg-card p-4">
         <div className="flex flex-col gap-1.5 flex-grow">
             <span className="font-semibold">{customer.name}</span>
@@ -273,7 +316,7 @@ export default function CustomersPage() {
             <span className="text-sm text-muted-foreground">{customer.contact}</span>
             <PhoneLinks phone={customer.phone} />
             <div className="pt-2">
-              <AssetCountDisplay counts={counts} />
+              <AssetCountDisplay counts={counts} historyCount={historyCount} />
             </div>
         </div>
         <div className="flex items-center flex-shrink-0">
@@ -336,7 +379,7 @@ export default function CustomersPage() {
                 />
               ) : isMobile ? (
                   <div className="space-y-4 p-4">
-                     {paginatedCustomers.map(customer => <CustomerCardMobile key={customer.id} customer={customer} counts={customerAssetCounts.get(customer.id)} />)}
+                     {paginatedCustomers.map(customer => <CustomerCardMobile key={customer.id} customer={customer} counts={customerAssetCounts.get(customer.id)} historyCount={customerAssetHistory.get(customer.id)} />)}
                   </div>
               ) : (
                 <Table>
@@ -344,7 +387,7 @@ export default function CustomersPage() {
                     <TableRow>
                       <TableHead>Nombre</TableHead>
                       <TableHead>Tipo</TableHead>
-                      <TableHead>Activos en Posesión</TableHead>
+                      <TableHead>Activos</TableHead>
                       <TableHead>Contacto</TableHead>
                       <TableHead>Teléfono</TableHead>
                       <TableHead>
@@ -360,7 +403,7 @@ export default function CustomersPage() {
                           <Badge variant="outline">{customer.type}</Badge>
                         </TableCell>
                         <TableCell>
-                           <AssetCountDisplay counts={customerAssetCounts.get(customer.id)} />
+                           <AssetCountDisplay counts={customerAssetCounts.get(customer.id)} historyCount={customerAssetHistory.get(customer.id)} />
                         </TableCell>
                         <TableCell>{customer.contact}</TableCell>
                         <TableCell><PhoneLinks phone={customer.phone} /></TableCell>
@@ -438,5 +481,3 @@ export default function CustomersPage() {
     </div>
   );
 }
-
-    
