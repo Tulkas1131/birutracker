@@ -4,8 +4,8 @@
 import { useState, useMemo, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { Timestamp } from "firebase/firestore/lite";
-import { db } from "@/lib/firebase";
-import { Loader2, Trash2, ChevronLeft, ChevronRight, SearchX } from "lucide-react";
+import { auth, db } from "@/lib/firebase";
+import { Loader2, Trash2, ChevronLeft, ChevronRight, SearchX, User } from "lucide-react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
@@ -22,8 +22,16 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { EmptyState } from '@/components/empty-state';
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { cn } from '@/lib/utils';
 
 const ITEMS_PER_PAGE = 10;
+
+interface UserData {
+  id: string;
+  email: string;
+  role: string;
+}
 
 const formatEventType = (eventType: Event['event_type']) => {
     const translations: Record<MovementEventType, string> = {
@@ -43,9 +51,12 @@ const formatDate = (timestamp: Timestamp) => {
     return timestamp.toDate().toLocaleString();
 };
 
-function EventCardMobile({ event, assetsMap, onDelete }: { event: Event, assetsMap: Map<string, Asset>, onDelete: (id: string) => void }) {
+function EventCardMobile({ event, assetsMap, usersMap, currentUser, onDelete }: { event: Event, assetsMap: Map<string, Asset>, usersMap: Map<string, UserData>, currentUser: any, onDelete: (id: string) => void }) {
     const userRole = useUserRole();
     const asset = assetsMap.get(event.asset_id);
+    const user = usersMap.get(event.user_id);
+    const isCurrentUserEvent = currentUser?.uid === event.user_id;
+
     const daysAtCustomer = useMemo(() => {
         if (event.event_type === 'ENTREGA_A_CLIENTE' && asset && asset.location === 'EN_CLIENTE') {
             return differenceInDays(new Date(), event.timestamp.toDate());
@@ -54,7 +65,7 @@ function EventCardMobile({ event, assetsMap, onDelete }: { event: Event, assetsM
     }, [event, asset]);
 
     return (
-        <div className="rounded-lg border bg-card p-4">
+        <div className={cn("rounded-lg border bg-card p-4", isCurrentUserEvent && userRole === 'Operador' && "bg-primary/5 border-primary/20")}>
             <div className="flex justify-between items-start">
                 <div className="flex flex-col gap-1.5">
                     <span className="font-semibold">{event.asset_code}</span>
@@ -62,6 +73,15 @@ function EventCardMobile({ event, assetsMap, onDelete }: { event: Event, assetsM
                     <span className="text-sm text-muted-foreground">{event.customer_name}</span>
                     <span className="text-xs text-muted-foreground">{formatDate(event.timestamp)}</span>
                      {asset?.type === 'BARRIL' && event.valveType && <span className="text-xs text-muted-foreground">Válvula: {event.valveType}</span>}
+                     {userRole === 'Admin' && user && (
+                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1">
+                            <User className="h-3 w-3" />
+                            <span>{user.email}</span>
+                        </div>
+                     )}
+                     {isCurrentUserEvent && userRole === 'Operador' && (
+                        <Badge variant="outline" className="w-fit mt-1">Mi Movimiento</Badge>
+                     )}
                 </div>
                 <div className="flex flex-col items-end gap-2">
                     {daysAtCustomer !== null && (
@@ -87,9 +107,12 @@ function EventCardMobile({ event, assetsMap, onDelete }: { event: Event, assetsM
     );
 }
 
-function EventTableRow({ event, assetsMap, onDelete, showBeerColumns }: { event: Event, assetsMap: Map<string, Asset>, onDelete: (id: string) => void, showBeerColumns: boolean }) {
+function EventTableRow({ event, assetsMap, usersMap, currentUser, onDelete, showBeerColumns }: { event: Event, assetsMap: Map<string, Asset>, usersMap: Map<string, UserData>, currentUser: any, onDelete: (id: string) => void, showBeerColumns: boolean }) {
   const userRole = useUserRole();
   const asset = assetsMap.get(event.asset_id);
+  const user = usersMap.get(event.user_id);
+  const isCurrentUserEvent = currentUser?.uid === event.user_id;
+
   const daysAtCustomer = useMemo(() => {
     if (event.event_type === 'ENTREGA_A_CLIENTE' && asset && asset.location === 'EN_CLIENTE') {
       return differenceInDays(new Date(), event.timestamp.toDate());
@@ -98,7 +121,7 @@ function EventTableRow({ event, assetsMap, onDelete, showBeerColumns }: { event:
   }, [event, asset]);
 
   return (
-    <TableRow>
+    <TableRow className={cn(isCurrentUserEvent && userRole === 'Operador' && "bg-primary/5")}>
       <TableCell className="hidden sm:table-cell">{formatDate(event.timestamp)}</TableCell>
       <TableCell className="font-medium">{event.asset_code}</TableCell>
       <TableCell className="hidden sm:table-cell">{formatEventType(event.event_type)}</TableCell>
@@ -116,6 +139,9 @@ function EventTableRow({ event, assetsMap, onDelete, showBeerColumns }: { event:
       </TableCell>
       {showBeerColumns && <TableCell className="hidden lg:table-cell">{event.variety || 'N/A'}</TableCell>}
       {showBeerColumns && <TableCell className="hidden lg:table-cell">{event.valveType || 'N/A'}</TableCell>}
+      {userRole === 'Admin' && (
+          <TableCell>{user?.email || 'Desconocido'}</TableCell>
+      )}
       {userRole === 'Admin' && (
         <TableCell>
           <Button
@@ -135,6 +161,7 @@ function EventTableRow({ event, assetsMap, onDelete, showBeerColumns }: { event:
 function OverviewPageContent() {
   const [allEvents, setAllEvents] = useState<Event[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [users, setUsers] = useState<UserData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const searchParams = useSearchParams();
   
@@ -147,6 +174,7 @@ function OverviewPageContent() {
   const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast();
   const userRole = useUserRole();
+  const [currentUser] = useAuthState(auth());
   const isMobile = useIsMobile();
 
   const fetchData = useCallback(async () => {
@@ -156,17 +184,22 @@ function OverviewPageContent() {
         const firestore = db();
         const eventsQuery = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
         const assetsQuery = query(collection(firestore, "assets"));
+        const usersQuery = query(collection(firestore, "users"));
         
-        const [eventsSnapshot, assetsSnapshot] = await Promise.all([
+        const [eventsSnapshot, assetsSnapshot, usersSnapshot] = await Promise.all([
             getDocs(eventsQuery),
-            getDocs(assetsQuery)
+            getDocs(assetsQuery),
+            getDocs(usersQuery),
         ]);
 
         const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
         const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
+        const usersData = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserData));
         
         setAllEvents(eventsData);
         setAssets(assetsData);
+        setUsers(usersData);
+
     } catch(error: any) {
         console.error("Error fetching data: ", error);
         logAppEvent({ level: 'ERROR', message: 'Failed to fetch history data', component: 'HistoryPage', stack: error.stack });
@@ -186,26 +219,16 @@ function OverviewPageContent() {
   };
   
   const assetsMap = useMemo(() => new Map(assets.map(asset => [asset.id, asset])), [assets]);
+  const usersMap = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
 
   const filteredEvents = useMemo(() => {
     let eventsToFilter = allEvents;
 
     if (filters.criticalOnly) {
-      // Find the last event for each asset
-      const lastEventsMap = new Map<string, Event>();
-      for (const event of allEvents) {
-          if (!lastEventsMap.has(event.asset_id)) {
-              lastEventsMap.set(event.asset_id, event);
-          }
-      }
-
       const criticalAssetIds = new Set<string>();
       assets.forEach(asset => {
-        // Condition 1: Asset must be at a customer
         if (asset.location === 'EN_CLIENTE') {
-          const lastEvent = lastEventsMap.get(asset.id);
-          // Condition 2: Last event must be a delivery
-          // Condition 3: Must be more than 30 days ago
+          const lastEvent = allEvents.find(e => e.asset_id === asset.id);
           if (lastEvent && lastEvent.event_type === 'ENTREGA_A_CLIENTE') {
             const days = differenceInDays(new Date(), lastEvent.timestamp.toDate());
             if (days >= 30) {
@@ -215,7 +238,6 @@ function OverviewPageContent() {
         }
       });
       
-      // We show the delivery events for the assets that are currently critical
       eventsToFilter = allEvents.filter(event => 
           event.event_type === 'ENTREGA_A_CLIENTE' && criticalAssetIds.has(event.asset_id)
       );
@@ -319,7 +341,7 @@ function OverviewPageContent() {
             ) : isMobile ? (
                 <div className="space-y-4 p-4">
                     {paginatedEvents.map((event) => (
-                        <EventCardMobile key={event.id} event={event} assetsMap={assetsMap} onDelete={handleDelete} />
+                        <EventCardMobile key={event.id} event={event} assetsMap={assetsMap} usersMap={usersMap} currentUser={currentUser} onDelete={handleDelete} />
                     ))}
                 </div>
             ) : (
@@ -333,12 +355,13 @@ function OverviewPageContent() {
                           <TableHead className="hidden md:table-cell">Días en Cliente</TableHead>
                           {showBeerColumns && <TableHead className="hidden lg:table-cell">Variedad</TableHead>}
                           {showBeerColumns && <TableHead className="hidden lg:table-cell">Válvula</TableHead>}
+                          {userRole === 'Admin' && <TableHead>Usuario</TableHead>}
                           {userRole === 'Admin' && <TableHead>Acciones</TableHead>}
                       </TableRow>
                   </TableHeader>
                   <TableBody>
                     {paginatedEvents.map((event) => (
-                        <EventTableRow key={event.id} event={event} assetsMap={assetsMap} onDelete={handleDelete} showBeerColumns={showBeerColumns} />
+                        <EventTableRow key={event.id} event={event} assetsMap={assetsMap} usersMap={usersMap} currentUser={currentUser} onDelete={handleDelete} showBeerColumns={showBeerColumns} />
                     ))}
                   </TableBody>
               </Table>
