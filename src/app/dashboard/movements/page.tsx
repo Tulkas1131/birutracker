@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import dynamic from "next/dynamic";
 import { auth, db } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { Loader2, QrCode, ArrowRight, AlertTriangle, Route as RouteIcon, PackageCheck, ListPlus } from "lucide-react";
+import { Loader2, QrCode, ArrowRight, AlertTriangle, Route as RouteIcon, PackageCheck, ListPlus, Pencil, X } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -131,6 +131,7 @@ export default function MovementsPage() {
   const [isRouteMode, setIsRouteMode] = useState(false);
   const [selectedAssetsForRoute, setSelectedAssetsForRoute] = useState<Record<string, boolean>>({});
   const [assetsForDispatch, setAssetsForDispatch] = useState<AssetForDispatch[]>([]);
+  const [historyTab, setHistoryTab] = useState(false);
 
   const form = useForm<MovementFormData>({
     resolver: zodResolver(movementSchema),
@@ -180,12 +181,8 @@ export default function MovementsPage() {
   }, [toast]);
 
   useEffect(() => {
-    if (userRole === 'Admin') {
-      fetchData();
-    } else {
-        setIsLoading(false);
-    }
-  }, [fetchData, userRole]);
+    fetchData();
+  }, [fetchData]);
   
   const resetMovementState = () => {
     setScannedAsset(null);
@@ -501,28 +498,19 @@ export default function MovementsPage() {
 
   const assetsByCustomer = useMemo(() => {
     const grouped = new Map<string, AssetForDispatch[]>();
-    // Prime the map with 'unassigned'
-    grouped.set('unassigned', []);
+    grouped.set('unassigned', []); // Prime the map with 'unassigned'
 
     assetsForDispatch.forEach(asset => {
-      const customerId = asset.assignedCustomerId || 'unassigned';
-      if (!grouped.has(customerId)) {
-        grouped.set(customerId, []);
-      }
-      grouped.get(customerId)!.push(asset);
+        // Force all assets to be unassigned initially
+        grouped.get('unassigned')!.push({ ...asset, assignedCustomerId: undefined });
     });
     
-    // Create a sorted array from the map
-    const sortedArray = Array.from(grouped.entries()).sort((a, b) => {
-        if (a[0] === 'unassigned') return -1; // 'unassigned' always first
-        if (b[0] === 'unassigned') return 1;
-        const customerA = customers.find(c => c.id === a[0]);
-        const customerB = customers.find(c => c.id === b[0]);
-        return (customerA?.name || '').localeCompare(customerB?.name || '');
-    });
+    // Create a sorted array from the map. Now it will only contain 'unassigned'
+    // but we keep the structure in case we want to re-introduce grouping later.
+    const sortedArray = Array.from(grouped.entries());
 
     return sortedArray;
-  }, [assetsForDispatch, customers]);
+  }, [assetsForDispatch]);
 
 
   return (
@@ -561,10 +549,10 @@ export default function MovementsPage() {
                                 </div>
                                 <div className="flex gap-2">
                                   {isRouteMode && (
-                                    <Button variant="outline" onClick={handleToggleRouteMode}>Cancelar</Button>
+                                    <Button variant="ghost" onClick={handleToggleRouteMode}><X className="mr-2 h-4 w-4" />Cancelar</Button>
                                   )}
                                   <Button onClick={isRouteMode ? handleConfirmRoute : handleToggleRouteMode} disabled={isSubmitting || assetsForDispatch.length === 0}>
-                                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : isRouteMode ? <PackageCheck className="mr-2 h-4 w-4" /> : <ListPlus className="mr-2 h-4 w-4" />}
+                                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : isRouteMode ? <PackageCheck className="mr-2 h-4 w-4" /> : <Pencil className="mr-2 h-4 w-4" />}
                                     {isRouteMode ? `Confirmar Ruta (${Object.values(selectedAssetsForRoute).filter(Boolean).length})` : 'Crear Ruta'}
                                   </Button>
                                 </div>
@@ -580,11 +568,10 @@ export default function MovementsPage() {
                           ) : (
                             <div className="space-y-6">
                             {assetsByCustomer.map(([customerId, customerAssets]) => {
-                                const customer = customers.find(c => c.id === customerId);
-                                if (customerAssets.length === 0 && customerId !== 'unassigned') return null;
+                                if (customerAssets.length === 0) return null;
                                 return (
                                 <div key={customerId} className="rounded-lg border p-4">
-                                    <h3 className="font-semibold mb-2">{customer?.name || 'Sin Asignar'}</h3>
+                                    <h3 className="font-semibold mb-2">Sin Asignar</h3>
                                     <div className="space-y-2">
                                         {customerAssets.map(asset => (
                                           <div key={asset.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 p-2 rounded-md hover:bg-muted/50">
@@ -593,13 +580,20 @@ export default function MovementsPage() {
                                                     id={`asset-${asset.id}`}
                                                     checked={!!selectedAssetsForRoute[asset.id]}
                                                     onCheckedChange={() => handleAssetSelectionForRoute(asset.id)}
+                                                    disabled={!isRouteMode}
                                                 />
                                               )}
-                                              <Label htmlFor={`asset-${asset.id}`} className="flex-1 font-mono">{asset.code} <span className="text-muted-foreground">({asset.format})</span></Label>
+                                              <Label htmlFor={`asset-${asset.id}`} className="flex-1 font-mono">
+                                                  {asset.code} 
+                                                  <span className="text-muted-foreground ml-2">
+                                                      ({asset.format}{asset.variety && asset.type === 'BARRIL' ? ` - ${asset.variety}` : ''})
+                                                  </span>
+                                              </Label>
                                               <div className="w-full sm:w-60">
                                                 <Select
                                                   value={asset.assignedCustomerId}
                                                   onValueChange={(value) => handleCustomerAssignment(asset.id, value)}
+                                                  disabled={!isRouteMode}
                                                 >
                                                   <SelectTrigger><SelectValue placeholder="Asignar cliente..." /></SelectTrigger>
                                                   <SelectContent>
@@ -768,6 +762,3 @@ export default function MovementsPage() {
     </div>
   );
 }
-
-
-    
