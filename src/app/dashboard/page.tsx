@@ -11,7 +11,7 @@ import { type Asset, type Event, type Customer } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { BarChart, XAxis, YAxis, Bar, Tooltip, Legend, CartesianGrid } from "recharts";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 import { differenceInDays } from 'date-fns';
 
 const chartConfig = {
@@ -80,15 +80,26 @@ export default function DashboardPage() {
     const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
     const movimientosUltimas24h = events.filter(event => event.timestamp.toDate() > twentyFourHoursAgo).length;
 
-    const activosCriticos = assets.filter(asset => {
-        if (asset.location !== 'EN_CLIENTE') return false;
-        
-        const lastDeliveryEvent = events.find(e => e.asset_id === asset.id && e.event_type === 'ENTREGA_A_CLIENTE');
-        if (lastDeliveryEvent) {
-             return differenceInDays(now, lastDeliveryEvent.timestamp.toDate()) >= 30;
+    // Create a map of the last known event for each asset for efficiency
+    const lastEventsMap = new Map<string, Event>();
+    for (const event of events) {
+        if (!lastEventsMap.has(event.asset_id)) {
+            lastEventsMap.set(event.asset_id, event);
         }
-        return false;
-    }).length;
+    }
+    
+    const activosCriticos = assets.reduce((count, asset) => {
+        const lastEvent = lastEventsMap.get(asset.id);
+        
+        // A critical asset is one whose LAST event was a delivery, and it was more than 30 days ago.
+        if (lastEvent && lastEvent.event_type === 'ENTREGA_A_CLIENTE') {
+            const daysAtCustomer = differenceInDays(now, lastEvent.timestamp.toDate());
+            if (daysAtCustomer >= 30) {
+                return count + 1;
+            }
+        }
+        return count;
+    }, 0);
     
     const assetsByLocation = assets.reduce((acc, asset) => {
         const location = asset.location.replace('_', ' ');
@@ -107,11 +118,9 @@ export default function DashboardPage() {
     
     const locationDistribution = Object.values(assetsByLocation);
 
-    const assetsEnCliente = assets.filter(asset => asset.location === 'EN_CLIENTE');
-    const customerAssetCount = assetsEnCliente.reduce((acc, asset) => {
-        const lastEvent = events.find(e => e.asset_id === asset.id && e.event_type === 'ENTREGA_A_CLIENTE');
-        if (lastEvent) {
-           acc[lastEvent.customer_name] = (acc[lastEvent.customer_name] || 0) + 1;
+    const customerAssetCount = Array.from(lastEventsMap.values()).reduce((acc, event) => {
+        if (event.event_type === 'ENTREGA_A_CLIENTE') {
+            acc[event.customer_name] = (acc[event.customer_name] || 0) + 1;
         }
         return acc;
     }, {} as Record<string, number>);
