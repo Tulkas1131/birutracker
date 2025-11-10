@@ -167,6 +167,7 @@ function OverviewPageContent() {
   
   const [filters, setFilters] = useState({
     customer: '',
+    assetCode: '',
     assetType: 'ALL',
     eventType: 'ALL',
     criticalOnly: searchParams.get('critical') === 'true',
@@ -225,32 +226,28 @@ function OverviewPageContent() {
     let eventsToFilter = allEvents;
 
     if (filters.criticalOnly) {
-      const criticalAssetIds = new Set<string>();
-      assets.forEach(asset => {
-        if (asset.location === 'EN_CLIENTE') {
-          const lastEvent = allEvents.find(e => e.asset_id === asset.id);
-          if (lastEvent && lastEvent.event_type === 'ENTREGA_A_CLIENTE') {
-            const days = differenceInDays(new Date(), lastEvent.timestamp.toDate());
-            if (days >= 30) {
-              criticalAssetIds.add(asset.id);
-            }
-          }
+      eventsToFilter = allEvents.filter(event => {
+        const asset = assetsMap.get(event.asset_id);
+        if (!asset || asset.location !== 'EN_CLIENTE') {
+          return false;
         }
+        if (event.event_type === 'ENTREGA_A_CLIENTE') {
+          const days = differenceInDays(new Date(), event.timestamp.toDate());
+          return days >= 30;
+        }
+        return false;
       });
-      
-      eventsToFilter = allEvents.filter(event => 
-          event.event_type === 'ENTREGA_A_CLIENTE' && criticalAssetIds.has(event.asset_id)
-      );
     }
     
     return eventsToFilter.filter(event => {
         const asset = assetsMap.get(event.asset_id);
         const customerMatch = event.customer_name.toLowerCase().includes(filters.customer.toLowerCase());
+        const assetCodeMatch = event.asset_code.toLowerCase().includes(filters.assetCode.toLowerCase());
         const assetTypeMatch = filters.assetType === 'ALL' || (asset?.type === filters.assetType);
         const eventTypeMatch = filters.eventType === 'ALL' || event.event_type === filters.eventType;
-        return customerMatch && assetTypeMatch && eventTypeMatch;
+        return customerMatch && assetCodeMatch && assetTypeMatch && eventTypeMatch;
     });
-  }, [allEvents, assets, filters, assetsMap]);
+  }, [allEvents, filters, assetsMap]);
 
   const totalPages = Math.ceil(filteredEvents.length / ITEMS_PER_PAGE);
   const paginatedEvents = useMemo(() => {
@@ -286,11 +283,17 @@ function OverviewPageContent() {
       />
       <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
         <Card>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 items-center gap-4 p-4 md:p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 items-start gap-4 p-4 md:p-6">
             <Input
               placeholder="Buscar por cliente..."
               value={filters.customer}
               onChange={(e) => handleFilterChange('customer', e.target.value)}
+              className="w-full"
+            />
+            <Input
+              placeholder="Buscar por código..."
+              value={filters.assetCode}
+              onChange={(e) => handleFilterChange('assetCode', e.target.value)}
               className="w-full"
             />
             <Select value={filters.assetType} onValueChange={(value) => handleFilterChange('assetType', value)}>
@@ -318,7 +321,7 @@ function OverviewPageContent() {
                     <SelectItem value="DEVOLUCION">Devolución (Lleno)</SelectItem>
                 </SelectContent>
             </Select>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 justify-self-start xl:justify-self-end">
               <Switch
                 id="critical-only"
                 checked={filters.criticalOnly}
@@ -336,7 +339,7 @@ function OverviewPageContent() {
                 <EmptyState 
                     icon={<SearchX className="h-16 w-16" />}
                     title="No se encontraron movimientos"
-                    description="Prueba a cambiar los filtros o busca por otro cliente para ver el historial de eventos."
+                    description="Prueba a cambiar los filtros o busca por otro criterio para ver el historial de eventos."
                 />
             ) : isMobile ? (
                 <div className="space-y-4 p-4">
