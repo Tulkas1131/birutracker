@@ -7,7 +7,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import dynamic from "next/dynamic";
 import { auth, db } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { Loader2, QrCode, ArrowRight, AlertTriangle, Route as RouteIcon, PackageCheck, ListPlus, Pencil, X } from "lucide-react";
+import { Loader2, QrCode, ArrowRight, AlertTriangle, Route as RouteIcon, PackageCheck, ListPlus, Pencil, X, Calendar as CalendarIcon } from "lucide-react";
+import { differenceInDays, format } from 'date-fns';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ import { Separator } from "@/components/ui/separator";
 import { useUserRole } from "@/hooks/use-user-role";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState } from "@/components/empty-state";
+import { cn } from "@/lib/utils";
 
 const QrScanner = dynamic(() => import('@/components/qr-scanner').then(mod => mod.QrScanner), {
   ssr: false,
@@ -116,6 +118,7 @@ export default function MovementsPage() {
   
   const [assets, setAssets] = useState<Asset[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
   const [lastEvents, setLastEvents] = useState<Map<string, Event>>(new Map());
 
   const [isLoading, setIsLoading] = useState(true);
@@ -131,7 +134,6 @@ export default function MovementsPage() {
   const [isRouteMode, setIsRouteMode] = useState(false);
   const [selectedAssetsForRoute, setSelectedAssetsForRoute] = useState<Record<string, boolean>>({});
   const [assetsForDispatch, setAssetsForDispatch] = useState<AssetForDispatch[]>([]);
-  const [historyTab, setHistoryTab] = useState(false);
 
   const form = useForm<MovementFormData>({
     resolver: zodResolver(movementSchema),
@@ -156,6 +158,8 @@ export default function MovementsPage() {
       const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
       const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
       const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
+      
+      setEvents(eventsData);
 
       const lastEventsMap = new Map<string, Event>();
       eventsData.forEach(event => {
@@ -183,6 +187,21 @@ export default function MovementsPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const fillDatesMap = useMemo(() => {
+    const map = new Map<string, Date>();
+    const fillEvents = events.filter(e => e.event_type === 'LLENADO_EN_PLANTA');
+    for (const asset of assetsForDispatch) {
+        const lastFillEvent = fillEvents
+            .filter(e => e.asset_id === asset.id)
+            .sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis())[0];
+
+        if (lastFillEvent) {
+            map.set(asset.id, lastFillEvent.timestamp.toDate());
+        }
+    }
+    return map;
+  }, [events, assetsForDispatch]);
   
   const resetMovementState = () => {
     setScannedAsset(null);
@@ -496,21 +515,24 @@ export default function MovementsPage() {
       }
   };
 
-  const assetsByCustomer = useMemo(() => {
-    const grouped = new Map<string, AssetForDispatch[]>();
-    grouped.set('unassigned', []); // Prime the map with 'unassigned'
+  const FillDateInfo = ({ fillDate }: { fillDate: Date | undefined }) => {
+    if (!fillDate) return null;
 
-    assetsForDispatch.forEach(asset => {
-        // Force all assets to be unassigned initially
-        grouped.get('unassigned')!.push({ ...asset, assignedCustomerId: undefined });
-    });
-    
-    // Create a sorted array from the map. Now it will only contain 'unassigned'
-    // but we keep the structure in case we want to re-introduce grouping later.
-    const sortedArray = Array.from(grouped.entries());
+    const daysOld = differenceInDays(new Date(), fillDate);
+    let colorClass = 'text-muted-foreground';
+    if (daysOld >= 14) {
+      colorClass = 'text-destructive';
+    } else if (daysOld >= 7) {
+      colorClass = 'text-amber-600 dark:text-amber-500';
+    }
 
-    return sortedArray;
-  }, [assetsForDispatch]);
+    return (
+      <div className={cn("flex items-center gap-1.5 text-xs mt-1", colorClass)}>
+        <CalendarIcon className="h-3 w-3" />
+        <span>Llenado: {format(fillDate, 'dd/MM/yyyy')}</span>
+      </div>
+    );
+  };
 
 
   return (
@@ -566,14 +588,11 @@ export default function MovementsPage() {
                                 description="No se encontraron activos 'En Planta' y 'Llenos' para despachar. ¡Llena algunos barriles para empezar!"
                             />
                           ) : (
-                            <div className="space-y-6">
-                            {assetsByCustomer.map(([customerId, customerAssets]) => {
-                                if (customerAssets.length === 0) return null;
-                                return (
-                                <div key={customerId} className="rounded-lg border p-4">
+                            <div className="space-y-4">
+                                <div key="unassigned" className="rounded-lg border p-4">
                                     <h3 className="font-semibold mb-2">Sin Asignar</h3>
                                     <div className="space-y-2">
-                                        {customerAssets.map(asset => (
+                                        {assetsForDispatch.map(asset => (
                                           <div key={asset.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 p-2 rounded-md hover:bg-muted/50">
                                               {isRouteMode && (
                                                 <Checkbox 
@@ -584,10 +603,15 @@ export default function MovementsPage() {
                                                 />
                                               )}
                                               <Label htmlFor={`asset-${asset.id}`} className="flex-1 font-mono">
-                                                  {asset.code} 
-                                                  <span className="text-muted-foreground ml-2">
-                                                      ({asset.format}{asset.variety && asset.type === 'BARRIL' ? ` - ${asset.variety}` : ''})
-                                                  </span>
+                                                  <div className="flex flex-col">
+                                                    <div>
+                                                      {asset.code} 
+                                                      <span className="text-muted-foreground ml-2">
+                                                          ({asset.format}{asset.variety && asset.type === 'BARRIL' ? ` - ${asset.variety}` : ''})
+                                                      </span>
+                                                    </div>
+                                                    <FillDateInfo fillDate={fillDatesMap.get(asset.id)} />
+                                                  </div>
                                               </Label>
                                               <div className="w-full sm:w-60">
                                                 <Select
@@ -605,8 +629,6 @@ export default function MovementsPage() {
                                         ))}
                                     </div>
                                 </div>
-                                )
-                            })}
                             </div>
                           )}
                         </CardContent>
@@ -762,3 +784,4 @@ export default function MovementsPage() {
     </div>
   );
 }
+
