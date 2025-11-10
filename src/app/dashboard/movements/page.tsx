@@ -28,6 +28,7 @@ import { useUserRole } from "@/hooks/use-user-role";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState } from "@/components/empty-state";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const QrScanner = dynamic(() => import('@/components/qr-scanner').then(mod => mod.QrScanner), {
   ssr: false,
@@ -173,7 +174,8 @@ export default function MovementsPage() {
       setAssets(assetsData);
       setCustomers(customersData);
       setLastEvents(lastEventsMap);
-      setAssetsForDispatch(readyAssets);
+      setAssetsForDispatch(readyAssets.map(asset => ({ ...asset, assignedCustomerId: undefined })));
+
 
     } catch (error: any) {
       console.error("Error fetching data for movements page: ", error);
@@ -187,6 +189,9 @@ export default function MovementsPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const barrelsForDispatch = useMemo(() => assetsForDispatch.filter(a => a.type === 'BARRIL'), [assetsForDispatch]);
+  const co2ForDispatch = useMemo(() => assetsForDispatch.filter(a => a.type === 'CO2'), [assetsForDispatch]);
 
   const fillDatesMap = useMemo(() => {
     const map = new Map<string, Date>();
@@ -533,6 +538,57 @@ export default function MovementsPage() {
       </div>
     );
   };
+  
+  const AssetsForDispatchList = ({ assetsList }: { assetsList: AssetForDispatch[] }) => (
+    <div className="space-y-4">
+        {assetsList.length === 0 ? (
+            <div className="py-10 text-center text-muted-foreground">
+                No hay activos de este tipo listos para despachar.
+            </div>
+        ) : (
+            <div key="unassigned" className="rounded-lg border p-4">
+                <h3 className="font-semibold mb-2">Sin Asignar</h3>
+                <div className="space-y-2">
+                    {assetsList.map(asset => (
+                        <div key={asset.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 p-2 rounded-md hover:bg-muted/50">
+                            {isRouteMode && (
+                                <Checkbox 
+                                    id={`asset-${asset.id}`}
+                                    checked={!!selectedAssetsForRoute[asset.id]}
+                                    onCheckedChange={() => handleAssetSelectionForRoute(asset.id)}
+                                    disabled={!isRouteMode}
+                                />
+                            )}
+                            <Label htmlFor={`asset-${asset.id}`} className="flex-1 font-mono">
+                                <div className="flex flex-col">
+                                    <div>
+                                        {asset.code} 
+                                        <span className="text-muted-foreground ml-2">
+                                            ({asset.format}{asset.variety && asset.type === 'BARRIL' ? ` - ${asset.variety}` : ''})
+                                        </span>
+                                    </div>
+                                    <FillDateInfo fillDate={fillDatesMap.get(asset.id)} />
+                                </div>
+                            </Label>
+                            <div className="w-full sm:w-60">
+                                <Select
+                                    value={asset.assignedCustomerId}
+                                    onValueChange={(value) => handleCustomerAssignment(asset.id, value)}
+                                    disabled={!isRouteMode}
+                                >
+                                    <SelectTrigger><SelectValue placeholder="Asignar cliente..." /></SelectTrigger>
+                                    <SelectContent>
+                                        {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )}
+    </div>
+  );
 
 
   return (
@@ -588,48 +644,18 @@ export default function MovementsPage() {
                                 description="No se encontraron activos 'En Planta' y 'Llenos' para despachar. ¡Llena algunos barriles para empezar!"
                             />
                           ) : (
-                            <div className="space-y-4">
-                                <div key="unassigned" className="rounded-lg border p-4">
-                                    <h3 className="font-semibold mb-2">Sin Asignar</h3>
-                                    <div className="space-y-2">
-                                        {assetsForDispatch.map(asset => (
-                                          <div key={asset.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 p-2 rounded-md hover:bg-muted/50">
-                                              {isRouteMode && (
-                                                <Checkbox 
-                                                    id={`asset-${asset.id}`}
-                                                    checked={!!selectedAssetsForRoute[asset.id]}
-                                                    onCheckedChange={() => handleAssetSelectionForRoute(asset.id)}
-                                                    disabled={!isRouteMode}
-                                                />
-                                              )}
-                                              <Label htmlFor={`asset-${asset.id}`} className="flex-1 font-mono">
-                                                  <div className="flex flex-col">
-                                                    <div>
-                                                      {asset.code} 
-                                                      <span className="text-muted-foreground ml-2">
-                                                          ({asset.format}{asset.variety && asset.type === 'BARRIL' ? ` - ${asset.variety}` : ''})
-                                                      </span>
-                                                    </div>
-                                                    <FillDateInfo fillDate={fillDatesMap.get(asset.id)} />
-                                                  </div>
-                                              </Label>
-                                              <div className="w-full sm:w-60">
-                                                <Select
-                                                  value={asset.assignedCustomerId}
-                                                  onValueChange={(value) => handleCustomerAssignment(asset.id, value)}
-                                                  disabled={!isRouteMode}
-                                                >
-                                                  <SelectTrigger><SelectValue placeholder="Asignar cliente..." /></SelectTrigger>
-                                                  <SelectContent>
-                                                    {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                                                  </SelectContent>
-                                                </Select>
-                                              </div>
-                                          </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
+                            <Tabs defaultValue="barrels">
+                                <TabsList className="grid w-full grid-cols-2">
+                                    <TabsTrigger value="barrels">Barriles ({barrelsForDispatch.length})</TabsTrigger>
+                                    <TabsTrigger value="co2">CO2 ({co2ForDispatch.length})</TabsTrigger>
+                                </TabsList>
+                                <TabsContent value="barrels" className="mt-4">
+                                    <AssetsForDispatchList assetsList={barrelsForDispatch} />
+                                </TabsContent>
+                                <TabsContent value="co2" className="mt-4">
+                                    <AssetsForDispatchList assetsList={co2ForDispatch} />
+                                </TabsContent>
+                            </Tabs>
                           )}
                         </CardContent>
                     </Card>
@@ -785,3 +811,5 @@ export default function MovementsPage() {
   );
 }
 
+
+    
