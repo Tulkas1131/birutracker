@@ -88,9 +88,14 @@ export default function DashboardPage() {
     }
     
     const activosCriticos = assets.reduce((count, asset) => {
+        // An asset is ONLY critical if it's currently at a customer's location.
+        if (asset.location !== 'EN_CLIENTE') {
+            return count;
+        }
+
         const lastEvent = lastEventsMap.get(asset.id);
         
-        // A critical asset is one whose LAST event was a delivery, and it was more than 30 days ago.
+        // The last event must be a delivery and must be over 30 days ago.
         if (lastEvent && lastEvent.event_type === 'ENTREGA_A_CLIENTE') {
             const daysAtCustomer = differenceInDays(now, lastEvent.timestamp.toDate());
             if (daysAtCustomer >= 30) {
