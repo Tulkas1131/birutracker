@@ -49,6 +49,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Logo } from "@/components/logo";
 import { EmptyState } from "@/components/empty-state";
 import { cn } from "@/lib/utils";
+import { useAuthState } from "react-firebase-hooks/auth";
+import { auth } from "@/lib/firebase";
 
 const QRCode = dynamic(() => import('qrcode.react'), {
   loading: () => <div className="flex h-[128px] w-[128px] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>,
@@ -94,6 +96,7 @@ export default function AssetsPage() {
   const { toast } = useToast();
   const userRole = useUserRole();
   const isMobile = useIsMobile();
+  const [user] = useAuthState(auth());
   
   useEffect(() => {
     const fetchData = async () => {
@@ -233,49 +236,82 @@ export default function AssetsPage() {
   };
   
   const handleFormSubmit = async (data: Omit<Asset, 'id' | 'code'>) => {
-    const { doc, updateDoc, addDoc, collection } = await import("firebase/firestore/lite");
+    const { doc, runTransaction, collection, Timestamp } = await import("firebase/firestore/lite");
     const firestore = db();
+
+    if (!user) {
+        toast({ title: "Error", description: "No se ha podido identificar al usuario.", variant: "destructive"});
+        return;
+    }
+
     try {
-      if (selectedAsset) {
-        // Editing existing asset
-        const assetDataToUpdate: Partial<Asset> = {
-          state: data.state,
-          location: data.location,
-          variety: data.state === 'LLENO' ? data.variety || "" : "",
-          valveType: data.state === 'LLENO' ? data.valveType || "" : "",
-        };
-        // Only allow changing format and type if asset is in plant
-        if(selectedAsset.location === 'EN_PLANTA') {
-            assetDataToUpdate.format = data.format;
-            assetDataToUpdate.type = data.type;
+      await runTransaction(firestore, async (transaction) => {
+        if (selectedAsset) {
+            // --- Editing existing asset ---
+            const assetRef = doc(firestore, "assets", selectedAsset.id);
+            const assetDataToUpdate: Partial<Asset> = {
+                state: data.state,
+                location: data.location,
+                variety: data.state === 'LLENO' ? data.variety || "" : "",
+                valveType: data.state === 'LLENO' ? data.valveType || "" : "",
+            };
+
+            // Only allow changing format and type if asset is in plant
+            if (selectedAsset.location === 'EN_PLANTA') {
+                assetDataToUpdate.format = data.format;
+                assetDataToUpdate.type = data.type;
+            } else if (data.format !== selectedAsset.format || data.type !== selectedAsset.type) {
+                 toast({
+                    title: "Edición Limitada",
+                    description: "El tipo y formato solo se pueden editar si el activo está EN PLANTA.",
+                    variant: "default",
+                    duration: 6000,
+                });
+            }
+
+            // --- Business Logic for Event Creation ---
+            // A new fill event is only created if the asset goes from VACIO to LLENO.
+            // Any other state change (e.g., from EN_CLIENTE to EN_PLANTA) is a correction
+            // and should NOT create a new fill event, preserving the original fill date.
+            if (data.state === 'LLENO' && selectedAsset.state === 'VACIO') {
+                const newEventRef = doc(collection(firestore, "events"));
+                transaction.set(newEventRef, {
+                    asset_id: selectedAsset.id,
+                    asset_code: selectedAsset.code,
+                    customer_id: "INTERNAL",
+                    customer_name: "Planta",
+                    event_type: 'LLENADO_EN_PLANTA',
+                    timestamp: Timestamp.now(),
+                    user_id: user.uid,
+                    variety: data.variety || "",
+                    valveType: data.valveType || "",
+                });
+            }
+
+            transaction.update(assetRef, assetDataToUpdate);
+
+            // Update local state for immediate UI feedback
+            setAssets(prev => prev.map(asset => asset.id === selectedAsset.id ? { ...asset, ...assetDataToUpdate } : asset));
+            toast({ title: "Activo Actualizado", description: "Los cambios han sido guardados." });
+
         } else {
-            toast({
-                title: "Edición Limitada",
-                description: "El tipo y formato solo se pueden editar si el activo está EN PLANTA.",
-                variant: "default",
-                duration: 6000,
-            })
+            // --- Creating new asset ---
+            const { prefix, nextNumber } = await generateNextCode(data.type);
+            const newCode = `${prefix}-${String(nextNumber).padStart(3, '0')}`;
+            const newAssetData = { ...data, code: newCode, state: 'VACIO' as const, location: 'EN_PLANTA' as const, variety: "", valveType: "" };
+            
+            const newAssetRef = doc(collection(firestore, "assets"));
+            transaction.set(newAssetRef, newAssetData);
+            
+            // Update local state
+            setAssets(prev => [...prev, { id: newAssetRef.id, ...newAssetData }]);
+            toast({ title: "Activo Creado", description: `El nuevo activo ha sido añadido con el código ${newCode}.` });
         }
-        await updateDoc(doc(firestore, "assets", selectedAsset.id), assetDataToUpdate);
-        setAssets(prev => prev.map(asset => asset.id === selectedAsset.id ? { ...asset, ...assetDataToUpdate } : asset));
-        toast({
-          title: "Activo Actualizado",
-          description: "Los cambios han sido guardados.",
-        });
-      } else {
-        // Creating new asset
-        const { prefix, nextNumber } = await generateNextCode(data.type);
-        const newCode = `${prefix}-${String(nextNumber).padStart(3, '0')}`;
-        const newAssetData = { ...data, code: newCode, state: 'VACIO' as const, location: 'EN_PLANTA' as const, variety: "", valveType: "" };
-        const newDocRef = await addDoc(collection(firestore, "assets"), newAssetData);
-        setAssets(prev => [...prev, { id: newDocRef.id, ...newAssetData }]);
-        toast({
-          title: "Activo Creado",
-          description: `El nuevo activo ha sido añadido con el código ${newCode}.`,
-        });
-      }
+      });
+      
       setFormOpen(false);
       setSelectedAsset(undefined);
+
     } catch (error: any) {
       console.error("Error guardando activo: ", error);
       logAppEvent({
@@ -286,7 +322,7 @@ export default function AssetsPage() {
       });
       toast({
         title: "Error",
-        description: "No se pudieron guardar los datos.",
+        description: "No se pudieron guardar los datos en una transacción.",
         variant: "destructive",
       });
     }
