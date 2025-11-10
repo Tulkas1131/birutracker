@@ -97,67 +97,61 @@ export default function CustomersPage() {
     fetchData();
   }, [toast]);
   
-  const customerAssetCounts = useMemo(() => {
+  const { customerAssetCounts, customerAssetHistory } = useMemo(() => {
     const counts = new Map<string, CustomerAssetCounts>();
-    if (!assets.length || !events.length) {
-      return counts;
-    }
-
-    const assetsInClient = assets.filter(asset => asset.location === 'EN_CLIENTE');
-    const lastDeliveryEvents = new Map<string, Event>();
-
-    // Find the last delivery event for each asset
-    for (const event of events) {
-        if (event.event_type === 'ENTREGA_A_CLIENTE' && !lastDeliveryEvents.has(event.asset_id)) {
-            lastDeliveryEvents.set(event.asset_id, event);
-        }
-    }
-    
-    for (const asset of assetsInClient) {
-        const lastDelivery = lastDeliveryEvents.get(asset.id);
-
-        if (lastDelivery) {
-            const customerId = lastDelivery.customer_id;
-            if (!counts.has(customerId)) {
-                counts.set(customerId, { total: 0 });
-            }
-
-            const customerCounts = counts.get(customerId)!;
-            const formatKey = asset.type === 'CO2' ? `${asset.format} (CO2)` : asset.format;
-
-            customerCounts[formatKey] = (customerCounts[formatKey] || 0) + 1;
-            customerCounts.total += 1;
-        }
-    }
-
-    return counts;
-  }, [assets, events]);
-  
-  const customerAssetHistory = useMemo(() => {
     const history = new Map<string, number>();
     const deliveredAssetsByCustomer = new Map<string, Set<string>>();
 
-    if (!events.length) {
-        return history;
+    if (!assets.length || !events.length) {
+      return { customerAssetCounts: counts, customerAssetHistory: history };
     }
-
-    // Iterate through all events to build the history
+    
+    // Create a map of last known events for each asset for efficiency
+    const lastEventsMap = new Map<string, Event>();
     for (const event of events) {
-        if (event.event_type === 'ENTREGA_A_CLIENTE' && event.customer_id) {
-            if (!deliveredAssetsByCustomer.has(event.customer_id)) {
-                deliveredAssetsByCustomer.set(event.customer_id, new Set());
-            }
-            deliveredAssetsByCustomer.get(event.customer_id)!.add(event.asset_id);
-        }
+      if (!lastEventsMap.has(event.asset_id)) {
+        lastEventsMap.set(event.asset_id, event);
+      }
     }
 
-    // Count the unique assets for each customer
+    // Calculate current assets in possession
+    for (const asset of assets) {
+      if (asset.location === 'EN_CLIENTE') {
+        const lastEvent = lastEventsMap.get(asset.id);
+        
+        // Ensure the last event was a delivery, not a collection that failed to update the asset location
+        if (lastEvent && lastEvent.event_type === 'ENTREGA_A_CLIENTE') {
+          const customerId = lastEvent.customer_id;
+          
+          if (!counts.has(customerId)) {
+            counts.set(customerId, { total: 0 });
+          }
+          
+          const customerCounts = counts.get(customerId)!;
+          const formatKey = asset.type === 'CO2' ? `${asset.format} (CO2)` : asset.format;
+
+          customerCounts[formatKey] = (customerCounts[formatKey] || 0) + 1;
+          customerCounts.total += 1;
+        }
+      }
+    }
+    
+    // Calculate historical asset deliveries
+    for (const event of events) {
+      if (event.event_type === 'ENTREGA_A_CLIENTE' && event.customer_id) {
+        if (!deliveredAssetsByCustomer.has(event.customer_id)) {
+          deliveredAssetsByCustomer.set(event.customer_id, new Set());
+        }
+        deliveredAssetsByCustomer.get(event.customer_id)!.add(event.asset_id);
+      }
+    }
+
     for (const [customerId, assetSet] of deliveredAssetsByCustomer.entries()) {
         history.set(customerId, assetSet.size);
     }
-
-    return history;
-  }, [events]);
+    
+    return { customerAssetCounts: counts, customerAssetHistory: history };
+  }, [assets, events]);
 
   const totalPages = Math.ceil(customers.length / ITEMS_PER_PAGE);
   const paginatedCustomers = useMemo(() => {
@@ -481,3 +475,5 @@ export default function CustomersPage() {
     </div>
   );
 }
+
+    
