@@ -1,3 +1,4 @@
+
 rules_version = '2';
 
 service cloud.firestore {
@@ -33,6 +34,14 @@ service cloud.firestore {
     match /{collection}/{docId} where collection in ['assets', 'customers', 'events'] {
       allow read, create, update: if isSignedIn();
       allow delete: if isAdmin();
+    }
+
+    // Routes:
+    // - Admins can read, create, and update routes.
+    // - No one can delete routes for now to preserve history.
+    match /routes/{routeId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if false;
     }
   }
 }

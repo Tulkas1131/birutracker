@@ -15,6 +15,7 @@ import {
   Truck,
   Users,
   ShieldAlert,
+  Route,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -52,6 +53,7 @@ const navItems = [
     { href: "/dashboard/movements", icon: Truck, label: "Registrar" },
     { href: "/dashboard/customers", icon: Users, label: "Clientes" },
     { href: "/dashboard/overview", icon: History, label: "Historial" },
+    { href: "/dashboard/routes", icon: Route, label: "Rutas" },
 ];
 
 const adminNavItems = [
@@ -63,11 +65,14 @@ function BottomNavBar() {
     const isMobile = useIsMobile();
 
     if (!isMobile) return null;
+    
+    // Filter out routes for mobile nav if needed
+    const mobileNavItems = navItems.filter(item => item.href !== '/dashboard/routes');
 
     return (
         <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur-sm md:hidden">
             <div className="grid h-16 grid-cols-5 items-center">
-                {navItems.map((item) => {
+                {mobileNavItems.map((item) => {
                     const isActive = pathname === item.href;
                     if (item.href === "/dashboard/movements") {
                         return (
@@ -116,6 +121,12 @@ function MobileUserMenu({ user, onSignOut }: { user: UserData, onSignOut: () => 
                     <Separator />
                      {user.role === 'Admin' && (
                         <>
+                            <Link href="/dashboard/routes" className={cn(
+                                "flex items-center gap-2 rounded-md p-2 text-sm font-medium hover:bg-accent"
+                            )}>
+                                <Route />
+                                <span>Hojas de Ruta</span>
+                            </Link>
                             <Link href="/dashboard/logs" className={cn(
                                 "flex items-center gap-2 rounded-md p-2 text-sm font-medium hover:bg-accent"
                             )}>

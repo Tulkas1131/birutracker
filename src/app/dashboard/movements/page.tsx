@@ -7,9 +7,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import dynamic from "next/dynamic";
 import { auth, db } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { Loader2, QrCode, ArrowRight, AlertTriangle } from "lucide-react";
+import { Loader2, QrCode, ArrowRight, AlertTriangle, Route as RouteIcon, PackageCheck, ListPlus } from "lucide-react";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -22,6 +22,10 @@ import { logAppEvent } from "@/lib/logging";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Separator } from "@/components/ui/separator";
+import { useUserRole } from "@/hooks/use-user-role";
+import { Checkbox } from "@/components/ui/checkbox";
+import { EmptyState } from "@/components/empty-state";
 
 const QrScanner = dynamic(() => import('@/components/qr-scanner').then(mod => mod.QrScanner), {
   ssr: false,
@@ -103,10 +107,13 @@ const getEventTypeTranslation = (eventType: MovementEventType): string => {
     return translations[eventType] || eventType;
 };
 
+type AssetForDispatch = Asset & { assignedCustomerId?: string };
 
 export default function MovementsPage() {
   const { toast } = useToast();
   const [user] = useAuthState(auth());
+  const userRole = useUserRole();
+  
   const [assets, setAssets] = useState<Asset[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [lastEvents, setLastEvents] = useState<Map<string, Event>>(new Map());
@@ -119,6 +126,11 @@ export default function MovementsPage() {
   const [actionLogic, setActionLogic] = useState<ActionLogic | null>(null);
   const [isManualOverride, setIsManualOverride] = useState(false);
   const [showCorrectionDialog, setShowCorrectionDialog] = useState(false);
+  
+  // State for Route Creation
+  const [isRouteMode, setIsRouteMode] = useState(false);
+  const [selectedAssetsForRoute, setSelectedAssetsForRoute] = useState<Record<string, boolean>>({});
+  const [assetsForDispatch, setAssetsForDispatch] = useState<AssetForDispatch[]>([]);
 
   const form = useForm<MovementFormData>({
     resolver: zodResolver(movementSchema),
@@ -144,17 +156,24 @@ export default function MovementsPage() {
       const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
       const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
 
-      // A map of the last known event for every asset
       const lastEventsMap = new Map<string, Event>();
       eventsData.forEach(event => {
         if (!lastEventsMap.has(event.asset_id)) {
             lastEventsMap.set(event.asset_id, event);
         }
       });
+      
+      const readyAssets = assetsData
+        .filter(asset => asset.location === 'EN_PLANTA' && asset.state === 'LLENO')
+        .map(asset => {
+            const lastDeliveryEvent = eventsData.find(e => e.asset_id === asset.id && e.event_type === 'ENTREGA_A_CLIENTE');
+            return { ...asset, assignedCustomerId: lastDeliveryEvent?.customer_id };
+        });
 
       setAssets(assetsData);
       setCustomers(customersData);
       setLastEvents(lastEventsMap);
+      setAssetsForDispatch(readyAssets);
 
     } catch (error: any) {
       console.error("Error fetching data for movements page: ", error);
@@ -166,8 +185,12 @@ export default function MovementsPage() {
   }, [toast]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (userRole === 'Admin') {
+      fetchData();
+    } else {
+        setIsLoading(false);
+    }
+  }, [fetchData, userRole]);
   
   const resetMovementState = () => {
     setScannedAsset(null);
@@ -180,18 +203,21 @@ export default function MovementsPage() {
   const handleScanSuccess = async (decodedText: string) => {
     setScannerOpen(false);
     
-    // Simple validation for Firestore-like ID
     if (!/^[a-zA-Z0-9]{20}$/.test(decodedText)) {
         toast({ title: "Código QR Inválido", description: "El QR no contiene un identificador válido.", variant: "destructive" });
         return;
     }
     
-    const asset = assets.find(a => a.id === decodedText);
+    const { getDoc, doc } = await import("firebase/firestore/lite");
+    const firestore = db();
+    const assetRef = doc(firestore, "assets", decodedText);
+    const assetSnap = await getDoc(assetRef);
 
-    if (!asset) {
+    if (!assetSnap.exists()) {
         toast({ title: "Activo No Encontrado", description: "El activo escaneado no existe.", variant: "destructive" });
         return;
     }
+    const asset = { id: assetSnap.id, ...assetSnap.data() } as Asset;
 
     let logic: ActionLogic | undefined | null = JSON.parse(JSON.stringify(stateLogic[asset.location]?.[asset.state]));
 
@@ -206,7 +232,6 @@ export default function MovementsPage() {
         setIsManualOverride(true); 
     }
     
-    // --- CO2 Specific Logic ---
     if (asset.type === 'CO2') {
         logic.manualOverrides = logic.manualOverrides.filter(o => o !== 'SALIDA_VACIO');
         logic.requiresVariety = false;
@@ -228,17 +253,15 @@ export default function MovementsPage() {
     form.setValue('asset_id', asset.id);
     form.setValue('event_type', logic.primary);
 
-    // Autofill customer if logic dictates
     if (logic.autoFillsCustomer) {
         const eventToUse: Event | undefined = lastEvents.get(asset.id);
-        
         if (eventToUse) {
             form.setValue('customer_id', eventToUse.customer_id);
         }
     } else if (!logic.requiresCustomerSelection) {
-        form.setValue('customer_id', 'INTERNAL'); // default for internal ops
+        form.setValue('customer_id', 'INTERNAL'); 
     } else {
-        form.resetField('customer_id'); // Clear customer if selection is required
+        form.resetField('customer_id'); 
     }
   };
 
@@ -383,27 +406,210 @@ export default function MovementsPage() {
     return customerEvents.includes(currentEventType);
   }, [currentEventType]);
 
+  // --- Route Creation Logic ---
+  const handleToggleRouteMode = () => {
+    if (isRouteMode) {
+      setSelectedAssetsForRoute({});
+    }
+    setIsRouteMode(!isRouteMode);
+  };
+
+  const handleAssetSelectionForRoute = (assetId: string) => {
+    setSelectedAssetsForRoute(prev => ({ ...prev, [assetId]: !prev[assetId] }));
+  };
+  
+  const handleCustomerAssignment = (assetId: string, customerId: string) => {
+    setAssetsForDispatch(prev => prev.map(a => a.id === assetId ? { ...a, assignedCustomerId: customerId } : a));
+  };
+
+  const handleConfirmRoute = async () => {
+      setIsSubmitting(true);
+      const { Timestamp, runTransaction, collection, doc } = await import("firebase/firestore/lite");
+      const firestore = db();
+      if (!user) return;
+
+      const selectedAssetIds = Object.keys(selectedAssetsForRoute).filter(id => selectedAssetsForRoute[id]);
+      if (selectedAssetIds.length === 0) {
+          toast({ title: "No hay activos seleccionados", description: "Selecciona al menos un activo para crear una ruta.", variant: "destructive" });
+          setIsSubmitting(false);
+          return;
+      }
+      
+      const assetsInRoute = assetsForDispatch.filter(a => selectedAssetIds.includes(a.id));
+      const routeStops = new Map<string, { customerName: string; assets: any[] }>();
+
+      for (const asset of assetsInRoute) {
+          const customerId = asset.assignedCustomerId;
+          if (!customerId) {
+              toast({ title: "Cliente no asignado", description: `El activo ${asset.code} no tiene un cliente asignado.`, variant: "destructive" });
+              setIsSubmitting(false);
+              return;
+          }
+          const customer = customers.find(c => c.id === customerId);
+          if (!customer) continue;
+
+          if (!routeStops.has(customerId)) {
+              routeStops.set(customerId, { customerName: customer.name, assets: [] });
+          }
+          routeStops.get(customerId)!.assets.push({ id: asset.id, code: asset.code, format: asset.format });
+      }
+
+      try {
+          await runTransaction(firestore, async (transaction) => {
+              // 1. Create the Route document
+              const newRouteRef = doc(collection(firestore, "routes"));
+              transaction.set(newRouteRef, {
+                  name: `Ruta - ${new Date().toLocaleString()}`,
+                  createdAt: Timestamp.now(),
+                  createdBy: user.uid,
+                  responsible: '', // Field for future use
+                  status: 'PENDIENTE',
+                  stops: Array.from(routeStops.entries()).map(([customerId, data]) => ({
+                      customerId,
+                      customerName: data.customerName,
+                      assets: data.assets,
+                  })),
+              });
+
+              // 2. Update assets and create events
+              for (const asset of assetsInRoute) {
+                  const assetRef = doc(firestore, "assets", asset.id);
+                  transaction.update(assetRef, { location: 'EN_REPARTO' });
+
+                  const newEventRef = doc(collection(firestore, "events"));
+                  transaction.set(newEventRef, {
+                      asset_id: asset.id,
+                      asset_code: asset.code,
+                      customer_id: asset.assignedCustomerId,
+                      customer_name: customers.find(c => c.id === asset.assignedCustomerId)?.name || 'N/A',
+                      event_type: 'SALIDA_A_REPARTO',
+                      timestamp: Timestamp.now(),
+                      user_id: user.uid,
+                      variety: asset.variety || "",
+                      valveType: asset.valveType || "",
+                  });
+              }
+          });
+          toast({ title: "Ruta Creada Exitosamente", description: `${assetsInRoute.length} activos han sido despachados.` });
+          await fetchData();
+          setIsRouteMode(false);
+          setSelectedAssetsForRoute({});
+
+      } catch (e: any) {
+          console.error("Error al crear la ruta: ", e);
+          logAppEvent({ level: 'ERROR', message: 'Failed to create route', component: 'MovementsPage-RouteCreation', stack: e.stack });
+          toast({ title: "Error", description: "No se pudo crear la hoja de ruta.", variant: "destructive" });
+      } finally {
+          setIsSubmitting(false);
+      }
+  };
+
+  const assetsByCustomer = useMemo(() => {
+    const grouped = new Map<string, AssetForDispatch[]>();
+    assetsForDispatch.forEach(asset => {
+      const customerId = asset.assignedCustomerId || 'unassigned';
+      if (!grouped.has(customerId)) {
+        grouped.set(customerId, []);
+      }
+      grouped.get(customerId)!.push(asset);
+    });
+    return Array.from(grouped.entries());
+  }, [assetsForDispatch]);
+
+
   return (
     <div className="flex flex-1 flex-col">
        <Dialog open={isScannerOpen} onOpenChange={setScannerOpen}>
-        <PageHeader title="Registrar Movimiento" description="Escanea un código QR para empezar." />
-            <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
+        <PageHeader title="Registrar Movimiento" description="Escanea un código QR o gestiona despachos en lote." />
+            <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0 space-y-8">
             {isLoading ? (
                 <div className="flex justify-center items-center py-10">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
             ) : (
-                <div className="flex flex-col items-center justify-center gap-8 text-center">
-                    <p className="text-lg text-muted-foreground max-w-md">
-                        Pulsa el botón para activar la cámara de tu dispositivo y escanear el código QR del activo que deseas mover.
-                    </p>
-                    <DialogTrigger asChild>
-                        <Button size="lg" className="h-24 w-full max-w-xs text-xl" onClick={() => setScannerOpen(true)}>
-                            <QrCode className="mr-4 h-10 w-10" />
-                            Escanear QR
-                        </Button>
-                    </DialogTrigger>
-                </div>
+                <>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Movimiento Individual</CardTitle>
+                        <CardDescription>Activa la cámara para escanear un activo y registrar una acción rápida.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <DialogTrigger asChild>
+                            <Button size="lg" className="w-full max-w-xs text-lg" onClick={() => setScannerOpen(true)}>
+                                <QrCode className="mr-4 h-8 w-8" />
+                                Escanear QR
+                            </Button>
+                        </DialogTrigger>
+                    </CardContent>
+                </Card>
+
+                {userRole === 'Admin' && (
+                    <Card>
+                        <CardHeader>
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                                <div>
+                                    <CardTitle>Mesa de Despacho Interactiva</CardTitle>
+                                    <CardDescription>Prepara y confirma una hoja de ruta completa para el reparto.</CardDescription>
+                                </div>
+                                <div className="flex gap-2">
+                                  {isRouteMode && (
+                                    <Button variant="outline" onClick={handleToggleRouteMode}>Cancelar</Button>
+                                  )}
+                                  <Button onClick={isRouteMode ? handleConfirmRoute : handleToggleRouteMode} disabled={isSubmitting || assetsForDispatch.length === 0}>
+                                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : isRouteMode ? <PackageCheck className="mr-2 h-4 w-4" /> : <ListPlus className="mr-2 h-4 w-4" />}
+                                    {isRouteMode ? `Confirmar Ruta (${Object.values(selectedAssetsForRoute).filter(Boolean).length})` : 'Crear Ruta'}
+                                  </Button>
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                          {assetsForDispatch.length === 0 ? (
+                            <EmptyState
+                                icon={<PackageCheck className="h-16 w-16" />}
+                                title="No hay activos listos"
+                                description="No se encontraron activos 'En Planta' y 'Llenos' para despachar. ¡Llena algunos barriles para empezar!"
+                            />
+                          ) : (
+                            <div className="space-y-6">
+                            {assetsByCustomer.map(([customerId, customerAssets]) => {
+                                const customer = customers.find(c => c.id === customerId);
+                                return (
+                                <div key={customerId} className="rounded-lg border p-4">
+                                    <h3 className="font-semibold mb-2">{customer?.name || 'Sin Asignar'}</h3>
+                                    <div className="space-y-2">
+                                        {customerAssets.map(asset => (
+                                          <div key={asset.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 p-2 rounded-md hover:bg-muted/50">
+                                              {isRouteMode && (
+                                                <Checkbox 
+                                                    id={`asset-${asset.id}`}
+                                                    checked={!!selectedAssetsForRoute[asset.id]}
+                                                    onCheckedChange={() => handleAssetSelectionForRoute(asset.id)}
+                                                />
+                                              )}
+                                              <Label htmlFor={`asset-${asset.id}`} className="flex-1 font-mono">{asset.code} <span className="text-muted-foreground">({asset.format})</span></Label>
+                                              <div className="w-full sm:w-60">
+                                                <Select
+                                                  value={asset.assignedCustomerId}
+                                                  onValueChange={(value) => handleCustomerAssignment(asset.id, value)}
+                                                >
+                                                  <SelectTrigger><SelectValue placeholder="Asignar cliente..." /></SelectTrigger>
+                                                  <SelectContent>
+                                                    {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                                                  </SelectContent>
+                                                </Select>
+                                              </div>
+                                          </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                )
+                            })}
+                            </div>
+                          )}
+                        </CardContent>
+                    </Card>
+                )}
+                </>
             )}
             </main>
 
