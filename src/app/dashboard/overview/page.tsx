@@ -68,7 +68,7 @@ function EventCardMobile({ event, assetsMap, usersMap, currentUser, onDelete }: 
         <div className={cn("rounded-lg border bg-card p-4", isCurrentUserEvent && userRole === 'Operador' && "bg-primary/5 border-primary/20")}>
             <div className="flex justify-between items-start">
                 <div className="flex flex-col gap-1.5">
-                    <span className="font-semibold">{event.asset_code}</span>
+                    <span className="font-semibold">{event.asset_code} {asset && `(${asset.format})`}</span>
                     <span className="text-sm font-medium">{formatEventType(event.event_type)}</span>
                     <span className="text-sm text-muted-foreground">{event.customer_name}</span>
                     <span className="text-xs text-muted-foreground">{formatDate(event.timestamp)}</span>
@@ -123,7 +123,7 @@ function EventTableRow({ event, assetsMap, usersMap, currentUser, onDelete, show
   return (
     <TableRow className={cn(isCurrentUserEvent && userRole === 'Operador' && "bg-primary/5")}>
       <TableCell className="hidden sm:table-cell">{formatDate(event.timestamp)}</TableCell>
-      <TableCell className="font-medium">{event.asset_code}</TableCell>
+      <TableCell className="font-medium">{event.asset_code} {asset && `(${asset.format})`}</TableCell>
       <TableCell className="hidden sm:table-cell">{formatEventType(event.event_type)}</TableCell>
       <TableCell>{event.customer_name}</TableCell>
       <TableCell className="hidden md:table-cell">
