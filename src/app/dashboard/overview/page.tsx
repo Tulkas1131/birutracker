@@ -188,27 +188,47 @@ function OverviewPageContent() {
   const assetsMap = useMemo(() => new Map(assets.map(asset => [asset.id, asset])), [assets]);
 
   const filteredEvents = useMemo(() => {
-    return allEvents.filter(event => {
-        const asset = assetsMap.get(event.asset_id);
-        const customerMatch = event.customer_name.toLowerCase().includes(filters.customer.toLowerCase());
-        
-        const assetTypeMatch = filters.assetType === 'ALL' || (asset?.type === filters.assetType);
-        const eventTypeMatch = filters.eventType === 'ALL' || event.event_type === filters.eventType;
+    let eventsToFilter = allEvents;
 
-        let criticalMatch = true;
-        if (filters.criticalOnly) {
-          criticalMatch = false; // Assume not a match unless proven otherwise
-          if (event.event_type === 'ENTREGA_A_CLIENTE' && asset && asset.location === 'EN_CLIENTE') {
-              const days = differenceInDays(new Date(), event.timestamp.toDate());
-              if (days >= 30) {
-                  criticalMatch = true;
-              }
+    if (filters.criticalOnly) {
+      // Find the last event for each asset
+      const lastEventsMap = new Map<string, Event>();
+      for (const event of allEvents) {
+          if (!lastEventsMap.has(event.asset_id)) {
+              lastEventsMap.set(event.asset_id, event);
+          }
+      }
+
+      const criticalAssetIds = new Set<string>();
+      assets.forEach(asset => {
+        // Condition 1: Asset must be at a customer
+        if (asset.location === 'EN_CLIENTE') {
+          const lastEvent = lastEventsMap.get(asset.id);
+          // Condition 2: Last event must be a delivery
+          // Condition 3: Must be more than 30 days ago
+          if (lastEvent && lastEvent.event_type === 'ENTREGA_A_CLIENTE') {
+            const days = differenceInDays(new Date(), lastEvent.timestamp.toDate());
+            if (days >= 30) {
+              criticalAssetIds.add(asset.id);
+            }
           }
         }
-        
-        return customerMatch && assetTypeMatch && eventTypeMatch && criticalMatch;
+      });
+      
+      // We show the delivery events for the assets that are currently critical
+      eventsToFilter = allEvents.filter(event => 
+          event.event_type === 'ENTREGA_A_CLIENTE' && criticalAssetIds.has(event.asset_id)
+      );
+    }
+    
+    return eventsToFilter.filter(event => {
+        const asset = assetsMap.get(event.asset_id);
+        const customerMatch = event.customer_name.toLowerCase().includes(filters.customer.toLowerCase());
+        const assetTypeMatch = filters.assetType === 'ALL' || (asset?.type === filters.assetType);
+        const eventTypeMatch = filters.eventType === 'ALL' || event.event_type === filters.eventType;
+        return customerMatch && assetTypeMatch && eventTypeMatch;
     });
-  }, [allEvents, filters, assetsMap]);
+  }, [allEvents, assets, filters, assetsMap]);
 
   const totalPages = Math.ceil(filteredEvents.length / ITEMS_PER_PAGE);
   const paginatedEvents = useMemo(() => {
