@@ -163,12 +163,7 @@ export default function MovementsPage() {
         }
       });
       
-      const readyAssets = assetsData
-        .filter(asset => asset.location === 'EN_PLANTA' && asset.state === 'LLENO')
-        .map(asset => {
-            const lastDeliveryEvent = eventsData.find(e => e.asset_id === asset.id && e.event_type === 'ENTREGA_A_CLIENTE');
-            return { ...asset, assignedCustomerId: lastDeliveryEvent?.customer_id };
-        });
+      const readyAssets = assetsData.filter(asset => asset.location === 'EN_PLANTA' && asset.state === 'LLENO');
 
       setAssets(assetsData);
       setCustomers(customersData);
@@ -506,6 +501,9 @@ export default function MovementsPage() {
 
   const assetsByCustomer = useMemo(() => {
     const grouped = new Map<string, AssetForDispatch[]>();
+    // Prime the map with 'unassigned'
+    grouped.set('unassigned', []);
+
     assetsForDispatch.forEach(asset => {
       const customerId = asset.assignedCustomerId || 'unassigned';
       if (!grouped.has(customerId)) {
@@ -513,8 +511,18 @@ export default function MovementsPage() {
       }
       grouped.get(customerId)!.push(asset);
     });
-    return Array.from(grouped.entries());
-  }, [assetsForDispatch]);
+    
+    // Create a sorted array from the map
+    const sortedArray = Array.from(grouped.entries()).sort((a, b) => {
+        if (a[0] === 'unassigned') return -1; // 'unassigned' always first
+        if (b[0] === 'unassigned') return 1;
+        const customerA = customers.find(c => c.id === a[0]);
+        const customerB = customers.find(c => c.id === b[0]);
+        return (customerA?.name || '').localeCompare(customerB?.name || '');
+    });
+
+    return sortedArray;
+  }, [assetsForDispatch, customers]);
 
 
   return (
@@ -548,7 +556,7 @@ export default function MovementsPage() {
                         <CardHeader>
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                                 <div>
-                                    <CardTitle>Mesa de Despacho Interactiva</CardTitle>
+                                    <CardTitle>Despachos</CardTitle>
                                     <CardDescription>Prepara y confirma una hoja de ruta completa para el reparto.</CardDescription>
                                 </div>
                                 <div className="flex gap-2">
@@ -573,6 +581,7 @@ export default function MovementsPage() {
                             <div className="space-y-6">
                             {assetsByCustomer.map(([customerId, customerAssets]) => {
                                 const customer = customers.find(c => c.id === customerId);
+                                if (customerAssets.length === 0 && customerId !== 'unassigned') return null;
                                 return (
                                 <div key={customerId} className="rounded-lg border p-4">
                                     <h3 className="font-semibold mb-2">{customer?.name || 'Sin Asignar'}</h3>
@@ -759,3 +768,6 @@ export default function MovementsPage() {
     </div>
   );
 }
+
+
+    
