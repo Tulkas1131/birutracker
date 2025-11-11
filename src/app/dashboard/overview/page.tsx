@@ -11,14 +11,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PageHeader } from "@/components/page-header";
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { Event, Asset, MovementEventType } from "@/lib/types";
+import type { Event, Asset, MovementEventType, UserData } from "@/lib/types";
 import { useUserRole } from '@/hooks/use-user-role';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { differenceInDays } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { logAppEvent } from '@/lib/logging';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { useIsMobile } from '@/hooks/use-is-mobile';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { EmptyState } from '@/components/empty-state';
@@ -26,12 +26,6 @@ import { useAuthState } from 'react-firebase-hooks/auth';
 import { cn } from '@/lib/utils';
 
 const ITEMS_PER_PAGE = 10;
-
-interface UserData {
-  id: string;
-  email: string;
-  role: string;
-}
 
 const formatEventType = (eventType: Event['event_type']) => {
     const translations: Record<MovementEventType, string> = {
@@ -51,18 +45,11 @@ const formatDate = (timestamp: Timestamp) => {
     return timestamp.toDate().toLocaleString();
 };
 
-function EventCardMobile({ event, assetsMap, usersMap, currentUser, onDelete }: { event: Event, assetsMap: Map<string, Asset>, usersMap: Map<string, UserData>, currentUser: any, onDelete: (id: string) => void }) {
+function EventCardMobile({ event, assetsMap, usersMap, currentUser, onDelete, daysAtCustomer }: { event: Event, assetsMap: Map<string, Asset>, usersMap: Map<string, UserData>, currentUser: any, onDelete: (id: string) => void, daysAtCustomer: number | null }) {
     const userRole = useUserRole();
     const asset = assetsMap.get(event.asset_id);
     const user = usersMap.get(event.user_id);
     const isCurrentUserEvent = currentUser?.uid === event.user_id;
-
-    const daysAtCustomer = useMemo(() => {
-        if (event.event_type === 'ENTREGA_A_CLIENTE' && asset && asset.location === 'EN_CLIENTE') {
-            return differenceInDays(new Date(), event.timestamp.toDate());
-        }
-        return null;
-    }, [event, asset]);
 
     return (
         <div className={cn("rounded-lg border bg-card p-4", isCurrentUserEvent && userRole === 'Operador' && "bg-primary/5 border-primary/20")}>
@@ -107,18 +94,11 @@ function EventCardMobile({ event, assetsMap, usersMap, currentUser, onDelete }: 
     );
 }
 
-function EventTableRow({ event, assetsMap, usersMap, currentUser, onDelete, showBeerColumns }: { event: Event, assetsMap: Map<string, Asset>, usersMap: Map<string, UserData>, currentUser: any, onDelete: (id: string) => void, showBeerColumns: boolean }) {
+function EventTableRow({ event, assetsMap, usersMap, currentUser, onDelete, showBeerColumns, daysAtCustomer }: { event: Event, assetsMap: Map<string, Asset>, usersMap: Map<string, UserData>, currentUser: any, onDelete: (id: string) => void, showBeerColumns: boolean, daysAtCustomer: number | null }) {
   const userRole = useUserRole();
   const asset = assetsMap.get(event.asset_id);
   const user = usersMap.get(event.user_id);
   const isCurrentUserEvent = currentUser?.uid === event.user_id;
-
-  const daysAtCustomer = useMemo(() => {
-    if (event.event_type === 'ENTREGA_A_CLIENTE' && asset && asset.location === 'EN_CLIENTE') {
-      return differenceInDays(new Date(), event.timestamp.toDate());
-    }
-    return null;
-  }, [event, asset]);
 
   return (
     <TableRow className={cn(isCurrentUserEvent && userRole === 'Operador' && "bg-primary/5")}>
@@ -221,22 +201,37 @@ function OverviewPageContent() {
   
   const assetsMap = useMemo(() => new Map(assets.map(asset => [asset.id, asset])), [assets]);
   const usersMap = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
+  
+  const lastEventsMap = useMemo(() => {
+    const map = new Map<string, Event>();
+    for (const event of allEvents) {
+      if (!map.has(event.asset_id)) {
+        map.set(event.asset_id, event);
+      }
+    }
+    return map;
+  }, [allEvents]);
+
 
   const filteredEvents = useMemo(() => {
     let eventsToFilter = allEvents;
 
     if (filters.criticalOnly) {
-      eventsToFilter = allEvents.filter(event => {
-        const asset = assetsMap.get(event.asset_id);
-        if (!asset || asset.location !== 'EN_CLIENTE') {
-          return false;
+      const criticalAssetIds = new Set<string>();
+      
+      for (const asset of assets) {
+        if (asset.location === 'EN_CLIENTE') {
+          const lastEvent = lastEventsMap.get(asset.id);
+          if (lastEvent && lastEvent.event_type === 'ENTREGA_A_CLIENTE') {
+            const daysAtCustomer = differenceInDays(new Date(), lastEvent.timestamp.toDate());
+            if (daysAtCustomer >= 30) {
+              criticalAssetIds.add(asset.id);
+            }
+          }
         }
-        if (event.event_type === 'ENTREGA_A_CLIENTE') {
-          const days = differenceInDays(new Date(), event.timestamp.toDate());
-          return days >= 30;
-        }
-        return false;
-      });
+      }
+      // Show all events related to the critical assets
+      eventsToFilter = allEvents.filter(event => criticalAssetIds.has(event.asset_id));
     }
     
     return eventsToFilter.filter(event => {
@@ -247,7 +242,21 @@ function OverviewPageContent() {
         const eventTypeMatch = filters.eventType === 'ALL' || event.event_type === filters.eventType;
         return customerMatch && assetCodeMatch && assetTypeMatch && eventTypeMatch;
     });
-  }, [allEvents, filters, assetsMap]);
+  }, [allEvents, assets, filters, assetsMap, lastEventsMap]);
+
+  const daysAtCustomerMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const event of filteredEvents) {
+      const asset = assetsMap.get(event.asset_id);
+      if (asset && asset.location === 'EN_CLIENTE' && event.event_type === 'ENTREGA_A_CLIENTE') {
+          const lastDelivery = lastEventsMap.get(asset.id);
+          if(lastDelivery && lastDelivery.id === event.id){
+            map.set(event.id, differenceInDays(new Date(), event.timestamp.toDate()));
+          }
+      }
+    }
+    return map;
+  }, [filteredEvents, assetsMap, lastEventsMap]);
 
   const totalPages = Math.ceil(filteredEvents.length / ITEMS_PER_PAGE);
   const paginatedEvents = useMemo(() => {
@@ -344,7 +353,7 @@ function OverviewPageContent() {
             ) : isMobile ? (
                 <div className="space-y-4 p-4">
                     {paginatedEvents.map((event) => (
-                        <EventCardMobile key={event.id} event={event} assetsMap={assetsMap} usersMap={usersMap} currentUser={currentUser} onDelete={handleDelete} />
+                        <EventCardMobile key={event.id} event={event} assetsMap={assetsMap} usersMap={usersMap} currentUser={currentUser} onDelete={handleDelete} daysAtCustomer={daysAtCustomerMap.get(event.id) || null} />
                     ))}
                 </div>
             ) : (
@@ -364,7 +373,7 @@ function OverviewPageContent() {
                   </TableHeader>
                   <TableBody>
                     {paginatedEvents.map((event) => (
-                        <EventTableRow key={event.id} event={event} assetsMap={assetsMap} usersMap={usersMap} currentUser={currentUser} onDelete={handleDelete} showBeerColumns={showBeerColumns} />
+                        <EventTableRow key={event.id} event={event} assetsMap={assetsMap} usersMap={usersMap} currentUser={currentUser} onDelete={handleDelete} showBeerColumns={showBeerColumns} daysAtCustomer={daysAtCustomerMap.get(event.id) || null} />
                     ))}
                   </TableBody>
               </Table>
@@ -411,3 +420,5 @@ export default function OverviewPage() {
         </Suspense>
     );
 }
+
+    
