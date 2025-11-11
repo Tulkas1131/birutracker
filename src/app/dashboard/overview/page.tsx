@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { differenceInDays } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { logAppEvent } from '@/lib/logging';
-import { useIsMobile } from '@/hooks/use-is-mobile';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { EmptyState } from '@/components/empty-state';
