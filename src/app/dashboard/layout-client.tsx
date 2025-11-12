@@ -15,7 +15,6 @@ import {
   Truck,
   Users,
   ShieldAlert,
-  Route,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -53,7 +52,6 @@ const navItems = [
     { href: "/dashboard/movements", icon: Truck, label: "Registrar" },
     { href: "/dashboard/customers", icon: Users, label: "Clientes" },
     { href: "/dashboard/overview", icon: History, label: "Historial" },
-    { href: "/dashboard/routes", icon: Route, label: "Rutas" },
 ];
 
 const adminNavItems = [
@@ -121,12 +119,6 @@ function MobileUserMenu({ user, onSignOut }: { user: UserData, onSignOut: () => 
                     <Separator />
                      {user.role === 'Admin' && (
                         <>
-                            <Link href="/dashboard/routes" className={cn(
-                                "flex items-center gap-2 rounded-md p-2 text-sm font-medium hover:bg-accent"
-                            )}>
-                                <Route />
-                                <span>Hojas de Ruta</span>
-                            </Link>
                             <Link href="/dashboard/logs" className={cn(
                                 "flex items-center gap-2 rounded-md p-2 text-sm font-medium hover:bg-accent"
                             )}>

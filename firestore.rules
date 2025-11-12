@@ -17,7 +17,7 @@ service cloud.firestore {
 
     // Users: Can only read their own user document.
     match /users/{userId} {
-      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow read: if request.auth.uid == userId;
       allow write: if false; // Users are created via server-side logic in signup, not directly
     }
     
@@ -34,14 +34,6 @@ service cloud.firestore {
     match /{collection}/{docId} where collection in ['assets', 'customers', 'events'] {
       allow read, create, update: if isSignedIn();
       allow delete: if isAdmin();
-    }
-
-    // Routes:
-    // - Admins can read, create, and update routes.
-    // - No one can delete routes for now to preserve history.
-    match /routes/{routeId} {
-      allow read, create, update: if isAdmin();
-      allow delete: if false;
     }
 
     // App Logs: Only Admins can read them. No one can write directly.

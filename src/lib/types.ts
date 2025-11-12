@@ -116,24 +116,10 @@ export const movementSchema = z.object({
 
 export type MovementFormData = z.infer<typeof movementSchema>;
 
-// --- ROUTE ---
+// --- USER ---
 
-export type RouteStop = {
-  customerId: string;
-  customerName: string;
-  assets: {
-    id: string;
-    code: string;
-    format: string;
-  }[];
-}
-
-export type Route = {
+export interface UserData {
   id: string;
-  name: string;
-  createdAt: Timestamp;
-  createdBy: string;
-  responsible: string;
-  status: 'PENDIENTE' | 'EN_PROGRESO' | 'COMPLETADA';
-  stops: RouteStop[];
+  email: string;
+  role: 'Admin' | 'Operador';
 }

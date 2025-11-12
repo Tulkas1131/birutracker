@@ -151,21 +151,21 @@ const AssetsOnDeliveryList = ({ assets, customerMap, fillDatesMap }: {
     fillDatesMap: Map<string, Date>;
 }) => {
     
-    const { groupedAssets } = useMemo(() => {
+    const { groupedAssets, lastDepartureEvents } = useMemo(() => {
         const groups = new Map<string, Asset[]>();
-        const lastDepartureEvents = new Map<string, string>(); // assetId -> customerId
+        const departureEvents = new Map<string, string>(); // assetId -> customerId
 
         // This is a simplified way to find the last departure customer.
         // It assumes events are pre-sorted descending by timestamp, which they are.
         for (const asset of assets) {
              const lastDepartureEvent = events.find(e => e.asset_id === asset.id && e.event_type === 'SALIDA_A_REPARTO');
              if (lastDepartureEvent) {
-                lastDepartureEvents.set(asset.id, lastDepartureEvent.customer_id);
+                departureEvents.set(asset.id, lastDepartureEvent.customer_id);
              }
         }
         
         for (const asset of assets) {
-             const customerId = lastDepartureEvents.get(asset.id);
+             const customerId = departureEvents.get(asset.id);
              if (customerId) {
                 if (!groups.has(customerId)) {
                     groups.set(customerId, []);
@@ -180,7 +180,7 @@ const AssetsOnDeliveryList = ({ assets, customerMap, fillDatesMap }: {
             return nameA.localeCompare(nameB);
         });
 
-        return { groupedAssets: sortedGroups };
+        return { groupedAssets: sortedGroups, lastDepartureEvents: departureEvents };
 
     }, [assets, customerMap]);
 
@@ -726,5 +726,3 @@ export default function MovementsPage() {
     </div>
   );
 }
-
-    
