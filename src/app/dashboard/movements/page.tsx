@@ -579,10 +579,10 @@ export default function MovementsPage() {
             }
         }
         
-        const sortedGroups = Array.from(groups.entries()).sort(([, assetsA], [, assetsB]) => {
-          const customerNameA = customerMap.get(assetsA[0].assignedCustomerId!) || '';
-          const customerNameB = customerMap.get(assetsB[0].assignedCustomerId!) || '';
-          return customerNameA.localeCompare(customerNameB);
+        const sortedGroups = Array.from(groups.entries()).sort(([idA], [idB]) => {
+          const nameA = customerMap.get(idA) || '';
+          const nameB = customerMap.get(idB) || '';
+          return nameA.localeCompare(nameB);
         });
 
         return { groupedAssets: sortedGroups, unassignedAssets: unassigned };
@@ -882,3 +882,5 @@ export default function MovementsPage() {
     </div>
   );
 }
+
+    
