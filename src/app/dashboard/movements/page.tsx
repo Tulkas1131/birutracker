@@ -608,12 +608,12 @@ export default function MovementsPage() {
             )}
             <Label htmlFor={`asset-${asset.id}`} className="flex-1 font-normal cursor-pointer">
                 <div className="flex flex-col">
-                    <div className="font-sans">
+                    <span className="font-sans">
                         {asset.code} 
                         <span className="text-muted-foreground ml-2">
                             ({asset.format}{asset.variety && asset.type === 'BARRIL' ? ` - ${asset.variety}` : ''})
                         </span>
-                    </div>
+                    </span>
                     <FillDateInfo fillDate={fillDatesMap.get(asset.id)} />
                 </div>
             </Label>
@@ -882,6 +882,3 @@ export default function MovementsPage() {
     </div>
   );
 }
-
-    
-    
