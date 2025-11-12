@@ -18,7 +18,7 @@ import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { movementSchema, type MovementFormData, type Asset, type Customer, type Event, type MovementEventType, type Route, type RouteStop, UserData } from "@/lib/types";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger } from "@/components/ui/dialog";
 import { logAppEvent } from "@/lib/logging";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
@@ -147,57 +147,6 @@ const AssetRow = ({ asset, fillDatesMap }: { asset: Asset; fillDatesMap: Map<str
     </div>
 );
 
-
-const AssetsOnDeliveryList = ({ isRouteMode, selectedCustomers, onCustomerSelect, groupedAssets, customerMap, fillDatesMap }: {
-    isRouteMode: boolean;
-    selectedCustomers: Set<string>;
-    onCustomerSelect: (customerId: string, isSelected: boolean) => void;
-    groupedAssets: [string, Asset[]][];
-    customerMap: Map<string, Customer>;
-    fillDatesMap: Map<string, Date>;
-}) => {
-    
-    if (groupedAssets.length === 0) {
-        return (
-            <EmptyState
-                icon={<RouteIcon className="h-16 w-16" />}
-                title="No hay activos en reparto"
-                description="Actualmente no hay ningún activo lleno en tránsito hacia los clientes."
-            />
-        );
-    }
-
-    return (
-        <div className="space-y-4">
-            {groupedAssets.map(([customerId, customerAssets]) => (
-                <Card key={customerId} className={cn(
-                    isRouteMode && selectedCustomers.has(customerId) && "border-primary ring-2 ring-primary"
-                )}>
-                    <CardHeader className="p-4 flex flex-row items-center gap-4">
-                        {isRouteMode && (
-                           <Checkbox
-                                id={`customer-${customerId}`}
-                                checked={selectedCustomers.has(customerId)}
-                                onCheckedChange={(checked) => onCustomerSelect(customerId, !!checked)}
-                                className="h-5 w-5"
-                           />
-                        )}
-                        <CardTitle className="text-base flex items-center gap-2">
-                           <User className="h-5 w-5" />
-                           {customerMap.get(customerId)?.name || 'Cliente desconocido'}
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0 space-y-2">
-                        {customerAssets.sort((a,b) => a.code.localeCompare(b.code)).map(asset => (
-                            <AssetRow key={asset.id} asset={asset} fillDatesMap={fillDatesMap} />
-                        ))}
-                    </CardContent>
-                </Card>
-            ))}
-        </div>
-    );
-};
-
 const PrintRouteSheet = ({ route, usersMap }: { route: Route | null, usersMap: Map<string, UserData> }) => {
     if (!route) return null;
     
@@ -254,7 +203,7 @@ export default function MovementsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isScannerOpen, setScannerOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("despachos");
+  const [activeTab, setActiveTab] = useState("rutas");
   
   const [scannedAsset, setScannedAsset] = useState<Asset | null>(null);
   const [actionLogic, setActionLogic] = useState<ActionLogic | null>(null);
@@ -262,7 +211,7 @@ export default function MovementsPage() {
   const [showCorrectionDialog, setShowCorrectionDialog] = useState(false);
 
   // Route creation state
-  const [isRouteMode, setIsRouteMode] = useState(false);
+  const [isRouteDialogOpen, setIsRouteDialogOpen] = useState(false);
   const [selectedCustomers, setSelectedCustomers] = useState<Set<string>>(new Set());
   const [routeToPrint, setRouteToPrint] = useState<Route | null>(null);
   const [editingRouteId, setEditingRouteId] = useState<string | null>(null);
@@ -634,7 +583,7 @@ export default function MovementsPage() {
         }
 
         setRouteToPrint(finalRoute);
-        setIsRouteMode(false);
+        setIsRouteDialogOpen(false);
         setSelectedCustomers(new Set());
         setEditingRouteId(null);
         await fetchData();
@@ -661,11 +610,10 @@ export default function MovementsPage() {
   }, [routeToPrint]);
 
   const handleEditRoute = (route: Route) => {
-    setIsRouteMode(true);
     setEditingRouteId(route.id);
     const customerIds = new Set(route.stops.map(stop => stop.customerId));
     setSelectedCustomers(customerIds);
-    setActiveTab("despachos");
+    setIsRouteDialogOpen(true);
   };
   
   const currentEventType = form.watch('event_type');
@@ -718,48 +666,74 @@ export default function MovementsPage() {
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="despachos">Despachos</TabsTrigger>
+                    <TabsTrigger value="rutas">Rutas</TabsTrigger>
                     <TabsTrigger value="historial">Historial de Rutas</TabsTrigger>
                 </TabsList>
-                <TabsContent value="despachos">
+                <TabsContent value="rutas">
                     <Card>
                         <CardHeader>
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                                <div>
-                                    <CardTitle>Activos en Reparto ({assetsOnDelivery.length})</CardTitle>
-                                    <CardDescription>Activos actualmente en tránsito hacia los clientes.</CardDescription>
-                                </div>
-                                <div className="flex gap-2">
-                                  {isRouteMode && (
-                                     <>
-                                      <Button variant="outline" onClick={() => { setIsRouteMode(false); setSelectedCustomers(new Set()); setEditingRouteId(null); }}>
-                                        <X className="mr-2 h-4 w-4" />
-                                        Cancelar
-                                      </Button>
-                                       <Button onClick={handleGenerateRoute} disabled={selectedCustomers.size === 0}>
-                                        <FileText className="mr-2 h-4 w-4" />
-                                        {editingRouteId ? 'Actualizar Ruta' : 'Generar Ruta'}
-                                      </Button>
-                                    </>
-                                  )}
-                                   {!isRouteMode && userRole === 'Admin' && assetsOnDelivery.length > 0 && (
-                                      <Button onClick={() => setIsRouteMode(true)}>
-                                          <PlusCircle className="mr-2 h-4 w-4" />
-                                          Crear Hoja de Ruta
-                                      </Button>
-                                  )}
-                                </div>
-                            </div>
+                            <CardTitle>Gestión de Rutas</CardTitle>
+                            <CardDescription>Crea una nueva hoja de ruta a partir de los activos que están actualmente en reparto.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                           <AssetsOnDeliveryList
-                                groupedAssets={groupedAssetsOnDelivery}
-                                customerMap={customerMap}
-                                fillDatesMap={fillDatesMap}
-                                isRouteMode={isRouteMode}
-                                selectedCustomers={selectedCustomers}
-                                onCustomerSelect={handleCustomerSelect}
-                            />
+                           <Dialog open={isRouteDialogOpen} onOpenChange={setIsRouteDialogOpen}>
+                                <DialogTrigger asChild>
+                                    <Button size="lg" onClick={() => { setEditingRouteId(null); setSelectedCustomers(new Set()); }}>
+                                        <PlusCircle className="mr-2 h-5 w-5" />
+                                        Crear Hoja de Ruta
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-2xl">
+                                    <DialogHeader>
+                                        <DialogTitle>{editingRouteId ? 'Editar Hoja de Ruta' : 'Crear Hoja de Ruta'}</DialogTitle>
+                                        <DialogDescription>
+                                            Selecciona los clientes que formarán parte de la ruta de despacho. Solo se muestran los que tienen activos en tránsito.
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="py-4 max-h-[60vh] overflow-y-auto">
+                                        {groupedAssetsOnDelivery.length > 0 ? (
+                                            <div className="space-y-4">
+                                                {groupedAssetsOnDelivery.map(([customerId, customerAssets]) => (
+                                                    <Card key={customerId} className={cn("transition-colors", selectedCustomers.has(customerId) && "border-primary ring-2 ring-primary")}>
+                                                        <CardHeader className="p-4 flex flex-row items-center gap-4 cursor-pointer" onClick={() => handleCustomerSelect(customerId, !selectedCustomers.has(customerId))}>
+                                                            <Checkbox
+                                                                id={`customer-${customerId}`}
+                                                                checked={selectedCustomers.has(customerId)}
+                                                                onCheckedChange={(checked) => handleCustomerSelect(customerId, !!checked)}
+                                                                className="h-5 w-5"
+                                                            />
+                                                            <div className="flex-1">
+                                                                <Label htmlFor={`customer-${customerId}`} className="text-base flex items-center gap-2 cursor-pointer">
+                                                                    <User className="h-5 w-5" />
+                                                                    {customerMap.get(customerId)?.name || 'Cliente desconocido'}
+                                                                </Label>
+                                                            </div>
+                                                        </CardHeader>
+                                                        <CardContent className="p-4 pt-0 space-y-2">
+                                                            {customerAssets.sort((a,b) => a.code.localeCompare(b.code)).map(asset => (
+                                                                <AssetRow key={asset.id} asset={asset} fillDatesMap={fillDatesMap} />
+                                                            ))}
+                                                        </CardContent>
+                                                    </Card>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <EmptyState
+                                                icon={<RouteIcon className="h-16 w-16" />}
+                                                title="No hay activos en reparto"
+                                                description="Actualmente no hay ningún activo lleno en tránsito hacia los clientes para crear una ruta."
+                                            />
+                                        )}
+                                    </div>
+                                    <DialogFooter>
+                                        <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
+                                        <Button onClick={handleGenerateRoute} disabled={selectedCustomers.size === 0}>
+                                            <FileText className="mr-2 h-4 w-4" />
+                                            {editingRouteId ? 'Actualizar y Guardar' : 'Crear y Guardar'}
+                                        </Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                           </Dialog>
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -773,7 +747,7 @@ export default function MovementsPage() {
                            {isLoading ? (
                                 <div className="flex justify-center items-center py-10"><Loader2 className="h-8 w-8 animate-spin" /></div>
                            ) : routes.length === 0 ? (
-                                <EmptyState icon={<History className="h-16 w-16" />} title="No hay rutas guardadas" description="Crea tu primera hoja de ruta desde la pestaña de Despachos." />
+                                <EmptyState icon={<History className="h-16 w-16" />} title="No hay rutas guardadas" description="Crea tu primera hoja de ruta desde la pestaña de Rutas." />
                            ) : (
                                 <div className="space-y-2">
                                   {routes.map(route => (
@@ -803,6 +777,9 @@ export default function MovementsPage() {
                 </TabsContent>
             </Tabs>
         </main>
+      </div>
+      <div className="print-only">
+          <PrintRouteSheet route={routeToPrint} usersMap={usersMap} />
       </div>
 
       <Dialog open={!!scannedAsset && !showCorrectionDialog} onOpenChange={(open) => !open && resetMovementState()}>
@@ -939,10 +916,6 @@ export default function MovementsPage() {
                 </AlertDialogFooter>
             </AlertDialogContent>
       </AlertDialog>
-
-      <div className="print-only">
-        <PrintRouteSheet route={routeToPrint} usersMap={usersMap} />
-      </div>
     </>
   );
 }
