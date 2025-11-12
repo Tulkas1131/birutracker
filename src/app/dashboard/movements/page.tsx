@@ -109,8 +109,8 @@ const getEventTypeTranslation = (eventType: MovementEventType): string => {
     return translations[eventType] || eventType;
 };
 
-type AssetForDispatch = Asset & { assignedCustomerId?: string };
-type GroupedAssets = [string, AssetForDispatch[]][];
+type AssetOnDelivery = Asset & { destinationCustomerId: string };
+type GroupedAssets = [string, AssetOnDelivery[]][];
 
 // --- Sub-components for better readability ---
 
@@ -133,25 +133,9 @@ const FillDateInfo = ({ fillDate }: { fillDate: Date | undefined }) => {
     );
 };
 
-const AssetRow = ({ asset, isRouteMode, selectedAssetsForRoute, onAssetSelection, onCustomerAssignment, customers, fillDatesMap }: {
-    asset: AssetForDispatch;
-    isRouteMode: boolean;
-    selectedAssetsForRoute: Record<string, boolean>;
-    onAssetSelection: (assetId: string) => void;
-    onCustomerAssignment: (assetId: string, customerId: string) => void;
-    customers: Customer[];
-    fillDatesMap: Map<string, Date>;
-}) => (
-    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 p-2 rounded-md hover:bg-muted/50">
-        {isRouteMode && (
-            <Checkbox
-                id={`asset-${asset.id}`}
-                checked={!!selectedAssetsForRoute[asset.id]}
-                onCheckedChange={() => onAssetSelection(asset.id)}
-                disabled={!isRouteMode}
-            />
-        )}
-        <Label htmlFor={`asset-${asset.id}`} className="flex-1 font-normal cursor-pointer">
+const AssetRow = ({ asset, fillDatesMap }: { asset: Asset; fillDatesMap: Map<string, Date> }) => (
+    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 p-2 rounded-md">
+        <div className="flex-1 font-normal">
             <div className="flex flex-col">
                 <span className="font-sans">
                     {asset.code}
@@ -161,38 +145,23 @@ const AssetRow = ({ asset, isRouteMode, selectedAssetsForRoute, onAssetSelection
                 </span>
                 <FillDateInfo fillDate={fillDatesMap.get(asset.id)} />
             </div>
-        </Label>
-        <div className="w-full sm:w-60">
-            <Select
-                value={asset.assignedCustomerId}
-                onValueChange={(value) => onCustomerAssignment(asset.id, value)}
-                disabled={!isRouteMode}
-            >
-                <SelectTrigger><SelectValue placeholder="Asignar cliente..." /></SelectTrigger>
-                <SelectContent>
-                    {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                </SelectContent>
-            </Select>
         </div>
     </div>
 );
 
 
-const AssetsForDispatchList = ({ groupedAssets, customerMap, ...props }: {
+const AssetsOnDeliveryList = ({ groupedAssets, customerMap, fillDatesMap }: {
     groupedAssets: GroupedAssets;
     customerMap: Map<string, string>;
-    isRouteMode: boolean;
-    selectedAssetsForRoute: Record<string, boolean>;
-    onAssetSelection: (assetId: string) => void;
-    onCustomerAssignment: (assetId: string, customerId: string) => void;
-    customers: Customer[];
     fillDatesMap: Map<string, Date>;
 }) => {
     if (groupedAssets.length === 0) {
         return (
-            <div className="py-10 text-center text-muted-foreground">
-                Asigna un cliente a los activos listos para despachar para poder crear una ruta.
-            </div>
+            <EmptyState
+                icon={<RouteIcon className="h-16 w-16" />}
+                title="No hay activos en reparto"
+                description="Actualmente no hay ningún activo en tránsito hacia los clientes."
+            />
         );
     }
 
@@ -208,7 +177,7 @@ const AssetsForDispatchList = ({ groupedAssets, customerMap, ...props }: {
                     </CardHeader>
                     <CardContent className="p-4 pt-0 space-y-2">
                         {customerAssets.sort((a,b) => a.code.localeCompare(b.code)).map(asset => (
-                            <AssetRow key={asset.id} asset={asset} {...props} />
+                            <AssetRow key={asset.id} asset={asset} fillDatesMap={fillDatesMap} />
                         ))}
                     </CardContent>
                 </Card>
@@ -225,6 +194,7 @@ export default function MovementsPage() {
   const [user] = useAuthState(auth());
   const userRole = useUserRole();
   
+  const [allAssets, setAllAssets] = useState<Asset[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [lastEvents, setLastEvents] = useState<Map<string, Event>>(new Map());
@@ -233,16 +203,11 @@ export default function MovementsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isScannerOpen, setScannerOpen] = useState(false);
   
-  const [scannedAsset, setScannedAsset] = useState<AssetForDispatch | null>(null);
+  const [scannedAsset, setScannedAsset] = useState<Asset | null>(null);
   const [actionLogic, setActionLogic] = useState<ActionLogic | null>(null);
   const [isManualOverride, setIsManualOverride] = useState(false);
   const [showCorrectionDialog, setShowCorrectionDialog] = useState(false);
   
-  // State for Route Creation
-  const [isRouteMode, setIsRouteMode] = useState(false);
-  const [selectedAssetsForRoute, setSelectedAssetsForRoute] = useState<Record<string, boolean>>({});
-  const [assetsForDispatch, setAssetsForDispatch] = useState<AssetForDispatch[]>([]);
-
   const form = useForm<MovementFormData>({
     resolver: zodResolver(movementSchema),
     defaultValues: { variety: "", valveType: "", customer_id: "INTERNAL" }, // Default customer for internal ops
@@ -267,6 +232,7 @@ export default function MovementsPage() {
       const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
       const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
       
+      setAllAssets(assetsData);
       setEvents(eventsData);
       setCustomers(customersData);
 
@@ -278,16 +244,6 @@ export default function MovementsPage() {
       });
       setLastEvents(lastEventsMap);
       
-      const readyAssets = assetsData.filter(asset => asset.location === 'EN_PLANTA' && asset.state === 'LLENO');
-
-      // Preserve assigned customer if asset still exists and update list
-      setAssetsForDispatch(prevAssets => {
-        const prevAssignments = new Map(prevAssets.map(a => [a.id, a.assignedCustomerId]));
-        return readyAssets.map(asset => ({
-            ...asset,
-            assignedCustomerId: prevAssignments.get(asset.id)
-        }));
-      });
     } catch (error: any) {
       console.error("Error fetching data for movements page: ", error);
       logAppEvent({ level: 'ERROR', message: 'Failed to fetch data', component: 'MovementsPage', stack: error.stack });
@@ -301,6 +257,21 @@ export default function MovementsPage() {
     fetchData();
   }, [fetchData]);
 
+  const { assetsOnDelivery } = useMemo(() => {
+    const onDelivery = allAssets
+        .filter(asset => asset.location === 'EN_REPARTO')
+        .map(asset => {
+            const lastDepartureEvent = events
+                .filter(e => e.asset_id === asset.id && e.event_type === 'SALIDA_A_REPARTO')
+                .sort((a,b) => b.timestamp.toMillis() - a.timestamp.toMillis())[0];
+            return {
+                ...asset,
+                destinationCustomerId: lastDepartureEvent?.customer_id || 'unknown'
+            };
+        });
+    return { assetsOnDelivery: onDelivery };
+  }, [allAssets, events]);
+
 
   const fillDatesMap = useMemo(() => {
     const map = new Map<string, Date>();
@@ -312,32 +283,32 @@ export default function MovementsPage() {
         }
     });
 
-    for (const asset of assetsForDispatch) {
+    for (const asset of allAssets) {
         const lastFillEvent = lastFillEvents.get(asset.id);
         if (lastFillEvent) {
             map.set(asset.id, lastFillEvent.timestamp.toDate());
         }
     }
     return map;
-  }, [events, assetsForDispatch]);
+  }, [events, allAssets]);
   
   const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c.name])), [customers]);
 
   const { groupedBarrels, groupedCo2 } = useMemo(() => {
-    const barrelGroups = new Map<string, AssetForDispatch[]>();
-    const co2Groups = new Map<string, AssetForDispatch[]>();
+    const barrelGroups = new Map<string, AssetOnDelivery[]>();
+    const co2Groups = new Map<string, AssetOnDelivery[]>();
 
-    for (const asset of assetsForDispatch) {
-      if (asset.assignedCustomerId) {
+    for (const asset of assetsOnDelivery) {
+      if (asset.destinationCustomerId !== 'unknown') {
         const targetGroup = asset.type === 'BARRIL' ? barrelGroups : co2Groups;
-        if (!targetGroup.has(asset.assignedCustomerId)) {
-          targetGroup.set(asset.assignedCustomerId, []);
+        if (!targetGroup.has(asset.destinationCustomerId)) {
+          targetGroup.set(asset.destinationCustomerId, []);
         }
-        targetGroup.get(asset.assignedCustomerId)!.push(asset);
+        targetGroup.get(asset.destinationCustomerId)!.push(asset);
       }
     }
 
-    const sortGroups = (groups: Map<string, AssetForDispatch[]>) => {
+    const sortGroups = (groups: Map<string, AssetOnDelivery[]>) => {
       return Array.from(groups.entries()).sort(([idA], [idB]) => {
         const nameA = customerMap.get(idA) || '';
         const nameB = customerMap.get(idB) || '';
@@ -349,7 +320,7 @@ export default function MovementsPage() {
       groupedBarrels: sortGroups(barrelGroups),
       groupedCo2: sortGroups(co2Groups),
     };
-  }, [assetsForDispatch, customerMap]);
+  }, [assetsOnDelivery, customerMap]);
   
   const resetMovementState = () => {
     setScannedAsset(null);
@@ -367,7 +338,7 @@ export default function MovementsPage() {
         return;
     }
     
-    let asset: AssetForDispatch | undefined = assetsForDispatch.find(a => a.id === decodedText);
+    let asset: Asset | undefined = allAssets.find(a => a.id === decodedText);
 
     if (!asset) {
         const { getDoc, doc } = await import("firebase/firestore/lite");
@@ -379,7 +350,7 @@ export default function MovementsPage() {
             toast({ title: "Activo No Encontrado", description: "El activo escaneado no existe.", variant: "destructive" });
             return;
         }
-        asset = { id: assetSnap.id, ...assetSnap.data() } as AssetForDispatch;
+        asset = { id: assetSnap.id, ...assetSnap.data() } as Asset;
     }
 
     let logic: ActionLogic | undefined | null = JSON.parse(JSON.stringify(stateLogic[asset.location]?.[asset.state]));
@@ -415,11 +386,7 @@ export default function MovementsPage() {
     form.setValue('asset_id', asset.id);
     form.setValue('event_type', logic.primary);
     
-    const assignedCustomerId = asset.assignedCustomerId;
-
-    if (assignedCustomerId) {
-        form.setValue('customer_id', assignedCustomerId);
-    } else if (logic.autoFillsCustomer) {
+    if (logic.autoFillsCustomer) {
         const eventToUse: Event | undefined = lastEvents.get(asset.id);
         if (eventToUse) {
             form.setValue('customer_id', eventToUse.customer_id);
@@ -488,11 +455,13 @@ export default function MovementsPage() {
         newValveType = data.valveType;
         break;
       case 'SALIDA_A_REPARTO':
-      case 'DEVOLUCION':
         if (scannedAsset.state === 'VACIO') newState = 'LLENO';
-        newLocation = data.event_type === 'SALIDA_A_REPARTO' ? 'EN_REPARTO' : 'EN_PLANTA';
+        newLocation = 'EN_REPARTO';
         newVariety = data.variety || newVariety;
         newValveType = data.valveType || newValveType;
+        break;
+      case 'DEVOLUCION':
+        newLocation = 'EN_PLANTA';
         break;
       case 'RECOLECCION_DE_CLIENTE':
       case 'RECEPCION_EN_PLANTA':
@@ -572,111 +541,10 @@ export default function MovementsPage() {
     return customerEvents.includes(currentEventType);
   }, [currentEventType]);
 
-  // --- Route Creation Logic ---
-  const handleToggleRouteMode = () => {
-    if (isRouteMode) {
-      setSelectedAssetsForRoute({});
-    }
-    setIsRouteMode(!isRouteMode);
-  };
-
-  const handleAssetSelectionForRoute = (assetId: string) => {
-    setSelectedAssetsForRoute(prev => ({ ...prev, [assetId]: !prev[assetId] }));
-  };
-  
-  const handleCustomerAssignment = (assetId: string, customerId: string) => {
-    setAssetsForDispatch(prev => {
-        return prev.map(a => a.id === assetId ? { ...a, assignedCustomerId: customerId } : a);
-    });
-  };
-
-  const handleConfirmRoute = async () => {
-      setIsSubmitting(true);
-      const { Timestamp, runTransaction, collection, doc } = await import("firebase/firestore/lite");
-      const firestore = db();
-      if (!user) return;
-
-      const selectedAssetIds = Object.keys(selectedAssetsForRoute).filter(id => selectedAssetsForRoute[id]);
-      if (selectedAssetIds.length === 0) {
-          toast({ title: "No hay activos seleccionados", description: "Selecciona al menos un activo para crear una ruta.", variant: "destructive" });
-          setIsSubmitting(false);
-          return;
-      }
-      
-      const assetsInRoute = assetsForDispatch.filter(a => selectedAssetIds.includes(a.id));
-      const routeStops = new Map<string, { customerName: string; assets: any[] }>();
-
-      for (const asset of assetsInRoute) {
-          const customerId = asset.assignedCustomerId;
-          if (!customerId) {
-              toast({ title: "Cliente no asignado", description: `El activo ${asset.code} no tiene un cliente asignado.`, variant: "destructive" });
-              setIsSubmitting(false);
-              return;
-          }
-          const customer = customers.find(c => c.id === customerId);
-          if (!customer) continue;
-
-          if (!routeStops.has(customerId)) {
-              routeStops.set(customerId, { customerName: customer.name, assets: [] });
-          }
-          routeStops.get(customerId)!.assets.push({ id: asset.id, code: asset.code, format: asset.format });
-      }
-
-      try {
-          await runTransaction(firestore, async (transaction) => {
-              // 1. Create the Route document
-              const newRouteRef = doc(collection(firestore, "routes"));
-              transaction.set(newRouteRef, {
-                  name: `Ruta - ${new Date().toLocaleString()}`,
-                  createdAt: Timestamp.now(),
-                  createdBy: user.uid,
-                  responsible: '', // Field for future use
-                  status: 'PENDIENTE',
-                  stops: Array.from(routeStops.entries()).map(([customerId, data]) => ({
-                      customerId,
-                      customerName: data.customerName,
-                      assets: data.assets,
-                  })),
-              });
-
-              // 2. Update assets and create events
-              for (const asset of assetsInRoute) {
-                  const assetRef = doc(firestore, "assets", asset.id);
-                  transaction.update(assetRef, { location: 'EN_REPARTO' });
-
-                  const newEventRef = doc(collection(firestore, "events"));
-                  transaction.set(newEventRef, {
-                      asset_id: asset.id,
-                      asset_code: asset.code,
-                      customer_id: asset.assignedCustomerId,
-                      customer_name: customers.find(c => c.id === asset.assignedCustomerId)?.name || 'N/A',
-                      event_type: 'SALIDA_A_REPARTO',
-                      timestamp: Timestamp.now(),
-                      user_id: user.uid,
-                      variety: asset.variety || "",
-                      valveType: asset.valveType || "",
-                  });
-              }
-          });
-          toast({ title: "Ruta Creada Exitosamente", description: `${assetsInRoute.length} activos han sido despachados.` });
-          await fetchData();
-          setIsRouteMode(false);
-          setSelectedAssetsForRoute({});
-
-      } catch (e: any) {
-          console.error("Error al crear la ruta: ", e);
-          logAppEvent({ level: 'ERROR', message: 'Failed to create route', component: 'MovementsPage-RouteCreation', stack: e.stack });
-          toast({ title: "Error", description: "No se pudo crear la hoja de ruta.", variant: "destructive" });
-      } finally {
-          setIsSubmitting(false);
-      }
-  };
-
-
   return (
     <div className="flex flex-1 flex-col">
        <Dialog open={isScannerOpen} onOpenChange={setScannerOpen}>
-        <PageHeader title="Registrar Movimiento" description="Escanea un código QR o gestiona despachos en lote." />
+        <PageHeader title="Registrar Movimiento" description="Escanea un código QR o consulta los activos en reparto." />
             <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0 space-y-8">
             {isLoading ? (
                 <div className="flex justify-center items-center py-10">
@@ -704,59 +572,32 @@ export default function MovementsPage() {
                         <CardHeader>
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                                 <div>
-                                    <CardTitle>Despachos</CardTitle>
-                                    <CardDescription>Prepara y confirma una hoja de ruta completa para el reparto.</CardDescription>
-                                </div>
-                                <div className="flex gap-2">
-                                  {isRouteMode && (
-                                    <Button variant="ghost" onClick={handleToggleRouteMode}><X className="mr-2 h-4 w-4" />Cancelar</Button>
-                                  )}
-                                  <Button onClick={isRouteMode ? handleConfirmRoute : handleToggleRouteMode} disabled={isSubmitting || assetsForDispatch.length === 0}>
-                                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : isRouteMode ? <PackageCheck className="mr-2 h-4 w-4" /> : <Pencil className="mr-2 h-4 w-4" />}
-                                    {isRouteMode ? `Confirmar Ruta (${Object.values(selectedAssetsForRoute).filter(Boolean).length})` : 'Crear Ruta'}
-                                  </Button>
+                                    <CardTitle>Activos en Reparto</CardTitle>
+                                    <CardDescription>Visualiza los activos que están actualmente en tránsito hacia los clientes.</CardDescription>
                                 </div>
                             </div>
                         </CardHeader>
                         <CardContent>
-                          {assetsForDispatch.length === 0 ? (
-                            <EmptyState
-                                icon={<PackageCheck className="h-16 w-16" />}
-                                title="No hay activos listos"
-                                description="No se encontraron activos 'En Planta' y 'Llenos' para despachar. ¡Llena algunos barriles para empezar!"
-                            />
-                          ) : (
                             <Tabs defaultValue="barrels">
                                 <TabsList className="grid w-full grid-cols-2">
-                                    <TabsTrigger value="barrels">Barriles ({groupedBarrels.length > 0 ? groupedBarrels.reduce((acc, [, assets]) => acc + assets.length, 0) : 0})</TabsTrigger>
-                                    <TabsTrigger value="co2">CO2 ({groupedCo2.length > 0 ? groupedCo2.reduce((acc, [, assets]) => acc + assets.length, 0) : 0})</TabsTrigger>
+                                    <TabsTrigger value="barrels">Barriles ({groupedBarrels.reduce((acc, [, assets]) => acc + assets.length, 0)})</TabsTrigger>
+                                    <TabsTrigger value="co2">CO2 ({groupedCo2.reduce((acc, [, assets]) => acc + assets.length, 0)})</TabsTrigger>
                                 </TabsList>
                                 <TabsContent value="barrels" className="mt-4">
-                                    <AssetsForDispatchList
+                                    <AssetsOnDeliveryList
                                       groupedAssets={groupedBarrels}
                                       customerMap={customerMap}
-                                      isRouteMode={isRouteMode}
-                                      selectedAssetsForRoute={selectedAssetsForRoute}
-                                      onAssetSelection={handleAssetSelectionForRoute}
-                                      onCustomerAssignment={handleCustomerAssignment}
-                                      customers={customers}
                                       fillDatesMap={fillDatesMap}
                                     />
                                 </TabsContent>
                                 <TabsContent value="co2" className="mt-4">
-                                     <AssetsForDispatchList
+                                     <AssetsOnDeliveryList
                                       groupedAssets={groupedCo2}
                                       customerMap={customerMap}
-                                      isRouteMode={isRouteMode}
-                                      selectedAssetsForRoute={selectedAssetsForRoute}
-                                      onAssetSelection={handleAssetSelectionForRoute}
-                                      onCustomerAssignment={handleCustomerAssignment}
-                                      customers={customers}
                                       fillDatesMap={fillDatesMap}
                                     />
                                 </TabsContent>
                             </Tabs>
-                          )}
                         </CardContent>
                     </Card>
                 )}
