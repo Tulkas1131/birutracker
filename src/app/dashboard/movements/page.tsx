@@ -174,7 +174,14 @@ export default function MovementsPage() {
       setAssets(assetsData);
       setCustomers(customersData);
       setLastEvents(lastEventsMap);
-      setAssetsForDispatch(readyAssets.map(asset => ({ ...asset, assignedCustomerId: undefined })));
+      setAssetsForDispatch(prevAssets => {
+        // Preserve assigned customer if asset still exists
+        const updatedReadyAssets = readyAssets.map(asset => {
+            const existing = prevAssets.find(p => p.id === asset.id);
+            return { ...asset, assignedCustomerId: existing?.assignedCustomerId };
+        });
+        return updatedReadyAssets;
+      });
 
 
     } catch (error: any) {
@@ -195,12 +202,16 @@ export default function MovementsPage() {
 
   const fillDatesMap = useMemo(() => {
     const map = new Map<string, Date>();
-    const fillEvents = events.filter(e => e.event_type === 'LLENADO_EN_PLANTA');
-    for (const asset of assetsForDispatch) {
-        const lastFillEvent = fillEvents
-            .filter(e => e.asset_id === asset.id)
-            .sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis())[0];
+    // Get all fill events, but only the last one per asset matters.
+    const lastFillEvents = new Map<string, Event>();
+    events.filter(e => e.event_type === 'LLENADO_EN_PLANTA').forEach(event => {
+        if (!lastFillEvents.has(event.asset_id) || event.timestamp.toMillis() > lastFillEvents.get(event.asset_id)!.timestamp.toMillis()) {
+            lastFillEvents.set(event.asset_id, event);
+        }
+    });
 
+    for (const asset of assetsForDispatch) {
+        const lastFillEvent = lastFillEvents.get(asset.id);
         if (lastFillEvent) {
             map.set(asset.id, lastFillEvent.timestamp.toDate());
         }
@@ -589,7 +600,7 @@ export default function MovementsPage() {
                                         disabled={!isRouteMode}
                                     />
                                 )}
-                                <Label htmlFor={`asset-${asset.id}`} className="flex-1">
+                                <Label htmlFor={`asset-${asset.id}`} className="flex-1 font-normal">
                                     <div className="flex flex-col">
                                         <div>
                                             {asset.code} 
@@ -634,7 +645,7 @@ export default function MovementsPage() {
                                         disabled={!isRouteMode}
                                     />
                                 )}
-                                <Label htmlFor={`asset-${asset.id}`} className="flex-1">
+                                <Label htmlFor={`asset-${asset.id}`} className="flex-1 font-normal">
                                     <div className="flex flex-col">
                                         <div>
                                             {asset.code} 
