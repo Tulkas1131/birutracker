@@ -36,6 +36,11 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Routes: Admins can do anything.
+    match /routes/{routeId} {
+      allow read, write: if isAdmin();
+    }
+
     // App Logs: Only Admins can read them. No one can write directly.
     match /app_logs/{logId} {
         allow read: if isAdmin();

@@ -123,3 +123,23 @@ export interface UserData {
   email: string;
   role: 'Admin' | 'Operador';
 }
+
+// --- ROUTE ---
+
+export const routeStopSchema = z.object({
+  customerId: z.string(),
+  assets: z.array(z.object({
+    id: z.string(),
+    code: z.string(),
+    format: z.string(),
+  })),
+});
+
+export const routeSchema = z.object({
+  id: z.string().optional(),
+  createdAt: z.instanceof(Timestamp),
+  stops: z.array(routeStopSchema),
+});
+
+export type RouteStop = z.infer<typeof routeStopSchema>;
+export type Route = z.infer<typeof routeSchema> & { id: string };

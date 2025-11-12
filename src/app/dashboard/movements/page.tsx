@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, Suspense, useEffect, useMemo, useCallback } from "react";
@@ -7,8 +6,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import dynamic from "next/dynamic";
 import { auth, db } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { Loader2, QrCode, ArrowRight, AlertTriangle, Route as RouteIcon, PackageCheck, Pencil, X, Calendar as CalendarIcon, User } from "lucide-react";
+import { Loader2, QrCode, ArrowRight, AlertTriangle, Route as RouteIcon, PackageCheck, Pencil, X, Calendar as CalendarIcon, User, PlusCircle, Printer, FileText, History } from "lucide-react";
 import { differenceInDays, format } from 'date-fns';
+import { renderToStaticMarkup } from 'react-dom/server';
+
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/hooks/use-toast";
-import { movementSchema, type MovementFormData, type Asset, type Customer, type Event, type MovementEventType } from "@/lib/types";
+import { movementSchema, type MovementFormData, type Asset, type Customer, type Event, type MovementEventType, type Route, type RouteStop, routeSchema } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { logAppEvent } from "@/lib/logging";
@@ -26,6 +27,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useUserRole } from "@/hooks/use-user-role";
 import { EmptyState } from "@/components/empty-state";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Logo } from "@/components/logo";
 
 const QrScanner = dynamic(() => import('@/components/qr-scanner').then(mod => mod.QrScanner), {
   ssr: false,
@@ -145,46 +149,16 @@ const AssetRow = ({ asset, fillDatesMap }: { asset: Asset; fillDatesMap: Map<str
 );
 
 
-const AssetsOnDeliveryList = ({ assets, customerMap, fillDatesMap }: {
+const AssetsOnDeliveryList = ({ assets, customerMap, fillDatesMap, isRouteMode, selectedCustomers, onCustomerSelect, groupedAssets }: {
     assets: Asset[];
     customerMap: Map<string, string>;
     fillDatesMap: Map<string, Date>;
+    isRouteMode: boolean;
+    selectedCustomers: Set<string>;
+    onCustomerSelect: (customerId: string, isSelected: boolean) => void;
+    groupedAssets: [string, Asset[]][];
 }) => {
     
-    const { groupedAssets, lastDepartureEvents } = useMemo(() => {
-        const groups = new Map<string, Asset[]>();
-        const departureEvents = new Map<string, string>(); // assetId -> customerId
-
-        // This is a simplified way to find the last departure customer.
-        // It assumes events are pre-sorted descending by timestamp, which they are.
-        for (const asset of assets) {
-             const lastDepartureEvent = events.find(e => e.asset_id === asset.id && e.event_type === 'SALIDA_A_REPARTO');
-             if (lastDepartureEvent) {
-                departureEvents.set(asset.id, lastDepartureEvent.customer_id);
-             }
-        }
-        
-        for (const asset of assets) {
-             const customerId = departureEvents.get(asset.id);
-             if (customerId) {
-                if (!groups.has(customerId)) {
-                    groups.set(customerId, []);
-                }
-                groups.get(customerId)!.push(asset);
-             }
-        }
-        
-        const sortedGroups = Array.from(groups.entries()).sort((a, b) => {
-            const nameA = customerMap.get(a[0]) || '';
-            const nameB = customerMap.get(b[0]) || '';
-            return nameA.localeCompare(nameB);
-        });
-
-        return { groupedAssets: sortedGroups, lastDepartureEvents: departureEvents };
-
-    }, [assets, customerMap]);
-
-
     if (assets.length === 0) {
         return (
             <EmptyState
@@ -198,8 +172,18 @@ const AssetsOnDeliveryList = ({ assets, customerMap, fillDatesMap }: {
     return (
         <div className="space-y-4">
             {groupedAssets.map(([customerId, customerAssets]) => (
-                <Card key={customerId}>
-                    <CardHeader className="p-4">
+                <Card key={customerId} className={cn(
+                    isRouteMode && selectedCustomers.has(customerId) && "border-primary ring-2 ring-primary"
+                )}>
+                    <CardHeader className="p-4 flex flex-row items-center gap-4">
+                        {isRouteMode && (
+                           <Checkbox
+                                id={`customer-${customerId}`}
+                                checked={selectedCustomers.has(customerId)}
+                                onCheckedChange={(checked) => onCustomerSelect(customerId, !!checked)}
+                                className="h-5 w-5"
+                           />
+                        )}
                         <CardTitle className="text-base flex items-center gap-2">
                            <User className="h-5 w-5" />
                            {customerMap.get(customerId) || 'Cliente desconocido'}
@@ -216,6 +200,38 @@ const AssetsOnDeliveryList = ({ assets, customerMap, fillDatesMap }: {
     );
 };
 
+const PrintRouteSheet = ({ route, customerMap }: { route: Route, customerMap: Map<string, string> }) => (
+  <div className="print-route-sheet bg-white text-black p-8 font-sans">
+      <header className="flex justify-between items-center mb-8 border-b-2 border-black pb-4">
+          <div className="flex items-center gap-4">
+              <Logo className="h-12 w-12 text-black" />
+              <h1 className="text-3xl font-bold">Hoja de Ruta</h1>
+          </div>
+          <div className="text-right">
+              <p><strong>Fecha:</strong> {format(route.createdAt.toDate(), 'dd/MM/yyyy HH:mm')}</p>
+              <p><strong>Ruta ID:</strong> {route.id}</p>
+          </div>
+      </header>
+      <main className="space-y-6">
+          {route.stops.map((stop, index) => (
+              <div key={stop.customerId} className="break-inside-avoid p-4 border border-gray-300 rounded-lg">
+                  <h2 className="text-xl font-semibold mb-2 border-b border-gray-200 pb-2">
+                      <span className="font-bold mr-2">{index + 1}.</span> {customerMap.get(stop.customerId) || 'Cliente Desconocido'}
+                  </h2>
+                  <div className="grid grid-cols-2 gap-x-4">
+                      {stop.assets.map(asset => (
+                          <div key={asset.id} className="text-sm py-1">
+                              <span className="font-mono">{asset.code}</span>
+                              <span className="text-gray-600 ml-2">({asset.format})</span>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+          ))}
+      </main>
+  </div>
+);
+
 
 // --- Main Page Component ---
 let events: Event[] = []; // Keep events in a broader scope
@@ -227,20 +243,28 @@ export default function MovementsPage() {
   
   const [allAssets, setAllAssets] = useState<Asset[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [routes, setRoutes] = useState<Route[]>([]);
   const [lastEvents, setLastEvents] = useState<Map<string, Event>>(new Map());
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isScannerOpen, setScannerOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("despachos");
   
   const [scannedAsset, setScannedAsset] = useState<Asset | null>(null);
   const [actionLogic, setActionLogic] = useState<ActionLogic | null>(null);
   const [isManualOverride, setIsManualOverride] = useState(false);
   const [showCorrectionDialog, setShowCorrectionDialog] = useState(false);
+
+  // Route creation state
+  const [isRouteMode, setIsRouteMode] = useState(false);
+  const [selectedCustomers, setSelectedCustomers] = useState<Set<string>>(new Set());
+  const [routeToPrint, setRouteToPrint] = useState<Route | null>(null);
+  const [editingRouteId, setEditingRouteId] = useState<string | null>(null);
   
   const form = useForm<MovementFormData>({
     resolver: zodResolver(movementSchema),
-    defaultValues: { variety: "", valveType: "", customer_id: "INTERNAL" }, // Default customer for internal ops
+    defaultValues: { variety: "", valveType: "", customer_id: "INTERNAL" },
   });
   
   const fetchData = useCallback(async () => {
@@ -251,20 +275,24 @@ export default function MovementsPage() {
       const assetsQuery = query(collection(firestore, "assets"));
       const customersQuery = query(collection(firestore, "customers"), orderBy("name"));
       const eventsQuery = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
+      const routesQuery = query(collection(firestore, "routes"), orderBy("createdAt", "desc"));
 
-      const [assetsSnapshot, customersSnapshot, eventsSnapshot] = await Promise.all([
+      const [assetsSnapshot, customersSnapshot, eventsSnapshot, routesSnapshot] = await Promise.all([
         getDocs(assetsQuery),
         getDocs(customersQuery),
         getDocs(eventsQuery),
+        getDocs(routesQuery),
       ]);
 
       const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
       const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
       const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
+      const routesData = routesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Route));
       
       setAllAssets(assetsData);
       events = eventsData; // Set the broader scope events
       setCustomers(customersData);
+      setRoutes(routesData);
 
       const lastEventsMap = new Map<string, Event>();
       eventsData.forEach(event => {
@@ -295,7 +323,6 @@ export default function MovementsPage() {
   const fillDatesMap = useMemo(() => {
     const map = new Map<string, Date>();
     const lastFillEvents = new Map<string, Event>();
-    // Prioritize creating a comprehensive map of the last fill event for every asset.
     events.filter(e => e.event_type === 'LLENADO_EN_PLANTA').forEach(event => {
         if (!lastFillEvents.has(event.asset_id) || event.timestamp.toMillis() > lastFillEvents.get(event.asset_id)!.timestamp.toMillis()) {
             lastFillEvents.set(event.asset_id, event);
@@ -312,6 +339,21 @@ export default function MovementsPage() {
   }, [allAssets]);
   
   const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c.name])), [customers]);
+
+  const groupedAssetsOnDelivery = useMemo(() => {
+    const groups = new Map<string, Asset[]>();
+    for (const asset of assetsOnDelivery) {
+         const lastEvent = lastEvents.get(asset.id);
+         if (lastEvent && lastEvent.event_type === 'SALIDA_A_REPARTO') {
+             const customerId = lastEvent.customer_id;
+             if (!groups.has(customerId)) {
+                groups.set(customerId, []);
+            }
+            groups.get(customerId)!.push(asset);
+         }
+    }
+    return Array.from(groups.entries()).sort((a, b) => (customerMap.get(a[0]) || '').localeCompare(customerMap.get(b[0]) || ''));
+  }, [assetsOnDelivery, lastEvents, customerMap]);
 
   
   const resetMovementState = () => {
@@ -350,7 +392,7 @@ export default function MovementsPage() {
     if (!logic) {
         toast({ title: "Movimiento No Definido", description: `No hay una acción lógica para un activo ${asset.state} que está ${asset.location.replace('_', ' ')}. Considera realizar una acción manual.`, variant: "destructive", duration: 8000 });
         logic = {
-            primary: 'SALIDA_A_REPARTO', // A neutral default
+            primary: 'SALIDA_A_REPARTO',
             manualOverrides: ['SALIDA_A_REPARTO', 'RECEPCION_EN_PLANTA', 'DEVOLUCION', 'SALIDA_VACIO', 'LLENADO_EN_PLANTA'],
             description: "El estado actual del activo no tiene una acción sugerida. Por favor, selecciona una acción manual.",
             requiresCustomerSelection: true,
@@ -513,6 +555,90 @@ export default function MovementsPage() {
       setIsSubmitting(false);
     }
   }
+
+  const handleCustomerSelect = (customerId: string, isSelected: boolean) => {
+    setSelectedCustomers(prev => {
+        const newSet = new Set(prev);
+        if (isSelected) {
+            newSet.add(customerId);
+        } else {
+            newSet.delete(customerId);
+        }
+        return newSet;
+    });
+  };
+
+  const handleGenerateRoute = async () => {
+    const { collection, addDoc, doc, setDoc, Timestamp } = await import("firebase/firestore/lite");
+    const firestore = db();
+    if (selectedCustomers.size === 0) {
+        toast({ title: "Error", description: "Debes seleccionar al menos un cliente.", variant: "destructive" });
+        return;
+    }
+
+    const stops: RouteStop[] = groupedAssetsOnDelivery
+        .filter(([customerId]) => selectedCustomers.has(customerId))
+        .map(([customerId, assets]) => ({
+            customerId,
+            assets: assets.map(a => ({ id: a.id, code: a.code, format: a.format })),
+        }));
+    
+    try {
+        if (editingRouteId) {
+            // Update existing route
+            const routeRef = doc(firestore, "routes", editingRouteId);
+            await setDoc(routeRef, { stops }, { merge: true });
+            const updatedRoute = routes.find(r => r.id === editingRouteId);
+            if (updatedRoute) {
+                const finalRoute = {...updatedRoute, stops};
+                setRouteToPrint(finalRoute);
+                toast({ title: "Ruta Actualizada", description: "La hoja de ruta ha sido actualizada." });
+            }
+        } else {
+            // Create new route
+            const newRouteData: Omit<Route, 'id'> = {
+                createdAt: Timestamp.now(),
+                stops,
+            };
+            const routeRef = await addDoc(collection(firestore, "routes"), newRouteData);
+            const finalRoute = { id: routeRef.id, ...newRouteData };
+            setRouteToPrint(finalRoute);
+            toast({ title: "Ruta Generada", description: "La hoja de ruta ha sido creada y guardada." });
+        }
+
+        setIsRouteMode(false);
+        setSelectedCustomers(new Set());
+        setEditingRouteId(null);
+        await fetchData();
+
+    } catch (error: any) {
+        console.error("Error generating route: ", error);
+        logAppEvent({ level: 'ERROR', message: 'Failed to generate route', component: 'MovementsPage-handleGenerateRoute', stack: error.stack });
+        toast({ title: "Error", description: "No se pudo generar la hoja de ruta.", variant: "destructive" });
+    }
+  };
+
+  const handlePrintRoute = (route: Route) => {
+      setRouteToPrint(route);
+  };
+  
+  useEffect(() => {
+    if (routeToPrint) {
+      // Delay print to allow component to render
+      setTimeout(() => {
+          window.print();
+          setRouteToPrint(null);
+      }, 100);
+    }
+  }, [routeToPrint]);
+
+  const handleEditRoute = (route: Route) => {
+    setIsRouteMode(true);
+    setEditingRouteId(route.id);
+    const customerIds = new Set(route.stops.map(stop => stop.customerId));
+    setSelectedCustomers(customerIds);
+    setActiveTab("despachos");
+  };
   
   const currentEventType = form.watch('event_type');
 
@@ -534,62 +660,125 @@ export default function MovementsPage() {
   }, [currentEventType]);
 
   return (
-    <div className="flex flex-1 flex-col">
-       <Dialog open={isScannerOpen} onOpenChange={setScannerOpen}>
-        <PageHeader title="Registrar Movimiento" description="Escanea un código QR o consulta los activos en reparto." />
-            <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0 space-y-8">
-            {isLoading ? (
-                <div className="flex justify-center items-center py-10">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-            ) : (
-                <>
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Movimiento Individual</CardTitle>
-                        <CardDescription>Activa la cámara para escanear un activo y registrar una acción rápida.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <DialogTrigger asChild>
-                            <Button size="lg" className="w-full max-w-xs text-lg" onClick={() => setScannerOpen(true)}>
-                                <QrCode className="mr-4 h-8 w-8" />
-                                Escanear QR
-                            </Button>
-                        </DialogTrigger>
-                    </CardContent>
-                </Card>
-                
-                <Card>
-                    <CardHeader>
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                            <div>
-                                <CardTitle>Activos en Reparto ({assetsOnDelivery.length})</CardTitle>
-                                <CardDescription>Visualiza los activos que están actualmente en tránsito hacia los clientes.</CardDescription>
+    <>
+      <div className="flex flex-1 flex-col no-print">
+        <PageHeader title="Registrar Movimiento" description="Gestiona los despachos, el historial de rutas y los escaneos individuales." />
+        <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0 space-y-8">
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="despachos">Despachos</TabsTrigger>
+                    <TabsTrigger value="historial">Historial de Rutas</TabsTrigger>
+                    <TabsTrigger value="individual">Movimiento Individual</TabsTrigger>
+                </TabsList>
+                <TabsContent value="despachos">
+                    <Card>
+                        <CardHeader>
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                                <div>
+                                    <CardTitle>Activos en Reparto ({assetsOnDelivery.length})</CardTitle>
+                                    <CardDescription>Activos actualmente en tránsito hacia los clientes.</CardDescription>
+                                </div>
+                                <div className="flex gap-2">
+                                  {isRouteMode && (
+                                     <>
+                                      <Button variant="outline" onClick={() => { setIsRouteMode(false); setSelectedCustomers(new Set()); setEditingRouteId(null); }}>
+                                        <X className="mr-2 h-4 w-4" />
+                                        Cancelar
+                                      </Button>
+                                       <Button onClick={handleGenerateRoute} disabled={selectedCustomers.size === 0}>
+                                        <FileText className="mr-2 h-4 w-4" />
+                                        {editingRouteId ? 'Actualizar Ruta' : 'Generar Ruta'}
+                                      </Button>
+                                    </>
+                                  )}
+                                   {!isRouteMode && userRole === 'Admin' && (
+                                      <Button onClick={() => setIsRouteMode(true)}>
+                                          <PlusCircle className="mr-2 h-4 w-4" />
+                                          Crear Hoja de Ruta
+                                      </Button>
+                                  )}
+                                </div>
                             </div>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        <AssetsOnDeliveryList
-                            assets={assetsOnDelivery}
-                            customerMap={customerMap}
-                            fillDatesMap={fillDatesMap}
-                        />
-                    </CardContent>
-                </Card>
-                </>
-            )}
-            </main>
+                        </CardHeader>
+                        <CardContent>
+                           <AssetsOnDeliveryList
+                                assets={assetsOnDelivery}
+                                customerMap={customerMap}
+                                fillDatesMap={fillDatesMap}
+                                isRouteMode={isRouteMode}
+                                selectedCustomers={selectedCustomers}
+                                onCustomerSelect={handleCustomerSelect}
+                                groupedAssets={groupedAssetsOnDelivery}
+                            />
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+                 <TabsContent value="historial">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Historial de Hojas de Ruta</CardTitle>
+                            <CardDescription>Consulta y reimprime las rutas generadas anteriormente.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                           {isLoading ? (
+                                <div className="flex justify-center items-center py-10"><Loader2 className="h-8 w-8 animate-spin" /></div>
+                           ) : routes.length === 0 ? (
+                                <EmptyState icon={<History className="h-16 w-16" />} title="No hay rutas guardadas" description="Crea tu primera hoja de ruta desde la pestaña de Despachos." />
+                           ) : (
+                                <div className="space-y-2">
+                                  {routes.map(route => (
+                                    <div key={route.id} className="flex items-center justify-between rounded-md border p-4">
+                                        <div className="flex flex-col">
+                                            <span className="font-semibold">Ruta del {format(route.createdAt.toDate(), 'dd/MM/yyyy HH:mm')}</span>
+                                            <span className="text-sm text-muted-foreground">{route.stops.length} parada(s)</span>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <Button variant="outline" size="sm" onClick={() => handlePrintRoute(route)}>
+                                                <Printer className="mr-2 h-4 w-4" />
+                                                Reimprimir
+                                            </Button>
+                                            <Button variant="outline" size="sm" onClick={() => handleEditRoute(route)}>
+                                                <Pencil className="mr-2 h-4 w-4" />
+                                                Editar
+                                            </Button>
+                                        </div>
+                                    </div>
+                                  ))}
+                                </div>
+                           )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+                <TabsContent value="individual">
+                     <Dialog open={isScannerOpen} onOpenChange={setScannerOpen}>
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Movimiento Individual</CardTitle>
+                                <CardDescription>Activa la cámara para escanear un activo y registrar una acción rápida.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <DialogTrigger asChild>
+                                    <Button size="lg" className="w-full max-w-xs text-lg" onClick={() => setScannerOpen(true)}>
+                                        <QrCode className="mr-4 h-8 w-8" />
+                                        Escanear QR
+                                    </Button>
+                                </DialogTrigger>
+                            </CardContent>
+                        </Card>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Escanear Código QR</DialogTitle>
+                                <DialogDescription>Apunta la cámara al código QR del activo.</DialogDescription>
+                            </DialogHeader>
+                            <QrScanner onScanSuccess={handleScanSuccess} onScanError={handleScanError} isScannerOpen={isScannerOpen} />
+                        </DialogContent>
+                    </Dialog>
+                </TabsContent>
+            </Tabs>
+        </main>
+      </div>
 
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Escanear Código QR</DialogTitle>
-                    <DialogDescription>Apunta la cámara al código QR del activo.</DialogDescription>
-                </DialogHeader>
-                <QrScanner onScanSuccess={handleScanSuccess} onScanError={handleScanError} isScannerOpen={isScannerOpen} />
-            </DialogContent>
-        </Dialog>
-
-        <Dialog open={!!scannedAsset && !showCorrectionDialog} onOpenChange={(open) => !open && resetMovementState()}>
+      <Dialog open={!!scannedAsset && !showCorrectionDialog} onOpenChange={(open) => !open && resetMovementState()}>
             <DialogContent>
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -700,9 +889,9 @@ export default function MovementsPage() {
                     </form>
                 </Form>
             </DialogContent>
-        </Dialog>
+      </Dialog>
         
-        <AlertDialog open={showCorrectionDialog} onOpenChange={setShowCorrectionDialog}>
+      <AlertDialog open={showCorrectionDialog} onOpenChange={setShowCorrectionDialog}>
             <AlertDialogContent>
                 <AlertDialogHeader>
                     <AlertDialogTitle className="flex items-center gap-2">
@@ -722,7 +911,12 @@ export default function MovementsPage() {
                     </AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>
-        </AlertDialog>
-    </div>
+      </AlertDialog>
+
+       {/* Print-only component */}
+        <div className="print-only">
+          {routeToPrint && <PrintRouteSheet route={routeToPrint} customerMap={customerMap} />}
+        </div>
+    </>
   );
 }
