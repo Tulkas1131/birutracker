@@ -653,10 +653,11 @@ export default function MovementsPage() {
   useEffect(() => {
     if (routeToPrint) {
       // Delay print to allow component to render
-      setTimeout(() => {
+      const timer = setTimeout(() => {
           window.print();
           setRouteToPrint(null);
-      }, 100);
+      }, 300); // Small delay to ensure render
+      return () => clearTimeout(timer);
     }
   }, [routeToPrint]);
 
