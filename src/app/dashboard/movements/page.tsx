@@ -9,6 +9,7 @@ import { auth, db } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { Loader2, QrCode, ArrowRight, AlertTriangle, Route as RouteIcon, Pencil, X, Calendar as CalendarIcon, User, PlusCircle, Printer, FileText, History } from "lucide-react";
 import { differenceInDays, format } from 'date-fns';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -152,7 +153,12 @@ const PrintRouteSheet = ({ route, usersMap }: { route: Route | null, usersMap: M
     
     const createdByUser = usersMap.get(route.createdBy);
     return (
-        <div className="print-route-sheet bg-white text-black p-8 font-sans">
+        <div className="bg-white text-black p-8 font-sans">
+            <style>{`
+                @media print {
+                    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                }
+            `}</style>
             <header className="flex justify-between items-center mb-8 border-b-2 border-black pb-4">
                 <div className="flex items-center gap-4">
                     <Logo className="h-12 w-12 text-black" />
@@ -213,7 +219,6 @@ export default function MovementsPage() {
   // Route creation state
   const [isRouteDialogOpen, setIsRouteDialogOpen] = useState(false);
   const [selectedCustomers, setSelectedCustomers] = useState<Set<string>>(new Set());
-  const [routeToPrint, setRouteToPrint] = useState<Route | null>(null);
   const [editingRouteId, setEditingRouteId] = useState<string | null>(null);
   
   const form = useForm<MovementFormData>({
@@ -532,6 +537,23 @@ export default function MovementsPage() {
     });
   };
 
+  const openPrintWindow = (route: Route) => {
+    const printContent = renderToStaticMarkup(<PrintRouteSheet route={route} usersMap={usersMap} />);
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+    } else {
+      toast({
+        title: "Error de Impresión",
+        description: "El navegador bloqueó la apertura de la ventana de impresión. Por favor, permite las ventanas emergentes para este sitio.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleGenerateRoute = async () => {
     const { collection, addDoc, doc, setDoc, Timestamp } = await import("firebase/firestore/lite");
     const firestore = db();
@@ -560,7 +582,6 @@ export default function MovementsPage() {
     try {
         let finalRoute: Route;
         if (editingRouteId) {
-            // Update existing route
             const routeRef = doc(firestore, "routes", editingRouteId);
             await setDoc(routeRef, { stops }, { merge: true });
             const updatedRoute = routes.find(r => r.id === editingRouteId);
@@ -571,7 +592,6 @@ export default function MovementsPage() {
                  throw new Error("No se pudo encontrar la ruta para actualizar localmente.");
             }
         } else {
-            // Create new route
             const newRouteData: Omit<Route, 'id'> = {
                 createdAt: Timestamp.now(),
                 createdBy: user.uid,
@@ -587,6 +607,9 @@ export default function MovementsPage() {
         setEditingRouteId(null);
         await fetchData();
 
+        // Open print window after successful creation/update
+        openPrintWindow(finalRoute);
+
     } catch (error: any) {
         console.error("Error generating route: ", error);
         logAppEvent({ level: 'ERROR', message: 'Failed to generate route', component: 'MovementsPage-handleGenerateRoute', stack: error.stack });
@@ -595,19 +618,9 @@ export default function MovementsPage() {
   };
 
   const handlePrintRoute = (route: Route) => {
-      setRouteToPrint(route);
+      openPrintWindow(route);
   };
   
-  useEffect(() => {
-    if (routeToPrint) {
-      const timer = setTimeout(() => {
-          window.print();
-          setRouteToPrint(null);
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-  }, [routeToPrint]);
-
   const handleEditRoute = (route: Route) => {
     setEditingRouteId(route.id);
     const customerIds = new Set(route.stops.map(stop => stop.customerId));
@@ -636,7 +649,7 @@ export default function MovementsPage() {
 
   return (
     <>
-      <div className="flex flex-1 flex-col no-print">
+      <div className="flex flex-1 flex-col">
         <PageHeader title="Registrar Movimiento" description="Escanea un QR para una acción rápida o gestiona las rutas de despacho." />
         <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0 space-y-8">
             
@@ -676,11 +689,7 @@ export default function MovementsPage() {
                         </TabsList>
                         <TabsContent value="rutas">
                             <Card className="border-none shadow-none">
-                                <CardHeader>
-                                    <CardTitle>Activos en Reparto</CardTitle>
-                                    <CardDescription>Crea una nueva hoja de ruta a partir de los activos que están actualmente en tránsito.</CardDescription>
-                                </CardHeader>
-                                <CardContent>
+                                <CardContent className="pt-6">
                                 <Dialog open={isRouteDialogOpen} onOpenChange={setIsRouteDialogOpen}>
                                         <DialogTrigger asChild>
                                             <Button size="lg" onClick={() => { setEditingRouteId(null); setSelectedCustomers(new Set()); }}>
@@ -744,11 +753,7 @@ export default function MovementsPage() {
                         </TabsContent>
                         <TabsContent value="historial">
                             <Card className="border-none shadow-none">
-                                <CardHeader>
-                                    <CardTitle>Historial de Hojas de Ruta</CardTitle>
-                                    <CardDescription>Consulta y reimprime las rutas generadas anteriormente.</CardDescription>
-                                </CardHeader>
-                                <CardContent>
+                                <CardContent className="pt-6">
                                 {isLoading ? (
                                         <div className="flex justify-center items-center py-10"><Loader2 className="h-8 w-8 animate-spin" /></div>
                                 ) : routes.length === 0 ? (
@@ -785,9 +790,6 @@ export default function MovementsPage() {
             </Card>
 
         </main>
-      </div>
-      <div className="print-only">
-          <PrintRouteSheet route={routeToPrint} usersMap={usersMap} />
       </div>
 
       <Dialog open={!!scannedAsset && !showCorrectionDialog} onOpenChange={(open) => !open && resetMovementState()}>
@@ -927,5 +929,3 @@ export default function MovementsPage() {
     </>
   );
 }
-
-    
