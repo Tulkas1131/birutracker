@@ -577,7 +577,6 @@ export default function MovementsPage() {
             }
         }
         
-        // Sort grouped assets to show them first
         const sortedGroups = Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
 
         return { groupedAssets: sortedGroups, unassignedAssets: unassigned };
