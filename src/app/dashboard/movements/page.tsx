@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import dynamic from "next/dynamic";
 import { auth, db } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { Loader2, QrCode, ArrowRight, AlertTriangle, Route as RouteIcon, PackageCheck, ListPlus, Pencil, X, Calendar as CalendarIcon, User } from "lucide-react";
+import { Loader2, QrCode, ArrowRight, AlertTriangle, Route as RouteIcon, PackageCheck, Pencil, X, Calendar as CalendarIcon, User } from "lucide-react";
 import { differenceInDays, format } from 'date-fns';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -23,7 +23,6 @@ import { logAppEvent } from "@/lib/logging";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Separator } from "@/components/ui/separator";
 import { useUserRole } from "@/hooks/use-user-role";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState } from "@/components/empty-state";
@@ -117,7 +116,6 @@ export default function MovementsPage() {
   const [user] = useAuthState(auth());
   const userRole = useUserRole();
   
-  const [assets, setAssets] = useState<Asset[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [lastEvents, setLastEvents] = useState<Map<string, Event>>(new Map());
@@ -171,16 +169,16 @@ export default function MovementsPage() {
       
       const readyAssets = assetsData.filter(asset => asset.location === 'EN_PLANTA' && asset.state === 'LLENO');
 
-      setAssets(assetsData);
       setCustomers(customersData);
       setLastEvents(lastEventsMap);
+      
+      // Preserve assigned customer if asset still exists and update list
       setAssetsForDispatch(prevAssets => {
-        // Preserve assigned customer if asset still exists
-        const updatedReadyAssets = readyAssets.map(asset => {
-            const existing = prevAssets.find(p => p.id === asset.id);
-            return { ...asset, assignedCustomerId: existing?.assignedCustomerId };
-        });
-        return updatedReadyAssets;
+        const prevAssignments = new Map(prevAssets.map(a => [a.id, a.assignedCustomerId]));
+        return readyAssets.map(asset => ({
+            ...asset,
+            assignedCustomerId: prevAssignments.get(asset.id)
+        }));
       });
 
 
@@ -202,7 +200,6 @@ export default function MovementsPage() {
 
   const fillDatesMap = useMemo(() => {
     const map = new Map<string, Date>();
-    // Get all fill events, but only the last one per asset matters.
     const lastFillEvents = new Map<string, Event>();
     events.filter(e => e.event_type === 'LLENADO_EN_PLANTA').forEach(event => {
         if (!lastFillEvents.has(event.asset_id) || event.timestamp.toMillis() > lastFillEvents.get(event.asset_id)!.timestamp.toMillis()) {
@@ -279,6 +276,19 @@ export default function MovementsPage() {
     setActionLogic(logic);
     form.setValue('asset_id', asset.id);
     form.setValue('event_type', logic.primary);
+
+    // Auto-assign customer if asset is ready for dispatch
+    if (asset.location === 'EN_PLANTA' && asset.state === 'LLENO' && logic.requiresCustomerSelection) {
+        const lastEvent = lastEvents.get(asset.id);
+        const lastDeliveryToCustomer = lastEvent?.event_type === 'SALIDA_A_REPARTO' ? lastEvent : null;
+        const customerId = lastDeliveryToCustomer?.customer_id;
+        
+        if (customerId) {
+            handleCustomerAssignment(asset.id, customerId);
+            toast({ title: "Cliente Asignado", description: `Activo ${asset.code} asignado automáticamente a ${lastDeliveryToCustomer?.customer_name}.` });
+        }
+    }
+
 
     if (logic.autoFillsCustomer) {
         const eventToUse: Event | undefined = lastEvents.get(asset.id);
@@ -551,7 +561,7 @@ export default function MovementsPage() {
   };
   
   const AssetsForDispatchList = ({ assetsList }: { assetsList: AssetForDispatch[] }) => {
-    const groupedAssets = useMemo(() => {
+    const { groupedAssets, unassignedAssets } = useMemo(() => {
         const groups = new Map<string, AssetForDispatch[]>();
         const unassigned: AssetForDispatch[] = [];
 
@@ -565,8 +575,7 @@ export default function MovementsPage() {
                 unassigned.push(asset);
             }
         }
-
-        return { groups, unassigned };
+        return { groupedAssets: Array.from(groups.entries()), unassignedAssets: unassigned };
     }, [assetsList]);
 
     const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c.name])), [customers]);
@@ -579,9 +588,45 @@ export default function MovementsPage() {
         );
     }
     
+    const AssetRow = ({ asset }: { asset: AssetForDispatch }) => (
+        <div key={asset.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 p-2 rounded-md hover:bg-muted/50">
+            {isRouteMode && (
+                <Checkbox 
+                    id={`asset-${asset.id}`}
+                    checked={!!selectedAssetsForRoute[asset.id]}
+                    onCheckedChange={() => handleAssetSelectionForRoute(asset.id)}
+                    disabled={!isRouteMode}
+                />
+            )}
+            <Label htmlFor={`asset-${asset.id}`} className="flex-1 font-normal cursor-pointer">
+                <div className="flex flex-col">
+                    <div className="font-sans">
+                        {asset.code} 
+                        <span className="text-muted-foreground ml-2">
+                            ({asset.format}{asset.variety && asset.type === 'BARRIL' ? ` - ${asset.variety}` : ''})
+                        </span>
+                    </div>
+                    <FillDateInfo fillDate={fillDatesMap.get(asset.id)} />
+                </div>
+            </Label>
+            <div className="w-full sm:w-60">
+                <Select
+                    value={asset.assignedCustomerId}
+                    onValueChange={(value) => handleCustomerAssignment(asset.id, value)}
+                    disabled={!isRouteMode}
+                >
+                    <SelectTrigger><SelectValue placeholder="Asignar cliente..." /></SelectTrigger>
+                    <SelectContent>
+                        {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    </SelectContent>
+                </Select>
+            </div>
+        </div>
+    );
+    
     return (
         <div className="space-y-4">
-            {Array.from(groupedAssets.groups.entries()).map(([customerId, customerAssets]) => (
+            {groupedAssets.map(([customerId, customerAssets]) => (
                 <Card key={customerId}>
                     <CardHeader className="p-4">
                         <CardTitle className="text-base flex items-center gap-2">
@@ -590,86 +635,18 @@ export default function MovementsPage() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="p-4 pt-0 space-y-2">
-                        {customerAssets.map(asset => (
-                            <div key={asset.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 p-2 rounded-md hover:bg-muted/50">
-                                {isRouteMode && (
-                                    <Checkbox 
-                                        id={`asset-${asset.id}`}
-                                        checked={!!selectedAssetsForRoute[asset.id]}
-                                        onCheckedChange={() => handleAssetSelectionForRoute(asset.id)}
-                                        disabled={!isRouteMode}
-                                    />
-                                )}
-                                <Label htmlFor={`asset-${asset.id}`} className="flex-1 font-normal">
-                                    <div className="flex flex-col">
-                                        <div>
-                                            {asset.code} 
-                                            <span className="text-muted-foreground ml-2">
-                                                ({asset.format}{asset.variety && asset.type === 'BARRIL' ? ` - ${asset.variety}` : ''})
-                                            </span>
-                                        </div>
-                                        <FillDateInfo fillDate={fillDatesMap.get(asset.id)} />
-                                    </div>
-                                </Label>
-                                <div className="w-full sm:w-60">
-                                    <Select
-                                        value={asset.assignedCustomerId}
-                                        onValueChange={(value) => handleCustomerAssignment(asset.id, value)}
-                                        disabled={!isRouteMode}
-                                    >
-                                        <SelectTrigger><SelectValue placeholder="Asignar cliente..." /></SelectTrigger>
-                                        <SelectContent>
-                                            {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-                        ))}
+                        {customerAssets.map(asset => <AssetRow key={asset.id} asset={asset} />)}
                     </CardContent>
                 </Card>
             ))}
 
-            {groupedAssets.unassigned.length > 0 && (
+            {unassignedAssets.length > 0 && (
                 <Card>
                     <CardHeader className="p-4">
                         <CardTitle className="text-base">Sin Asignar</CardTitle>
                     </CardHeader>
                     <CardContent className="p-4 pt-0 space-y-2">
-                         {groupedAssets.unassigned.map(asset => (
-                            <div key={asset.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 p-2 rounded-md hover:bg-muted/50">
-                                {isRouteMode && (
-                                    <Checkbox 
-                                        id={`asset-${asset.id}`}
-                                        checked={!!selectedAssetsForRoute[asset.id]}
-                                        onCheckedChange={() => handleAssetSelectionForRoute(asset.id)}
-                                        disabled={!isRouteMode}
-                                    />
-                                )}
-                                <Label htmlFor={`asset-${asset.id}`} className="flex-1 font-normal">
-                                    <div className="flex flex-col">
-                                        <div>
-                                            {asset.code} 
-                                            <span className="text-muted-foreground ml-2">
-                                                ({asset.format}{asset.variety && asset.type === 'BARRIL' ? ` - ${asset.variety}` : ''})
-                                            </span>
-                                        </div>
-                                        <FillDateInfo fillDate={fillDatesMap.get(asset.id)} />
-                                    </div>
-                                </Label>
-                                <div className="w-full sm:w-60">
-                                    <Select
-                                        value={asset.assignedCustomerId}
-                                        onValueChange={(value) => handleCustomerAssignment(asset.id, value)}
-                                        disabled={!isRouteMode}
-                                    >
-                                        <SelectTrigger><SelectValue placeholder="Asignar cliente..." /></SelectTrigger>
-                                        <SelectContent>
-                                            {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-                        ))}
+                         {unassignedAssets.map(asset => <AssetRow key={asset.id} asset={asset} />)}
                     </CardContent>
                 </Card>
             )}
@@ -897,3 +874,5 @@ export default function MovementsPage() {
     </div>
   );
 }
+
+    
