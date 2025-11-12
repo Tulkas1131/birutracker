@@ -201,6 +201,7 @@ export default function MovementsPage() {
   const fillDatesMap = useMemo(() => {
     const map = new Map<string, Date>();
     const lastFillEvents = new Map<string, Event>();
+    // Prioritize creating a comprehensive map of the last fill event for every asset.
     events.filter(e => e.event_type === 'LLENADO_EN_PLANTA').forEach(event => {
         if (!lastFillEvents.has(event.asset_id) || event.timestamp.toMillis() > lastFillEvents.get(event.asset_id)!.timestamp.toMillis()) {
             lastFillEvents.set(event.asset_id, event);
@@ -233,7 +234,7 @@ export default function MovementsPage() {
     }
     
     // --- New Logic: Check in-memory list first ---
-    let asset: Asset | undefined = assetsForDispatch.find(a => a.id === decodedText);
+    let asset: AssetForDispatch | undefined = assetsForDispatch.find(a => a.id === decodedText);
 
     if (!asset) {
         // If not in dispatch list, fetch from Firestore
@@ -246,7 +247,7 @@ export default function MovementsPage() {
             toast({ title: "Activo No Encontrado", description: "El activo escaneado no existe.", variant: "destructive" });
             return;
         }
-        asset = { id: assetSnap.id, ...assetSnap.data() } as Asset;
+        asset = { id: assetSnap.id, ...assetSnap.data() } as AssetForDispatch;
     }
 
     let logic: ActionLogic | undefined | null = JSON.parse(JSON.stringify(stateLogic[asset.location]?.[asset.state]));
@@ -284,7 +285,7 @@ export default function MovementsPage() {
     form.setValue('event_type', logic.primary);
     
     // --- New Logic: Prioritize already assigned customer ---
-    const assignedCustomerId = (asset as AssetForDispatch).assignedCustomerId;
+    const assignedCustomerId = asset.assignedCustomerId;
 
     if (assignedCustomerId) {
         form.setValue('customer_id', assignedCustomerId);
@@ -455,9 +456,7 @@ export default function MovementsPage() {
   
   const handleCustomerAssignment = (assetId: string, customerId: string) => {
     setAssetsForDispatch(prev => {
-        const newAssets = prev.map(a => a.id === assetId ? { ...a, assignedCustomerId: customerId } : a);
-        // Ensure the updated list is used for rendering groups
-        return [...newAssets];
+        return prev.map(a => a.id === assetId ? { ...a, assignedCustomerId: customerId } : a);
     });
   };
 
@@ -641,7 +640,7 @@ export default function MovementsPage() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="p-4 pt-0 space-y-2">
-                        {customerAssets.map(asset => <AssetRow key={asset.id} asset={asset} />)}
+                        {customerAssets.sort((a,b) => a.code.localeCompare(b.code)).map(asset => <AssetRow key={asset.id} asset={asset} />)}
                     </CardContent>
                 </Card>
             ))}
@@ -652,7 +651,7 @@ export default function MovementsPage() {
                         <CardTitle className="text-base">Sin Asignar</CardTitle>
                     </CardHeader>
                     <CardContent className="p-4 pt-0 space-y-2">
-                         {unassignedAssets.map(asset => <AssetRow key={asset.id} asset={asset} />)}
+                         {unassignedAssets.sort((a,b) => a.code.localeCompare(b.code)).map(asset => <AssetRow key={asset.id} asset={asset} />)}
                     </CardContent>
                 </Card>
             )}
@@ -880,3 +879,5 @@ export default function MovementsPage() {
     </div>
   );
 }
+
+    
