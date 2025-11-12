@@ -128,20 +128,22 @@ export interface UserData {
 
 export const routeStopSchema = z.object({
   customerId: z.string(),
+  customerName: z.string(),
+  customerAddress: z.string().optional(),
   assets: z.array(z.object({
     id: z.string(),
     code: z.string(),
     format: z.string(),
+    variety: z.string().optional(),
   })),
 });
 
 export const routeSchema = z.object({
   id: z.string().optional(),
   createdAt: z.instanceof(Timestamp),
+  createdBy: z.string(), // User email
   stops: z.array(routeStopSchema),
 });
 
 export type RouteStop = z.infer<typeof routeStopSchema>;
 export type Route = z.infer<typeof routeSchema> & { id: string };
-
-    

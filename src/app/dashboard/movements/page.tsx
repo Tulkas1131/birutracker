@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, Suspense, useEffect, useMemo, useCallback } from "react";
@@ -17,7 +18,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/hooks/use-toast";
-import { movementSchema, type MovementFormData, type Asset, type Customer, type Event, type MovementEventType, type Route, type RouteStop, routeSchema } from "@/lib/types";
+import { movementSchema, type MovementFormData, type Asset, type Customer, type Event, type MovementEventType, type Route, type RouteStop, routeSchema, UserData } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { logAppEvent } from "@/lib/logging";
@@ -154,7 +155,7 @@ const AssetsOnDeliveryList = ({ isRouteMode, selectedCustomers, onCustomerSelect
     selectedCustomers: Set<string>;
     onCustomerSelect: (customerId: string, isSelected: boolean) => void;
     groupedAssets: [string, Asset[]][];
-    customerMap: Map<string, string>;
+    customerMap: Map<string, Customer>;
     fillDatesMap: Map<string, Date>;
 }) => {
     
@@ -185,7 +186,7 @@ const AssetsOnDeliveryList = ({ isRouteMode, selectedCustomers, onCustomerSelect
                         )}
                         <CardTitle className="text-base flex items-center gap-2">
                            <User className="h-5 w-5" />
-                           {customerMap.get(customerId) || 'Cliente desconocido'}
+                           {customerMap.get(customerId)?.name || 'Cliente desconocido'}
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="p-4 pt-0 space-y-2">
@@ -199,37 +200,42 @@ const AssetsOnDeliveryList = ({ isRouteMode, selectedCustomers, onCustomerSelect
     );
 };
 
-const PrintRouteSheet = ({ route, customerMap }: { route: Route, customerMap: Map<string, string> }) => (
-  <div className="print-route-sheet bg-white text-black p-8 font-sans">
-      <header className="flex justify-between items-center mb-8 border-b-2 border-black pb-4">
-          <div className="flex items-center gap-4">
-              <Logo className="h-12 w-12 text-black" />
-              <h1 className="text-3xl font-bold">Hoja de Ruta</h1>
-          </div>
-          <div className="text-right">
-              <p><strong>Fecha:</strong> {format(route.createdAt.toDate(), 'dd/MM/yyyy HH:mm')}</p>
-              <p><strong>Ruta ID:</strong> {route.id}</p>
-          </div>
-      </header>
-      <main className="space-y-6">
-          {route.stops.map((stop, index) => (
-              <div key={stop.customerId} className="break-inside-avoid p-4 border border-gray-300 rounded-lg">
-                  <h2 className="text-xl font-semibold mb-2 border-b border-gray-200 pb-2">
-                      <span className="font-bold mr-2">{index + 1}.</span> {customerMap.get(stop.customerId) || 'Cliente Desconocido'}
-                  </h2>
-                  <div className="grid grid-cols-2 gap-x-4">
-                      {stop.assets.map(asset => (
-                          <div key={asset.id} className="text-sm py-1">
-                              <span className="font-mono">{asset.code}</span>
-                              <span className="text-gray-600 ml-2">({asset.format})</span>
-                          </div>
-                      ))}
-                  </div>
-              </div>
-          ))}
-      </main>
-  </div>
-);
+const PrintRouteSheet = ({ route, usersMap }: { route: Route, usersMap: Map<string, UserData> }) => {
+    const createdByUser = usersMap.get(route.createdBy);
+    return (
+        <div className="print-route-sheet bg-white text-black p-8 font-sans">
+            <header className="flex justify-between items-center mb-8 border-b-2 border-black pb-4">
+                <div className="flex items-center gap-4">
+                    <Logo className="h-12 w-12 text-black" />
+                    <h1 className="text-3xl font-bold">Hoja de Ruta</h1>
+                </div>
+                <div className="text-right text-sm">
+                    <p><strong>Fecha:</strong> {format(route.createdAt.toDate(), 'dd/MM/yyyy HH:mm')}</p>
+                    <p><strong>Ruta ID:</strong> {route.id}</p>
+                    <p><strong>Generado por:</strong> {createdByUser?.email || route.createdBy}</p>
+                </div>
+            </header>
+            <main className="space-y-6">
+                {route.stops.map((stop, index) => (
+                    <div key={stop.customerId} className="break-inside-avoid p-4 border border-gray-300 rounded-lg">
+                        <h2 className="text-xl font-semibold mb-3 border-b border-gray-200 pb-2">
+                            <span className="font-bold mr-2">{index + 1}.</span> {stop.customerName}
+                        </h2>
+                        {stop.customerAddress && <p className="text-sm text-gray-600 mb-3">{stop.customerAddress}</p>}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4">
+                            {stop.assets.map(asset => (
+                                <div key={asset.id} className="text-sm py-1">
+                                    <span className="font-mono">{asset.code}</span>
+                                    <span className="text-gray-600 ml-2">({asset.format}{asset.variety ? ` - ${asset.variety}` : ''})</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </main>
+        </div>
+    )
+};
 
 
 // --- Main Page Component ---
@@ -243,6 +249,7 @@ export default function MovementsPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [routes, setRoutes] = useState<Route[]>([]);
+  const [users, setUsers] = useState<UserData[]>([]);
   
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -274,23 +281,27 @@ export default function MovementsPage() {
       const customersQuery = query(collection(firestore, "customers"), orderBy("name"));
       const eventsQuery = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
       const routesQuery = query(collection(firestore, "routes"), orderBy("createdAt", "desc"));
+      const usersQuery = query(collection(firestore, "users"));
 
-      const [assetsSnapshot, customersSnapshot, eventsSnapshot, routesSnapshot] = await Promise.all([
+      const [assetsSnapshot, customersSnapshot, eventsSnapshot, routesSnapshot, usersSnapshot] = await Promise.all([
         getDocs(assetsQuery),
         getDocs(customersQuery),
         getDocs(eventsQuery),
         getDocs(routesQuery),
+        getDocs(usersQuery)
       ]);
 
       const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
       const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
       const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
       const routesData = routesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Route));
+      const usersData = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserData));
       
       setAllAssets(assetsData);
       setEvents(eventsData);
       setCustomers(customersData);
       setRoutes(routesData);
+      setUsers(usersData);
       
     } catch (error: any) {
       console.error("Error fetching data for movements page: ", error);
@@ -341,7 +352,8 @@ export default function MovementsPage() {
     return map;
   }, [allAssets, events]);
   
-  const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c.name])), [customers]);
+  const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
+  const usersMap = useMemo(() => new Map(users.map(u => [u.id, u])), [users]);
 
   const groupedAssetsOnDelivery = useMemo(() => {
     const groups = new Map<string, Asset[]>();
@@ -355,7 +367,7 @@ export default function MovementsPage() {
             groups.get(customerId)!.push(asset);
          }
     }
-    return Array.from(groups.entries()).sort((a, b) => (customerMap.get(a[0]) || '').localeCompare(customerMap.get(b[0]) || ''));
+    return Array.from(groups.entries()).sort((a, b) => (customerMap.get(a[0])?.name || '').localeCompare(customerMap.get(b[0])?.name || ''));
   }, [assetsOnDelivery, lastEventsMap, customerMap]);
 
   
@@ -579,36 +591,49 @@ export default function MovementsPage() {
         return;
     }
 
+    if (!user) {
+        toast({ title: "Error", description: "No se pudo identificar al usuario creador.", variant: "destructive" });
+        return;
+    }
+
     const stops: RouteStop[] = groupedAssetsOnDelivery
         .filter(([customerId]) => selectedCustomers.has(customerId))
-        .map(([customerId, assets]) => ({
-            customerId,
-            assets: assets.map(a => ({ id: a.id, code: a.code, format: a.format })),
-        }));
+        .map(([customerId, assets]) => {
+            const customer = customerMap.get(customerId);
+            return {
+                customerId,
+                customerName: customer?.name || 'Desconocido',
+                customerAddress: customer?.address || '',
+                assets: assets.map(a => ({ id: a.id, code: a.code, format: a.format, variety: a.variety })),
+            }
+        });
     
     try {
+        let finalRoute: Route;
         if (editingRouteId) {
             // Update existing route
             const routeRef = doc(firestore, "routes", editingRouteId);
             await setDoc(routeRef, { stops }, { merge: true });
             const updatedRoute = routes.find(r => r.id === editingRouteId);
             if (updatedRoute) {
-                const finalRoute = {...updatedRoute, stops};
-                setRouteToPrint(finalRoute);
+                finalRoute = {...updatedRoute, stops};
                 toast({ title: "Ruta Actualizada", description: "La hoja de ruta ha sido actualizada." });
+            } else {
+                 throw new Error("No se pudo encontrar la ruta para actualizar localmente.");
             }
         } else {
             // Create new route
             const newRouteData: Omit<Route, 'id'> = {
                 createdAt: Timestamp.now(),
+                createdBy: user.uid,
                 stops,
             };
             const routeRef = await addDoc(collection(firestore, "routes"), newRouteData);
-            const finalRoute = { id: routeRef.id, ...newRouteData };
-            setRouteToPrint(finalRoute);
+            finalRoute = { id: routeRef.id, ...newRouteData };
             toast({ title: "Ruta Generada", description: "La hoja de ruta ha sido creada y guardada." });
         }
 
+        setRouteToPrint(finalRoute);
         setIsRouteMode(false);
         setSelectedCustomers(new Set());
         setEditingRouteId(null);
@@ -763,10 +788,12 @@ export default function MovementsPage() {
                                                 <Printer className="mr-2 h-4 w-4" />
                                                 Reimprimir
                                             </Button>
-                                            <Button variant="outline" size="sm" onClick={() => handleEditRoute(route)}>
-                                                <Pencil className="mr-2 h-4 w-4" />
-                                                Editar
-                                            </Button>
+                                            {userRole === 'Admin' && (
+                                                <Button variant="outline" size="sm" onClick={() => handleEditRoute(route)}>
+                                                    <Pencil className="mr-2 h-4 w-4" />
+                                                    Editar
+                                                </Button>
+                                            )}
                                         </div>
                                     </div>
                                   ))}
@@ -916,9 +943,8 @@ export default function MovementsPage() {
 
        {/* Print-only component */}
         <div className="print-only">
-          {routeToPrint && <PrintRouteSheet route={routeToPrint} customerMap={customerMap} />}
+          {routeToPrint && <PrintRouteSheet route={routeToPrint} usersMap={usersMap} />}
         </div>
     </>
   );
 }
-    
