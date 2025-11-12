@@ -232,16 +232,22 @@ export default function MovementsPage() {
         return;
     }
     
-    const { getDoc, doc } = await import("firebase/firestore/lite");
-    const firestore = db();
-    const assetRef = doc(firestore, "assets", decodedText);
-    const assetSnap = await getDoc(assetRef);
+    // --- New Logic: Check in-memory list first ---
+    let asset: Asset | undefined = assetsForDispatch.find(a => a.id === decodedText);
 
-    if (!assetSnap.exists()) {
-        toast({ title: "Activo No Encontrado", description: "El activo escaneado no existe.", variant: "destructive" });
-        return;
+    if (!asset) {
+        // If not in dispatch list, fetch from Firestore
+        const { getDoc, doc } = await import("firebase/firestore/lite");
+        const firestore = db();
+        const assetRef = doc(firestore, "assets", decodedText);
+        const assetSnap = await getDoc(assetRef);
+
+        if (!assetSnap.exists()) {
+            toast({ title: "Activo No Encontrado", description: "El activo escaneado no existe.", variant: "destructive" });
+            return;
+        }
+        asset = { id: assetSnap.id, ...assetSnap.data() } as Asset;
     }
-    const asset = { id: assetSnap.id, ...assetSnap.data() } as Asset;
 
     let logic: ActionLogic | undefined | null = JSON.parse(JSON.stringify(stateLogic[asset.location]?.[asset.state]));
 
@@ -276,21 +282,13 @@ export default function MovementsPage() {
     setActionLogic(logic);
     form.setValue('asset_id', asset.id);
     form.setValue('event_type', logic.primary);
+    
+    // --- New Logic: Prioritize already assigned customer ---
+    const assignedCustomerId = (asset as AssetForDispatch).assignedCustomerId;
 
-    // Auto-assign customer if asset is ready for dispatch
-    if (asset.location === 'EN_PLANTA' && asset.state === 'LLENO' && logic.requiresCustomerSelection) {
-        const lastEvent = lastEvents.get(asset.id);
-        const lastDeliveryToCustomer = lastEvent?.event_type === 'SALIDA_A_REPARTO' ? lastEvent : null;
-        const customerId = lastDeliveryToCustomer?.customer_id;
-        
-        if (customerId) {
-            handleCustomerAssignment(asset.id, customerId);
-            toast({ title: "Cliente Asignado", description: `Activo ${asset.code} asignado automáticamente a ${lastDeliveryToCustomer?.customer_name}.` });
-        }
-    }
-
-
-    if (logic.autoFillsCustomer) {
+    if (assignedCustomerId) {
+        form.setValue('customer_id', assignedCustomerId);
+    } else if (logic.autoFillsCustomer) {
         const eventToUse: Event | undefined = lastEvents.get(asset.id);
         if (eventToUse) {
             form.setValue('customer_id', eventToUse.customer_id);
@@ -456,7 +454,11 @@ export default function MovementsPage() {
   };
   
   const handleCustomerAssignment = (assetId: string, customerId: string) => {
-    setAssetsForDispatch(prev => prev.map(a => a.id === assetId ? { ...a, assignedCustomerId: customerId } : a));
+    setAssetsForDispatch(prev => {
+        const newAssets = prev.map(a => a.id === assetId ? { ...a, assignedCustomerId: customerId } : a);
+        // Ensure the updated list is used for rendering groups
+        return [...newAssets];
+    });
   };
 
   const handleConfirmRoute = async () => {
@@ -575,7 +577,11 @@ export default function MovementsPage() {
                 unassigned.push(asset);
             }
         }
-        return { groupedAssets: Array.from(groups.entries()), unassignedAssets: unassigned };
+        
+        // Sort grouped assets to show them first
+        const sortedGroups = Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+        return { groupedAssets: sortedGroups, unassignedAssets: unassigned };
     }, [assetsList]);
 
     const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c.name])), [customers]);
@@ -874,5 +880,3 @@ export default function MovementsPage() {
     </div>
   );
 }
-
-    
