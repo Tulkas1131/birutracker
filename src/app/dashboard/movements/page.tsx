@@ -110,6 +110,115 @@ const getEventTypeTranslation = (eventType: MovementEventType): string => {
 };
 
 type AssetForDispatch = Asset & { assignedCustomerId?: string };
+type GroupedAssets = [string, AssetForDispatch[]][];
+
+// --- Sub-components for better readability ---
+
+const FillDateInfo = ({ fillDate }: { fillDate: Date | undefined }) => {
+    if (!fillDate) return null;
+
+    const daysOld = differenceInDays(new Date(), fillDate);
+    let colorClass = 'text-muted-foreground';
+    if (daysOld >= 14) {
+      colorClass = 'text-destructive';
+    } else if (daysOld >= 7) {
+      colorClass = 'text-amber-600 dark:text-amber-500';
+    }
+
+    return (
+      <div className={cn("flex items-center gap-1.5 text-xs mt-1", colorClass)}>
+        <CalendarIcon className="h-3 w-3" />
+        <span>Llenado: {format(fillDate, 'dd/MM/yyyy')}</span>
+      </div>
+    );
+};
+
+const AssetRow = ({ asset, isRouteMode, selectedAssetsForRoute, onAssetSelection, onCustomerAssignment, customers, fillDatesMap }: {
+    asset: AssetForDispatch;
+    isRouteMode: boolean;
+    selectedAssetsForRoute: Record<string, boolean>;
+    onAssetSelection: (assetId: string) => void;
+    onCustomerAssignment: (assetId: string, customerId: string) => void;
+    customers: Customer[];
+    fillDatesMap: Map<string, Date>;
+}) => (
+    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 p-2 rounded-md hover:bg-muted/50">
+        {isRouteMode && (
+            <Checkbox
+                id={`asset-${asset.id}`}
+                checked={!!selectedAssetsForRoute[asset.id]}
+                onCheckedChange={() => onAssetSelection(asset.id)}
+                disabled={!isRouteMode}
+            />
+        )}
+        <Label htmlFor={`asset-${asset.id}`} className="flex-1 font-normal cursor-pointer">
+            <div className="flex flex-col">
+                <span className="font-sans">
+                    {asset.code}
+                    <span className="text-muted-foreground ml-2">
+                        ({asset.format}{asset.variety && asset.type === 'BARRIL' ? ` - ${asset.variety}` : ''})
+                    </span>
+                </span>
+                <FillDateInfo fillDate={fillDatesMap.get(asset.id)} />
+            </div>
+        </Label>
+        <div className="w-full sm:w-60">
+            <Select
+                value={asset.assignedCustomerId}
+                onValueChange={(value) => onCustomerAssignment(asset.id, value)}
+                disabled={!isRouteMode}
+            >
+                <SelectTrigger><SelectValue placeholder="Asignar cliente..." /></SelectTrigger>
+                <SelectContent>
+                    {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                </SelectContent>
+            </Select>
+        </div>
+    </div>
+);
+
+
+const AssetsForDispatchList = ({ groupedAssets, customerMap, ...props }: {
+    groupedAssets: GroupedAssets;
+    customerMap: Map<string, string>;
+    isRouteMode: boolean;
+    selectedAssetsForRoute: Record<string, boolean>;
+    onAssetSelection: (assetId: string) => void;
+    onCustomerAssignment: (assetId: string, customerId: string) => void;
+    customers: Customer[];
+    fillDatesMap: Map<string, Date>;
+}) => {
+    if (groupedAssets.length === 0) {
+        return (
+            <div className="py-10 text-center text-muted-foreground">
+                Asigna un cliente a los activos listos para despachar para poder crear una ruta.
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-4">
+            {groupedAssets.map(([customerId, customerAssets]) => (
+                <Card key={customerId}>
+                    <CardHeader className="p-4">
+                        <CardTitle className="text-base flex items-center gap-2">
+                           <User className="h-5 w-5" />
+                           {customerMap.get(customerId) || 'Cliente desconocido'}
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0 space-y-2">
+                        {customerAssets.sort((a,b) => a.code.localeCompare(b.code)).map(asset => (
+                            <AssetRow key={asset.id} asset={asset} {...props} />
+                        ))}
+                    </CardContent>
+                </Card>
+            ))}
+        </div>
+    );
+};
+
+
+// --- Main Page Component ---
 
 export default function MovementsPage() {
   const { toast } = useToast();
@@ -124,7 +233,7 @@ export default function MovementsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isScannerOpen, setScannerOpen] = useState(false);
   
-  const [scannedAsset, setScannedAsset] = useState<Asset | null>(null);
+  const [scannedAsset, setScannedAsset] = useState<AssetForDispatch | null>(null);
   const [actionLogic, setActionLogic] = useState<ActionLogic | null>(null);
   const [isManualOverride, setIsManualOverride] = useState(false);
   const [showCorrectionDialog, setShowCorrectionDialog] = useState(false);
@@ -159,6 +268,7 @@ export default function MovementsPage() {
       const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
       
       setEvents(eventsData);
+      setCustomers(customersData);
 
       const lastEventsMap = new Map<string, Event>();
       eventsData.forEach(event => {
@@ -166,12 +276,10 @@ export default function MovementsPage() {
             lastEventsMap.set(event.asset_id, event);
         }
       });
+      setLastEvents(lastEventsMap);
       
       const readyAssets = assetsData.filter(asset => asset.location === 'EN_PLANTA' && asset.state === 'LLENO');
 
-      setCustomers(customersData);
-      setLastEvents(lastEventsMap);
-      
       // Preserve assigned customer if asset still exists and update list
       setAssetsForDispatch(prevAssets => {
         const prevAssignments = new Map(prevAssets.map(a => [a.id, a.assignedCustomerId]));
@@ -180,8 +288,6 @@ export default function MovementsPage() {
             assignedCustomerId: prevAssignments.get(asset.id)
         }));
       });
-
-
     } catch (error: any) {
       console.error("Error fetching data for movements page: ", error);
       logAppEvent({ level: 'ERROR', message: 'Failed to fetch data', component: 'MovementsPage', stack: error.stack });
@@ -195,8 +301,6 @@ export default function MovementsPage() {
     fetchData();
   }, [fetchData]);
 
-  const barrelsForDispatch = useMemo(() => assetsForDispatch.filter(a => a.type === 'BARRIL'), [assetsForDispatch]);
-  const co2ForDispatch = useMemo(() => assetsForDispatch.filter(a => a.type === 'CO2'), [assetsForDispatch]);
 
   const fillDatesMap = useMemo(() => {
     const map = new Map<string, Date>();
@@ -216,6 +320,36 @@ export default function MovementsPage() {
     }
     return map;
   }, [events, assetsForDispatch]);
+  
+  const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c.name])), [customers]);
+
+  const { groupedBarrels, groupedCo2 } = useMemo(() => {
+    const barrelGroups = new Map<string, AssetForDispatch[]>();
+    const co2Groups = new Map<string, AssetForDispatch[]>();
+
+    for (const asset of assetsForDispatch) {
+      if (asset.assignedCustomerId) {
+        const targetGroup = asset.type === 'BARRIL' ? barrelGroups : co2Groups;
+        if (!targetGroup.has(asset.assignedCustomerId)) {
+          targetGroup.set(asset.assignedCustomerId, []);
+        }
+        targetGroup.get(asset.assignedCustomerId)!.push(asset);
+      }
+    }
+
+    const sortGroups = (groups: Map<string, AssetForDispatch[]>) => {
+      return Array.from(groups.entries()).sort(([idA], [idB]) => {
+        const nameA = customerMap.get(idA) || '';
+        const nameB = customerMap.get(idB) || '';
+        return nameA.localeCompare(nameB);
+      });
+    };
+
+    return {
+      groupedBarrels: sortGroups(barrelGroups),
+      groupedCo2: sortGroups(co2Groups),
+    };
+  }, [assetsForDispatch, customerMap]);
   
   const resetMovementState = () => {
     setScannedAsset(null);
@@ -538,120 +672,6 @@ export default function MovementsPage() {
       }
   };
 
-  const FillDateInfo = ({ fillDate }: { fillDate: Date | undefined }) => {
-    if (!fillDate) return null;
-
-    const daysOld = differenceInDays(new Date(), fillDate);
-    let colorClass = 'text-muted-foreground';
-    if (daysOld >= 14) {
-      colorClass = 'text-destructive';
-    } else if (daysOld >= 7) {
-      colorClass = 'text-amber-600 dark:text-amber-500';
-    }
-
-    return (
-      <div className={cn("flex items-center gap-1.5 text-xs mt-1", colorClass)}>
-        <CalendarIcon className="h-3 w-3" />
-        <span>Llenado: {format(fillDate, 'dd/MM/yyyy')}</span>
-      </div>
-    );
-  };
-  
-  const AssetsForDispatchList = ({ assetsList }: { assetsList: AssetForDispatch[] }) => {
-    const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c.name])), [customers]);
-
-    const { groupedAssets } = useMemo(() => {
-        const groups = new Map<string, AssetForDispatch[]>();
-        
-        for (const asset of assetsList) {
-            if (asset.assignedCustomerId) {
-                if (!groups.has(asset.assignedCustomerId)) {
-                    groups.set(asset.assignedCustomerId, []);
-                }
-                groups.get(asset.assignedCustomerId)!.push(asset);
-            }
-        }
-        
-        const sortedGroups = Array.from(groups.entries()).sort(([idA], [idB]) => {
-          const nameA = customerMap.get(idA) || '';
-          const nameB = customerMap.get(idB) || '';
-          return nameA.localeCompare(nameB);
-        });
-
-        return { groupedAssets: sortedGroups };
-    }, [assetsList, customerMap]);
-
-    if (assetsList.length === 0) {
-        return (
-            <div className="py-10 text-center text-muted-foreground">
-                No hay activos de este tipo listos para despachar.
-            </div>
-        );
-    }
-    
-    if (groupedAssets.length === 0) {
-        return (
-             <div className="py-10 text-center text-muted-foreground">
-                Asigna un cliente a los activos para poder crear una ruta.
-            </div>
-        )
-    }
-    
-    const AssetRow = ({ asset }: { asset: AssetForDispatch }) => (
-        <div key={asset.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 p-2 rounded-md hover:bg-muted/50">
-            {isRouteMode && (
-                <Checkbox 
-                    id={`asset-${asset.id}`}
-                    checked={!!selectedAssetsForRoute[asset.id]}
-                    onCheckedChange={() => handleAssetSelectionForRoute(asset.id)}
-                    disabled={!isRouteMode}
-                />
-            )}
-            <Label htmlFor={`asset-${asset.id}`} className="flex-1 font-normal cursor-pointer">
-                <div className="flex flex-col">
-                    <span className="font-sans">
-                        {asset.code} 
-                        <span className="text-muted-foreground ml-2">
-                            ({asset.format}{asset.variety && asset.type === 'BARRIL' ? ` - ${asset.variety}` : ''})
-                        </span>
-                    </span>
-                    <FillDateInfo fillDate={fillDatesMap.get(asset.id)} />
-                </div>
-            </Label>
-            <div className="w-full sm:w-60">
-                <Select
-                    value={asset.assignedCustomerId}
-                    onValueChange={(value) => handleCustomerAssignment(asset.id, value)}
-                    disabled={!isRouteMode}
-                >
-                    <SelectTrigger><SelectValue placeholder="Asignar cliente..." /></SelectTrigger>
-                    <SelectContent>
-                        {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                    </SelectContent>
-                </Select>
-            </div>
-        </div>
-    );
-    
-    return (
-        <div className="space-y-4">
-            {groupedAssets.map(([customerId, customerAssets]) => (
-                <Card key={customerId}>
-                    <CardHeader className="p-4">
-                        <CardTitle className="text-base flex items-center gap-2">
-                           <User className="h-5 w-5" />
-                           {customerMap.get(customerId) || 'Cliente desconocido'}
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0 space-y-2">
-                        {customerAssets.sort((a,b) => a.code.localeCompare(b.code)).map(asset => <AssetRow key={asset.id} asset={asset} />)}
-                    </CardContent>
-                </Card>
-            ))}
-        </div>
-    );
-  };
-
 
   return (
     <div className="flex flex-1 flex-col">
@@ -708,14 +728,32 @@ export default function MovementsPage() {
                           ) : (
                             <Tabs defaultValue="barrels">
                                 <TabsList className="grid w-full grid-cols-2">
-                                    <TabsTrigger value="barrels">Barriles ({barrelsForDispatch.length})</TabsTrigger>
-                                    <TabsTrigger value="co2">CO2 ({co2ForDispatch.length})</TabsTrigger>
+                                    <TabsTrigger value="barrels">Barriles ({groupedBarrels.length > 0 ? groupedBarrels.reduce((acc, [, assets]) => acc + assets.length, 0) : 0})</TabsTrigger>
+                                    <TabsTrigger value="co2">CO2 ({groupedCo2.length > 0 ? groupedCo2.reduce((acc, [, assets]) => acc + assets.length, 0) : 0})</TabsTrigger>
                                 </TabsList>
                                 <TabsContent value="barrels" className="mt-4">
-                                    <AssetsForDispatchList assetsList={barrelsForDispatch} />
+                                    <AssetsForDispatchList
+                                      groupedAssets={groupedBarrels}
+                                      customerMap={customerMap}
+                                      isRouteMode={isRouteMode}
+                                      selectedAssetsForRoute={selectedAssetsForRoute}
+                                      onAssetSelection={handleAssetSelectionForRoute}
+                                      onCustomerAssignment={handleCustomerAssignment}
+                                      customers={customers}
+                                      fillDatesMap={fillDatesMap}
+                                    />
                                 </TabsContent>
                                 <TabsContent value="co2" className="mt-4">
-                                    <AssetsForDispatchList assetsList={co2ForDispatch} />
+                                     <AssetsForDispatchList
+                                      groupedAssets={groupedCo2}
+                                      customerMap={customerMap}
+                                      isRouteMode={isRouteMode}
+                                      selectedAssetsForRoute={selectedAssetsForRoute}
+                                      onAssetSelection={handleAssetSelectionForRoute}
+                                      onCustomerAssignment={handleCustomerAssignment}
+                                      customers={customers}
+                                      fillDatesMap={fillDatesMap}
+                                    />
                                 </TabsContent>
                             </Tabs>
                           )}
@@ -872,5 +910,3 @@ export default function MovementsPage() {
     </div>
   );
 }
-
-    
