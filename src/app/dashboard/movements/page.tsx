@@ -153,43 +153,110 @@ const PrintRouteSheet = ({ route, usersMap }: { route: Route | null, usersMap: M
     
     const createdByUser = usersMap.get(route.createdBy);
     return (
-        <div className="bg-white text-black p-8 font-sans">
-            <style>{`
-                @media print {
-                    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                }
-            `}</style>
-            <header className="flex justify-between items-center mb-8 border-b-2 border-black pb-4">
-                <div className="flex items-center gap-4">
-                    <Logo className="h-12 w-12 text-black" />
-                    <h1 className="text-3xl font-bold">Hoja de Ruta</h1>
-                </div>
-                <div className="text-right text-sm">
-                    <p><strong>Fecha:</strong> {format(route.createdAt.toDate(), 'dd/MM/yyyy HH:mm')}</p>
-                    <p><strong>Ruta ID:</strong> {route.id}</p>
-                    <p><strong>Generado por:</strong> {createdByUser?.email || route.createdBy}</p>
-                </div>
-            </header>
-            <main className="space-y-6">
-                {route.stops.map((stop, index) => (
-                    <div key={stop.customerId} className="break-inside-avoid p-4 border border-gray-300 rounded-lg">
-                        <h2 className="text-xl font-semibold mb-3 border-b border-gray-200 pb-2">
-                            <span className="font-bold mr-2">{index + 1}.</span> {stop.customerName}
-                        </h2>
-                        {stop.customerAddress && <p className="text-sm text-gray-600 mb-3">{stop.customerAddress}</p>}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4">
-                            {stop.assets.map(asset => (
-                                <div key={asset.id} className="text-sm py-1">
-                                    <span className="font-mono">{asset.code}</span>
-                                    <span className="text-gray-600 ml-2">({asset.format}{asset.variety ? ` - ${asset.variety}` : ''})</span>
-                                </div>
-                            ))}
-                        </div>
+        <html>
+            <head>
+                <title>Hoja de Ruta</title>
+                <style>{`
+                    body { 
+                        font-family: Calibri, sans-serif;
+                        margin: 2rem;
+                    }
+                    @media print {
+                        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                    }
+                    .header {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: flex-start;
+                        border-bottom: 2px solid black;
+                        padding-bottom: 1rem;
+                        margin-bottom: 2rem;
+                    }
+                    .header h1 {
+                        font-size: 2rem;
+                        font-weight: bold;
+                        margin: 0;
+                    }
+                    .header-details {
+                        text-align: right;
+                        font-size: 0.9rem;
+                    }
+                    .header-details p {
+                        margin: 0;
+                    }
+                    .customer-section {
+                        page-break-inside: avoid;
+                        margin-bottom: 2rem;
+                        border: 1px solid #ccc;
+                        padding: 1rem;
+                        border-radius: 8px;
+                    }
+                    .customer-header h2 {
+                        font-size: 1.5rem;
+                        font-weight: bold;
+                        margin: 0;
+                    }
+                    .customer-header p {
+                        font-size: 1rem;
+                        color: #555;
+                        margin: 0.25rem 0 0 0;
+                    }
+                    .assets-table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin-top: 1rem;
+                    }
+                    .assets-table th, .assets-table td {
+                        border: 1px solid #ddd;
+                        padding: 8px;
+                        text-align: left;
+                    }
+                    .assets-table th {
+                        background-color: #f2f2f2;
+                        font-weight: bold;
+                    }
+                `}</style>
+            </head>
+            <body>
+                <header className="header">
+                    <h1>Hoja de Ruta "Cervecería Pukalan"</h1>
+                    <div className="header-details">
+                        <p><strong>Fecha:</strong> {format(route.createdAt.toDate(), 'dd/MM/yyyy HH:mm')}</p>
+                        <p><strong>Ruta ID:</strong> {route.id}</p>
+                        <p><strong>Generado por:</strong> {createdByUser?.email || route.createdBy}</p>
                     </div>
-                ))}
-            </main>
-        </div>
-    )
+                </header>
+                <main>
+                    {route.stops.map((stop, index) => (
+                        <div key={stop.customerId} className="customer-section">
+                            <div className="customer-header">
+                                <h2>{index + 1}. {stop.customerName}</h2>
+                                {stop.customerAddress && <p>{stop.customerAddress}</p>}
+                            </div>
+                            <table className="assets-table">
+                                <thead>
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Formato</th>
+                                        <th>Variedad</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {stop.assets.map(asset => (
+                                        <tr key={asset.id}>
+                                            <td>{asset.code}</td>
+                                            <td>{asset.format}</td>
+                                            <td>{asset.variety || 'N/A'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    ))}
+                </main>
+            </body>
+        </html>
+    );
 };
 
 
@@ -537,20 +604,22 @@ export default function MovementsPage() {
     });
   };
 
-  const openPrintWindow = (route: Route) => {
+ const openPrintWindow = (route: Route) => {
     const printContent = renderToStaticMarkup(<PrintRouteSheet route={route} usersMap={usersMap} />);
-    const printWindow = window.open('', '_blank');
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
     if (printWindow) {
-      printWindow.document.write(printContent);
-      printWindow.document.close();
-      printWindow.focus();
-      printWindow.print();
+        printWindow.document.write(printContent);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+            printWindow.print();
+        }, 500); // Small delay to ensure content is rendered
     } else {
-      toast({
-        title: "Error de Impresión",
-        description: "El navegador bloqueó la apertura de la ventana de impresión. Por favor, permite las ventanas emergentes para este sitio.",
-        variant: "destructive",
-      });
+        toast({
+            title: "Error de Impresión",
+            description: "El navegador bloqueó la apertura de la ventana de impresión. Por favor, permite las ventanas emergentes para este sitio.",
+            variant: "destructive",
+        });
     }
   };
 
@@ -607,7 +676,6 @@ export default function MovementsPage() {
         setEditingRouteId(null);
         await fetchData();
 
-        // Open print window after successful creation/update
         openPrintWindow(finalRoute);
 
     } catch (error: any) {
@@ -615,10 +683,6 @@ export default function MovementsPage() {
         logAppEvent({ level: 'ERROR', message: 'Failed to generate route', component: 'MovementsPage-handleGenerateRoute', stack: error.stack });
         toast({ title: "Error", description: "No se pudo generar la hoja de ruta.", variant: "destructive" });
     }
-  };
-
-  const handlePrintRoute = (route: Route) => {
-      openPrintWindow(route);
   };
   
   const handleEditRoute = (route: Route) => {
@@ -652,280 +716,282 @@ export default function MovementsPage() {
       <div className="flex flex-1 flex-col">
         <PageHeader title="Registrar Movimiento" description="Escanea un QR para una acción rápida o gestiona las rutas de despacho." />
         <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0 space-y-8">
-            
-            <Card>
-                <CardHeader>
-                    <CardTitle>Movimiento Individual</CardTitle>
-                    <CardDescription>Activa la cámara para escanear un activo y registrar una acción rápida.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {!isScannerOpen ? (
-                        <Button size="lg" className="w-full max-w-xs text-lg" onClick={() => setScannerOpen(true)}>
-                            <QrCode className="mr-4 h-8 w-8" />
-                            Escanear QR
-                        </Button>
-                    ) : (
-                        <div>
-                             <QrScanner onScanSuccess={handleScanSuccess} onScanError={handleScanError} />
-                             <Button variant="outline" className="mt-4 w-full max-w-xs" onClick={() => setScannerOpen(false)}>
-                                <X className="mr-2 h-4 w-4" />
-                                Cerrar Escáner
+            <div className="no-print">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Movimiento Individual</CardTitle>
+                        <CardDescription>Activa la cámara para escanear un activo y registrar una acción rápida.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {!isScannerOpen ? (
+                            <Button size="lg" className="w-full max-w-xs text-lg" onClick={() => setScannerOpen(true)}>
+                                <QrCode className="mr-4 h-8 w-8" />
+                                Escanear QR
                             </Button>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+                        ) : (
+                            <div>
+                                <QrScanner onScanSuccess={handleScanSuccess} onScanError={handleScanError} />
+                                <Button variant="outline" className="mt-4 w-full max-w-xs" onClick={() => setScannerOpen(false)}>
+                                    <X className="mr-2 h-4 w-4" />
+                                    Cerrar Escáner
+                                </Button>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Gestión de Rutas</CardTitle>
-                    <CardDescription>Crea y consulta las hojas de ruta para los despachos a clientes.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Tabs value={activeTab} onValueChange={setActiveTab}>
-                        <TabsList className="grid w-full grid-cols-2">
-                            <TabsTrigger value="rutas">Rutas</TabsTrigger>
-                            <TabsTrigger value="historial">Historial de Rutas</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="rutas">
-                            <Card className="border-none shadow-none">
-                                <CardContent className="pt-6">
-                                <Dialog open={isRouteDialogOpen} onOpenChange={setIsRouteDialogOpen}>
-                                        <DialogTrigger asChild>
-                                            <Button size="lg" onClick={() => { setEditingRouteId(null); setSelectedCustomers(new Set()); }}>
-                                                <PlusCircle className="mr-2 h-5 w-5" />
-                                                Crear Hoja de Ruta
-                                            </Button>
-                                        </DialogTrigger>
-                                        <DialogContent className="max-w-2xl">
-                                            <DialogHeader>
-                                                <DialogTitle>{editingRouteId ? 'Editar Hoja de Ruta' : 'Crear Hoja de Ruta'}</DialogTitle>
-                                                <DialogDescription>
-                                                    Selecciona los clientes que formarán parte de la ruta de despacho. Solo se muestran los que tienen activos en tránsito.
-                                                </DialogDescription>
-                                            </DialogHeader>
-                                            <div className="py-4 max-h-[60vh] overflow-y-auto">
-                                                {groupedAssetsOnDelivery.length > 0 ? (
-                                                    <div className="space-y-4">
-                                                        {groupedAssetsOnDelivery.map(([customerId, customerAssets]) => (
-                                                            <Card key={customerId} className={cn("transition-colors", selectedCustomers.has(customerId) && "border-primary ring-2 ring-primary")}>
-                                                                <CardHeader className="p-4 flex flex-row items-center gap-4 cursor-pointer" onClick={() => handleCustomerSelect(customerId, !selectedCustomers.has(customerId))}>
-                                                                    <Checkbox
-                                                                        id={`customer-${customerId}`}
-                                                                        checked={selectedCustomers.has(customerId)}
-                                                                        onCheckedChange={(checked) => handleCustomerSelect(customerId, !!checked)}
-                                                                        className="h-5 w-5"
-                                                                    />
-                                                                    <div className="flex-1">
-                                                                        <Label htmlFor={`customer-${customerId}`} className="text-base flex items-center gap-2 cursor-pointer">
-                                                                            <User className="h-5 w-5" />
-                                                                            {customerMap.get(customerId)?.name || 'Cliente desconocido'}
-                                                                        </Label>
-                                                                    </div>
-                                                                </CardHeader>
-                                                                <CardContent className="p-4 pt-0 space-y-2">
-                                                                    {customerAssets.sort((a,b) => a.code.localeCompare(b.code)).map(asset => (
-                                                                        <AssetRow key={asset.id} asset={asset} fillDatesMap={fillDatesMap} />
-                                                                    ))}
-                                                                </CardContent>
-                                                            </Card>
-                                                        ))}
-                                                    </div>
-                                                ) : (
-                                                    <EmptyState
-                                                        icon={<RouteIcon className="h-16 w-16" />}
-                                                        title="No hay activos en reparto"
-                                                        description="Actualmente no hay ningún activo lleno en tránsito hacia los clientes para crear una ruta."
-                                                    />
-                                                )}
-                                            </div>
-                                            <DialogFooter>
-                                                <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
-                                                <Button onClick={handleGenerateRoute} disabled={selectedCustomers.size === 0}>
-                                                    <FileText className="mr-2 h-4 w-4" />
-                                                    {editingRouteId ? 'Actualizar y Guardar' : 'Crear y Guardar'}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Despachos</CardTitle>
+                        <CardDescription>Crea y consulta las hojas de ruta para los despachos a clientes.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Tabs value={activeTab} onValueChange={setActiveTab}>
+                            <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="rutas">Rutas</TabsTrigger>
+                                <TabsTrigger value="historial">Historial de Rutas</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="rutas">
+                                <Card className="border-none shadow-none">
+                                    <CardContent className="pt-6">
+                                    <Dialog open={isRouteDialogOpen} onOpenChange={setIsRouteDialogOpen}>
+                                            <DialogTrigger asChild>
+                                                <Button size="lg" onClick={() => { setEditingRouteId(null); setSelectedCustomers(new Set()); }}>
+                                                    <PlusCircle className="mr-2 h-5 w-5" />
+                                                    Crear Hoja de Ruta
                                                 </Button>
-                                            </DialogFooter>
-                                        </DialogContent>
-                                </Dialog>
-                                </CardContent>
-                            </Card>
-                        </TabsContent>
-                        <TabsContent value="historial">
-                            <Card className="border-none shadow-none">
-                                <CardContent className="pt-6">
-                                {isLoading ? (
-                                        <div className="flex justify-center items-center py-10"><Loader2 className="h-8 w-8 animate-spin" /></div>
-                                ) : routes.length === 0 ? (
-                                        <EmptyState icon={<History className="h-16 w-16" />} title="No hay rutas guardadas" description="Crea tu primera hoja de ruta desde la pestaña de Rutas." />
-                                ) : (
-                                        <div className="space-y-2">
-                                        {routes.map(route => (
-                                            <div key={route.id} className="flex items-center justify-between rounded-md border p-4">
-                                                <div className="flex flex-col">
-                                                    <span className="font-semibold">Ruta del {format(route.createdAt.toDate(), 'dd/MM/yyyy HH:mm')}</span>
-                                                    <span className="text-sm text-muted-foreground">{route.stops.length} parada(s)</span>
-                                                </div>
-                                                <div className="flex gap-2">
-                                                    <Button variant="outline" size="sm" onClick={() => handlePrintRoute(route)}>
-                                                        <Printer className="mr-2 h-4 w-4" />
-                                                        Reimprimir
-                                                    </Button>
-                                                    {userRole === 'Admin' && (
-                                                        <Button variant="outline" size="sm" onClick={() => handleEditRoute(route)}>
-                                                            <Pencil className="mr-2 h-4 w-4" />
-                                                            Editar
-                                                        </Button>
+                                            </DialogTrigger>
+                                            <DialogContent className="max-w-2xl">
+                                                <DialogHeader>
+                                                    <DialogTitle>{editingRouteId ? 'Editar Hoja de Ruta' : 'Crear Hoja de Ruta'}</DialogTitle>
+                                                    <DialogDescription>
+                                                        Selecciona los clientes que formarán parte de la ruta de despacho. Solo se muestran los que tienen activos en tránsito.
+                                                    </DialogDescription>
+                                                </DialogHeader>
+                                                <div className="py-4 max-h-[60vh] overflow-y-auto">
+                                                    {groupedAssetsOnDelivery.length > 0 ? (
+                                                        <div className="space-y-4">
+                                                            {groupedAssetsOnDelivery.map(([customerId, customerAssets]) => (
+                                                                <Card key={customerId} className={cn("transition-colors", selectedCustomers.has(customerId) && "border-primary ring-2 ring-primary")}>
+                                                                    <CardHeader className="p-4 flex flex-row items-center gap-4 cursor-pointer" onClick={() => handleCustomerSelect(customerId, !selectedCustomers.has(customerId))}>
+                                                                        <Checkbox
+                                                                            id={`customer-${customerId}`}
+                                                                            checked={selectedCustomers.has(customerId)}
+                                                                            onCheckedChange={(checked) => handleCustomerSelect(customerId, !!checked)}
+                                                                            className="h-5 w-5"
+                                                                        />
+                                                                        <div className="flex-1">
+                                                                            <Label htmlFor={`customer-${customerId}`} className="text-base flex items-center gap-2 cursor-pointer">
+                                                                                <User className="h-5 w-5" />
+                                                                                {customerMap.get(customerId)?.name || 'Cliente desconocido'}
+                                                                            </Label>
+                                                                        </div>
+                                                                    </CardHeader>
+                                                                    <CardContent className="p-4 pt-0 space-y-2">
+                                                                        {customerAssets.sort((a,b) => a.code.localeCompare(b.code)).map(asset => (
+                                                                            <AssetRow key={asset.id} asset={asset} fillDatesMap={fillDatesMap} />
+                                                                        ))}
+                                                                    </CardContent>
+                                                                </Card>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <EmptyState
+                                                            icon={<RouteIcon className="h-16 w-16" />}
+                                                            title="No hay activos en reparto"
+                                                            description="Actualmente no hay ningún activo lleno en tránsito hacia los clientes para crear una ruta."
+                                                        />
                                                     )}
                                                 </div>
+                                                <DialogFooter>
+                                                    <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
+                                                    <Button onClick={handleGenerateRoute} disabled={selectedCustomers.size === 0}>
+                                                        <FileText className="mr-2 h-4 w-4" />
+                                                        {editingRouteId ? 'Actualizar y Guardar' : 'Crear y Guardar'}
+                                                    </Button>
+                                                </DialogFooter>
+                                            </DialogContent>
+                                    </Dialog>
+                                    </CardContent>
+                                </Card>
+                            </TabsContent>
+                            <TabsContent value="historial">
+                                <Card className="border-none shadow-none">
+                                    <CardContent className="pt-6">
+                                    {isLoading ? (
+                                            <div className="flex justify-center items-center py-10"><Loader2 className="h-8 w-8 animate-spin" /></div>
+                                    ) : routes.length === 0 ? (
+                                            <EmptyState icon={<History className="h-16 w-16" />} title="No hay rutas guardadas" description="Crea tu primera hoja de ruta desde la pestaña de Rutas." />
+                                    ) : (
+                                            <div className="space-y-2">
+                                            {routes.map(route => (
+                                                <div key={route.id} className="flex items-center justify-between rounded-md border p-4">
+                                                    <div className="flex flex-col">
+                                                        <span className="font-semibold">Ruta del {format(route.createdAt.toDate(), 'dd/MM/yyyy HH:mm')}</span>
+                                                        <span className="text-sm text-muted-foreground">{route.stops.length} parada(s)</span>
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <Button variant="outline" size="sm" onClick={() => openPrintWindow(route)}>
+                                                            <Printer className="mr-2 h-4 w-4" />
+                                                            Reimprimir
+                                                        </Button>
+                                                        {userRole === 'Admin' && (
+                                                            <Button variant="outline" size="sm" onClick={() => handleEditRoute(route)}>
+                                                                <Pencil className="mr-2 h-4 w-4" />
+                                                                Editar
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
                                             </div>
-                                        ))}
-                                        </div>
-                                )}
-                                </CardContent>
-                            </Card>
-                        </TabsContent>
-                    </Tabs>
-                </CardContent>
-            </Card>
+                                    )}
+                                    </CardContent>
+                                </Card>
+                            </TabsContent>
+                        </Tabs>
+                    </CardContent>
+                </Card>
+            </div>
+            
+            <Dialog open={!!scannedAsset && !showCorrectionDialog} onOpenChange={(open) => !open && resetMovementState()}>
+                    <DialogContent>
+                        <Form {...form}>
+                            <form onSubmit={form.handleSubmit(onSubmit)}>
+                                <DialogHeader>
+                                    <DialogTitle>Registrar Movimiento</DialogTitle>
+                                    <DialogDescription>Confirma la acción para el activo <span className="font-bold">{scannedAsset?.code}</span>.</DialogDescription>
+                                </DialogHeader>
+                                
+                                <div className="my-4 space-y-4">
+                                <Alert>
+                                        <AlertTitle className="flex items-center gap-2">
+                                            <span className="font-normal">{scannedAsset?.location.replace('_', ' ')} ({scannedAsset?.state})</span>
+                                            <ArrowRight className="h-4 w-4" />
+                                            <span>{getEventTypeTranslation(currentEventType)}</span>
+                                        </AlertTitle>
+                                        <AlertDescription>
+                                            {actionLogic?.description}
+                                        </AlertDescription>
+                                    </Alert>
+                                    
+                                    {actionLogic?.manualOverrides && actionLogic.manualOverrides.length > 0 && isManualOverride && (
+                                        <FormField
+                                            control={form.control}
+                                            name="event_type"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Acción Manual</FormLabel>
+                                                    <Select onValueChange={field.onChange} value={field.value}>
+                                                        <FormControl><SelectTrigger><SelectValue placeholder="Selecciona una acción..."/></SelectTrigger></FormControl>
+                                                        <SelectContent>
+                                                            <SelectItem value={actionLogic.primary}>{getEventTypeTranslation(actionLogic.primary)} (Sugerido)</SelectItem>
+                                                            {actionLogic.manualOverrides.map(type => (
+                                                                <SelectItem key={type} value={type}>{getEventTypeTranslation(type)}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    )}
 
+                                    {requiresCustomerSelection ? (
+                                        <FormField
+                                            control={form.control}
+                                            name="customer_id"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Cliente</FormLabel>
+                                                    <Select onValueChange={field.onChange} value={field.value || ''} disabled={!!actionLogic?.autoFillsCustomer && !isManualOverride}>
+                                                        <FormControl><SelectTrigger><SelectValue placeholder="Selecciona un cliente" /></SelectTrigger></FormControl>
+                                                        <SelectContent>
+                                                            {customers.map(customer => (<SelectItem key={customer.id} value={customer.id}>{customer.name}</SelectItem>))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    ) : customerForMovement && customerForMovement.name !== 'Planta' ? (
+                                        <div>
+                                            <Label>Cliente Asignado</Label>
+                                            <Input value={customerForMovement.name} disabled />
+                                        </div>
+                                    ) : null}
+
+                                    {showVarietyField && (
+                                        <FormField
+                                            control={form.control}
+                                            name="variety"
+                                            render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Variedad de Cerveza</FormLabel>
+                                                <FormControl><Input placeholder="ej., IPA, Stout, Lager" {...field} /></FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                            )}
+                                        />
+                                    )}
+                                    
+                                    {showValveTypeField && (
+                                        <FormField
+                                            control={form.control}
+                                            name="valveType"
+                                            render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Tipo de Válvula</FormLabel>
+                                                <FormControl><Input placeholder="ej., A, G" {...field} maxLength={1} style={{ textTransform: 'uppercase' }} /></FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                            )}
+                                        />
+                                    )}
+                                </div>
+
+                                <DialogFooter className="grid grid-cols-2 gap-2 sm:flex">
+                                {actionLogic?.manualOverrides && actionLogic.manualOverrides.length > 0 && !isManualOverride ? (
+                                        <Button type="button" variant="ghost" onClick={() => setIsManualOverride(true)}>Realizar otra acción</Button>
+                                ) : <div />}
+                                <div className="flex col-start-2 gap-2">
+                                        <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+                                        <Button type="submit" disabled={isSubmitting}>
+                                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                            Confirmar
+                                        </Button>
+                                </div>
+                                </DialogFooter>
+                            </form>
+                        </Form>
+                    </DialogContent>
+            </Dialog>
+                
+            <AlertDialog open={showCorrectionDialog} onOpenChange={setShowCorrectionDialog}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle className="flex items-center gap-2">
+                                <AlertTriangle className="h-6 w-6 text-yellow-500" />
+                                Confirmación Requerida
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                                Este cilindro de CO₂ figura como VACÍO. Para enviarlo a un cliente, su estado debe ser LLENO.
+                                <br/><br/>
+                                ¿Confirmas que el activo está físicamente lleno y deseas corregir su estado para continuar?
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel onClick={resetMovementState}>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleCorrectionAndSubmit}>
+                                Corregir y Continuar
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+            </AlertDialog>
         </main>
       </div>
-
-      <Dialog open={!!scannedAsset && !showCorrectionDialog} onOpenChange={(open) => !open && resetMovementState()}>
-            <DialogContent>
-                <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)}>
-                        <DialogHeader>
-                            <DialogTitle>Registrar Movimiento</DialogTitle>
-                            <DialogDescription>Confirma la acción para el activo <span className="font-bold">{scannedAsset?.code}</span>.</DialogDescription>
-                        </DialogHeader>
-                        
-                        <div className="my-4 space-y-4">
-                           <Alert>
-                                <AlertTitle className="flex items-center gap-2">
-                                    <span className="font-normal">{scannedAsset?.location.replace('_', ' ')} ({scannedAsset?.state})</span>
-                                    <ArrowRight className="h-4 w-4" />
-                                    <span>{getEventTypeTranslation(currentEventType)}</span>
-                                </AlertTitle>
-                                <AlertDescription>
-                                    {actionLogic?.description}
-                                </AlertDescription>
-                            </Alert>
-                            
-                            {actionLogic?.manualOverrides && actionLogic.manualOverrides.length > 0 && isManualOverride && (
-                                <FormField
-                                    control={form.control}
-                                    name="event_type"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Acción Manual</FormLabel>
-                                            <Select onValueChange={field.onChange} value={field.value}>
-                                                <FormControl><SelectTrigger><SelectValue placeholder="Selecciona una acción..."/></SelectTrigger></FormControl>
-                                                <SelectContent>
-                                                    <SelectItem value={actionLogic.primary}>{getEventTypeTranslation(actionLogic.primary)} (Sugerido)</SelectItem>
-                                                    {actionLogic.manualOverrides.map(type => (
-                                                        <SelectItem key={type} value={type}>{getEventTypeTranslation(type)}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                            )}
-
-                            {requiresCustomerSelection ? (
-                                <FormField
-                                    control={form.control}
-                                    name="customer_id"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Cliente</FormLabel>
-                                            <Select onValueChange={field.onChange} value={field.value || ''} disabled={!!actionLogic?.autoFillsCustomer && !isManualOverride}>
-                                                <FormControl><SelectTrigger><SelectValue placeholder="Selecciona un cliente" /></SelectTrigger></FormControl>
-                                                <SelectContent>
-                                                    {customers.map(customer => (<SelectItem key={customer.id} value={customer.id}>{customer.name}</SelectItem>))}
-                                                </SelectContent>
-                                            </Select>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                            ) : customerForMovement && customerForMovement.name !== 'Planta' ? (
-                                <div>
-                                    <Label>Cliente Asignado</Label>
-                                    <Input value={customerForMovement.name} disabled />
-                                </div>
-                            ) : null}
-
-                            {showVarietyField && (
-                                <FormField
-                                    control={form.control}
-                                    name="variety"
-                                    render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Variedad de Cerveza</FormLabel>
-                                        <FormControl><Input placeholder="ej., IPA, Stout, Lager" {...field} /></FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                    )}
-                                />
-                            )}
-                            
-                             {showValveTypeField && (
-                                <FormField
-                                    control={form.control}
-                                    name="valveType"
-                                    render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Tipo de Válvula</FormLabel>
-                                        <FormControl><Input placeholder="ej., A, G" {...field} maxLength={1} style={{ textTransform: 'uppercase' }} /></FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                    )}
-                                />
-                            )}
-                        </div>
-
-                        <DialogFooter className="grid grid-cols-2 gap-2 sm:flex">
-                           {actionLogic?.manualOverrides && actionLogic.manualOverrides.length > 0 && !isManualOverride ? (
-                                <Button type="button" variant="ghost" onClick={() => setIsManualOverride(true)}>Realizar otra acción</Button>
-                           ) : <div />}
-                           <div className="flex col-start-2 gap-2">
-                                <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
-                                <Button type="submit" disabled={isSubmitting}>
-                                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    Confirmar
-                                </Button>
-                           </div>
-                        </DialogFooter>
-                    </form>
-                </Form>
-            </DialogContent>
-      </Dialog>
-        
-      <AlertDialog open={showCorrectionDialog} onOpenChange={setShowCorrectionDialog}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle className="flex items-center gap-2">
-                        <AlertTriangle className="h-6 w-6 text-yellow-500" />
-                        Confirmación Requerida
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                        Este cilindro de CO₂ figura como VACÍO. Para enviarlo a un cliente, su estado debe ser LLENO.
-                        <br/><br/>
-                        ¿Confirmas que el activo está físicamente lleno y deseas corregir su estado para continuar?
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel onClick={resetMovementState}>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleCorrectionAndSubmit}>
-                        Corregir y Continuar
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }
+
+    
