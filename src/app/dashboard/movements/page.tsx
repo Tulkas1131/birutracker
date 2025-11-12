@@ -24,7 +24,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useUserRole } from "@/hooks/use-user-role";
-import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState } from "@/components/empty-state";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -109,9 +108,6 @@ const getEventTypeTranslation = (eventType: MovementEventType): string => {
     return translations[eventType] || eventType;
 };
 
-type AssetOnDelivery = Asset & { destinationCustomerId: string };
-type GroupedAssets = [string, AssetOnDelivery[]][];
-
 // --- Sub-components for better readability ---
 
 const FillDateInfo = ({ fillDate }: { fillDate: Date | undefined }) => {
@@ -150,17 +146,52 @@ const AssetRow = ({ asset, fillDatesMap }: { asset: Asset; fillDatesMap: Map<str
 );
 
 
-const AssetsOnDeliveryList = ({ groupedAssets, customerMap, fillDatesMap }: {
-    groupedAssets: GroupedAssets;
+const AssetsOnDeliveryList = ({ assets, customerMap, fillDatesMap }: {
+    assets: Asset[];
     customerMap: Map<string, string>;
     fillDatesMap: Map<string, Date>;
 }) => {
-    if (groupedAssets.length === 0) {
+    
+    const { groupedAssets } = useMemo(() => {
+        const groups = new Map<string, Asset[]>();
+        const lastDepartureEvents = new Map<string, string>(); // assetId -> customerId
+
+        // This is a simplified way to find the last departure customer.
+        // It assumes events are pre-sorted descending by timestamp, which they are.
+        for (const asset of assets) {
+             const lastDepartureEvent = events.find(e => e.asset_id === asset.id && e.event_type === 'SALIDA_A_REPARTO');
+             if (lastDepartureEvent) {
+                lastDepartureEvents.set(asset.id, lastDepartureEvent.customer_id);
+             }
+        }
+        
+        for (const asset of assets) {
+             const customerId = lastDepartureEvents.get(asset.id);
+             if (customerId) {
+                if (!groups.has(customerId)) {
+                    groups.set(customerId, []);
+                }
+                groups.get(customerId)!.push(asset);
+             }
+        }
+        
+        const sortedGroups = Array.from(groups.entries()).sort((a, b) => {
+            const nameA = customerMap.get(a[0]) || '';
+            const nameB = customerMap.get(b[0]) || '';
+            return nameA.localeCompare(nameB);
+        });
+
+        return { groupedAssets: sortedGroups };
+
+    }, [assets, customerMap]);
+
+
+    if (assets.length === 0) {
         return (
             <EmptyState
                 icon={<RouteIcon className="h-16 w-16" />}
                 title="No hay activos en reparto"
-                description="Actualmente no hay ningún activo en tránsito hacia los clientes."
+                description="Actualmente no hay ningún activo lleno en tránsito hacia los clientes."
             />
         );
     }
@@ -188,6 +219,7 @@ const AssetsOnDeliveryList = ({ groupedAssets, customerMap, fillDatesMap }: {
 
 
 // --- Main Page Component ---
+let events: Event[] = []; // Keep events in a broader scope
 
 export default function MovementsPage() {
   const { toast } = useToast();
@@ -196,7 +228,6 @@ export default function MovementsPage() {
   
   const [allAssets, setAllAssets] = useState<Asset[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [events, setEvents] = useState<Event[]>([]);
   const [lastEvents, setLastEvents] = useState<Map<string, Event>>(new Map());
 
   const [isLoading, setIsLoading] = useState(true);
@@ -218,7 +249,7 @@ export default function MovementsPage() {
     try {
       const { collection, query, orderBy, getDocs } = await import("firebase/firestore/lite");
       const firestore = db();
-      const assetsQuery = query(collection(firestore, "assets"), orderBy("code"));
+      const assetsQuery = query(collection(firestore, "assets"));
       const customersQuery = query(collection(firestore, "customers"), orderBy("name"));
       const eventsQuery = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
 
@@ -233,7 +264,7 @@ export default function MovementsPage() {
       const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
       
       setAllAssets(assetsData);
-      setEvents(eventsData);
+      events = eventsData; // Set the broader scope events
       setCustomers(customersData);
 
       const lastEventsMap = new Map<string, Event>();
@@ -256,21 +287,10 @@ export default function MovementsPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-
-  const { assetsOnDelivery } = useMemo(() => {
-    const onDelivery = allAssets
-        .filter(asset => asset.location === 'EN_REPARTO')
-        .map(asset => {
-            const lastDepartureEvent = events
-                .filter(e => e.asset_id === asset.id && e.event_type === 'SALIDA_A_REPARTO')
-                .sort((a,b) => b.timestamp.toMillis() - a.timestamp.toMillis())[0];
-            return {
-                ...asset,
-                destinationCustomerId: lastDepartureEvent?.customer_id || 'unknown'
-            };
-        });
-    return { assetsOnDelivery: onDelivery };
-  }, [allAssets, events]);
+  
+  const assetsOnDelivery = useMemo(() => {
+    return allAssets.filter(asset => asset.location === 'EN_REPARTO' && asset.state === 'LLENO');
+  }, [allAssets]);
 
 
   const fillDatesMap = useMemo(() => {
@@ -290,37 +310,17 @@ export default function MovementsPage() {
         }
     }
     return map;
-  }, [events, allAssets]);
+  }, [allAssets]); // Removed events dependency as it's now in broader scope
   
   const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c.name])), [customers]);
-
-  const { groupedBarrels, groupedCo2 } = useMemo(() => {
-    const barrelGroups = new Map<string, AssetOnDelivery[]>();
-    const co2Groups = new Map<string, AssetOnDelivery[]>();
-
-    for (const asset of assetsOnDelivery) {
-      if (asset.destinationCustomerId !== 'unknown') {
-        const targetGroup = asset.type === 'BARRIL' ? barrelGroups : co2Groups;
-        if (!targetGroup.has(asset.destinationCustomerId)) {
-          targetGroup.set(asset.destinationCustomerId, []);
-        }
-        targetGroup.get(asset.destinationCustomerId)!.push(asset);
-      }
-    }
-
-    const sortGroups = (groups: Map<string, AssetOnDelivery[]>) => {
-      return Array.from(groups.entries()).sort(([idA], [idB]) => {
-        const nameA = customerMap.get(idA) || '';
-        const nameB = customerMap.get(idB) || '';
-        return nameA.localeCompare(nameB);
-      });
-    };
-
+  
+  const { barrelsOnDelivery, co2OnDelivery } = useMemo(() => {
     return {
-      groupedBarrels: sortGroups(barrelGroups),
-      groupedCo2: sortGroups(co2Groups),
-    };
-  }, [assetsOnDelivery, customerMap]);
+        barrelsOnDelivery: assetsOnDelivery.filter(a => a.type === 'BARRIL'),
+        co2OnDelivery: assetsOnDelivery.filter(a => a.type === 'CO2')
+    }
+  }, [assetsOnDelivery]);
+
   
   const resetMovementState = () => {
     setScannedAsset(null);
@@ -566,41 +566,39 @@ export default function MovementsPage() {
                         </DialogTrigger>
                     </CardContent>
                 </Card>
-
-                {userRole === 'Admin' && (
-                    <Card>
-                        <CardHeader>
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                                <div>
-                                    <CardTitle>Activos en Reparto</CardTitle>
-                                    <CardDescription>Visualiza los activos que están actualmente en tránsito hacia los clientes.</CardDescription>
-                                </div>
+                
+                <Card>
+                    <CardHeader>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                            <div>
+                                <CardTitle>Activos en Reparto</CardTitle>
+                                <CardDescription>Visualiza los activos que están actualmente en tránsito hacia los clientes.</CardDescription>
                             </div>
-                        </CardHeader>
-                        <CardContent>
-                            <Tabs defaultValue="barrels">
-                                <TabsList className="grid w-full grid-cols-2">
-                                    <TabsTrigger value="barrels">Barriles ({groupedBarrels.reduce((acc, [, assets]) => acc + assets.length, 0)})</TabsTrigger>
-                                    <TabsTrigger value="co2">CO2 ({groupedCo2.reduce((acc, [, assets]) => acc + assets.length, 0)})</TabsTrigger>
-                                </TabsList>
-                                <TabsContent value="barrels" className="mt-4">
-                                    <AssetsOnDeliveryList
-                                      groupedAssets={groupedBarrels}
-                                      customerMap={customerMap}
-                                      fillDatesMap={fillDatesMap}
-                                    />
-                                </TabsContent>
-                                <TabsContent value="co2" className="mt-4">
-                                     <AssetsOnDeliveryList
-                                      groupedAssets={groupedCo2}
-                                      customerMap={customerMap}
-                                      fillDatesMap={fillDatesMap}
-                                    />
-                                </TabsContent>
-                            </Tabs>
-                        </CardContent>
-                    </Card>
-                )}
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <Tabs defaultValue="barrels">
+                            <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="barrels">Barriles ({barrelsOnDelivery.length})</TabsTrigger>
+                                <TabsTrigger value="co2">CO2 ({co2OnDelivery.length})</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="barrels" className="mt-4">
+                                <AssetsOnDeliveryList
+                                    assets={barrelsOnDelivery}
+                                    customerMap={customerMap}
+                                    fillDatesMap={fillDatesMap}
+                                />
+                            </TabsContent>
+                            <TabsContent value="co2" className="mt-4">
+                                 <AssetsOnDeliveryList
+                                    assets={co2OnDelivery}
+                                    customerMap={customerMap}
+                                    fillDatesMap={fillDatesMap}
+                                />
+                            </TabsContent>
+                        </Tabs>
+                    </CardContent>
+                </Card>
                 </>
             )}
             </main>
