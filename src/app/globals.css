@@ -137,12 +137,17 @@
     margin: 0.5in;
   }
 
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
   .no-print {
-    display: none;
+    display: none !important;
   }
 
   .print-only {
-    display: block;
+    display: block !important;
   }
 
   .print-route-sheet {
@@ -200,3 +205,5 @@
     border: none;
   }
 }
+
+    

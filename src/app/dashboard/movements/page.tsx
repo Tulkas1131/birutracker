@@ -149,17 +149,16 @@ const AssetRow = ({ asset, fillDatesMap }: { asset: Asset; fillDatesMap: Map<str
 );
 
 
-const AssetsOnDeliveryList = ({ assets, customerMap, fillDatesMap, isRouteMode, selectedCustomers, onCustomerSelect, groupedAssets }: {
-    assets: Asset[];
-    customerMap: Map<string, string>;
-    fillDatesMap: Map<string, Date>;
+const AssetsOnDeliveryList = ({ isRouteMode, selectedCustomers, onCustomerSelect, groupedAssets, customerMap, fillDatesMap }: {
     isRouteMode: boolean;
     selectedCustomers: Set<string>;
     onCustomerSelect: (customerId: string, isSelected: boolean) => void;
     groupedAssets: [string, Asset[]][];
+    customerMap: Map<string, string>;
+    fillDatesMap: Map<string, Date>;
 }) => {
     
-    if (assets.length === 0) {
+    if (groupedAssets.length === 0) {
         return (
             <EmptyState
                 icon={<RouteIcon className="h-16 w-16" />}
@@ -234,7 +233,6 @@ const PrintRouteSheet = ({ route, customerMap }: { route: Route, customerMap: Ma
 
 
 // --- Main Page Component ---
-let events: Event[] = []; // Keep events in a broader scope
 
 export default function MovementsPage() {
   const { toast } = useToast();
@@ -243,9 +241,9 @@ export default function MovementsPage() {
   
   const [allAssets, setAllAssets] = useState<Asset[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
   const [routes, setRoutes] = useState<Route[]>([]);
-  const [lastEvents, setLastEvents] = useState<Map<string, Event>>(new Map());
-
+  
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isScannerOpen, setScannerOpen] = useState(false);
@@ -290,17 +288,9 @@ export default function MovementsPage() {
       const routesData = routesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Route));
       
       setAllAssets(assetsData);
-      events = eventsData; // Set the broader scope events
+      setEvents(eventsData);
       setCustomers(customersData);
       setRoutes(routesData);
-
-      const lastEventsMap = new Map<string, Event>();
-      eventsData.forEach(event => {
-        if (!lastEventsMap.has(event.asset_id)) {
-            lastEventsMap.set(event.asset_id, event);
-        }
-      });
-      setLastEvents(lastEventsMap);
       
     } catch (error: any) {
       console.error("Error fetching data for movements page: ", error);
@@ -315,14 +305,27 @@ export default function MovementsPage() {
     fetchData();
   }, [fetchData]);
   
+  const lastEventsMap = useMemo(() => {
+    const map = new Map<string, Event>();
+    for (const event of events) {
+      if (!map.has(event.asset_id)) {
+        map.set(event.asset_id, event);
+      }
+    }
+    return map;
+  }, [events]);
+
   const assetsOnDelivery = useMemo(() => {
-    return allAssets.filter(asset => asset.location === 'EN_REPARTO' && asset.state === 'LLENO');
+    return allAssets.filter(asset => 
+        asset.location === 'EN_REPARTO' && asset.state === 'LLENO'
+    );
   }, [allAssets]);
 
 
   const fillDatesMap = useMemo(() => {
     const map = new Map<string, Date>();
     const lastFillEvents = new Map<string, Event>();
+    
     events.filter(e => e.event_type === 'LLENADO_EN_PLANTA').forEach(event => {
         if (!lastFillEvents.has(event.asset_id) || event.timestamp.toMillis() > lastFillEvents.get(event.asset_id)!.timestamp.toMillis()) {
             lastFillEvents.set(event.asset_id, event);
@@ -336,14 +339,14 @@ export default function MovementsPage() {
         }
     }
     return map;
-  }, [allAssets]);
+  }, [allAssets, events]);
   
   const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c.name])), [customers]);
 
   const groupedAssetsOnDelivery = useMemo(() => {
     const groups = new Map<string, Asset[]>();
     for (const asset of assetsOnDelivery) {
-         const lastEvent = lastEvents.get(asset.id);
+         const lastEvent = lastEventsMap.get(asset.id);
          if (lastEvent && lastEvent.event_type === 'SALIDA_A_REPARTO') {
              const customerId = lastEvent.customer_id;
              if (!groups.has(customerId)) {
@@ -353,7 +356,7 @@ export default function MovementsPage() {
          }
     }
     return Array.from(groups.entries()).sort((a, b) => (customerMap.get(a[0]) || '').localeCompare(customerMap.get(b[0]) || ''));
-  }, [assetsOnDelivery, lastEvents, customerMap]);
+  }, [assetsOnDelivery, lastEventsMap, customerMap]);
 
   
   const resetMovementState = () => {
@@ -421,7 +424,7 @@ export default function MovementsPage() {
     form.setValue('event_type', logic.primary);
     
     if (logic.autoFillsCustomer) {
-        const eventToUse: Event | undefined = lastEvents.get(asset.id);
+        const eventToUse: Event | undefined = lastEventsMap.get(asset.id);
         if (eventToUse) {
             form.setValue('customer_id', eventToUse.customer_id);
         }
@@ -662,13 +665,37 @@ export default function MovementsPage() {
   return (
     <>
       <div className="flex flex-1 flex-col no-print">
-        <PageHeader title="Registrar Movimiento" description="Gestiona los despachos, el historial de rutas y los escaneos individuales." />
+        <PageHeader title="Registrar Movimiento" description="Escanea un QR para una acción rápida o gestiona las rutas de despacho." />
         <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0 space-y-8">
+            
+            <Dialog open={isScannerOpen} onOpenChange={setScannerOpen}>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Movimiento Individual</CardTitle>
+                        <CardDescription>Activa la cámara para escanear un activo y registrar una acción rápida.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <DialogTrigger asChild>
+                            <Button size="lg" className="w-full max-w-xs text-lg" onClick={() => setScannerOpen(true)}>
+                                <QrCode className="mr-4 h-8 w-8" />
+                                Escanear QR
+                            </Button>
+                        </DialogTrigger>
+                    </CardContent>
+                </Card>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Escanear Código QR</DialogTitle>
+                        <DialogDescription>Apunta la cámara al código QR del activo.</DialogDescription>
+                    </DialogHeader>
+                    <QrScanner onScanSuccess={handleScanSuccess} onScanError={handleScanError} isScannerOpen={isScannerOpen} />
+                </DialogContent>
+            </Dialog>
+
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="despachos">Despachos</TabsTrigger>
                     <TabsTrigger value="historial">Historial de Rutas</TabsTrigger>
-                    <TabsTrigger value="individual">Movimiento Individual</TabsTrigger>
                 </TabsList>
                 <TabsContent value="despachos">
                     <Card>
@@ -691,7 +718,7 @@ export default function MovementsPage() {
                                       </Button>
                                     </>
                                   )}
-                                   {!isRouteMode && userRole === 'Admin' && (
+                                   {!isRouteMode && userRole === 'Admin' && assetsOnDelivery.length > 0 && (
                                       <Button onClick={() => setIsRouteMode(true)}>
                                           <PlusCircle className="mr-2 h-4 w-4" />
                                           Crear Hoja de Ruta
@@ -702,13 +729,12 @@ export default function MovementsPage() {
                         </CardHeader>
                         <CardContent>
                            <AssetsOnDeliveryList
-                                assets={assetsOnDelivery}
+                                groupedAssets={groupedAssetsOnDelivery}
                                 customerMap={customerMap}
                                 fillDatesMap={fillDatesMap}
                                 isRouteMode={isRouteMode}
                                 selectedCustomers={selectedCustomers}
                                 onCustomerSelect={handleCustomerSelect}
-                                groupedAssets={groupedAssetsOnDelivery}
                             />
                         </CardContent>
                     </Card>
@@ -748,31 +774,6 @@ export default function MovementsPage() {
                            )}
                         </CardContent>
                     </Card>
-                </TabsContent>
-                <TabsContent value="individual">
-                     <Dialog open={isScannerOpen} onOpenChange={setScannerOpen}>
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Movimiento Individual</CardTitle>
-                                <CardDescription>Activa la cámara para escanear un activo y registrar una acción rápida.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <DialogTrigger asChild>
-                                    <Button size="lg" className="w-full max-w-xs text-lg" onClick={() => setScannerOpen(true)}>
-                                        <QrCode className="mr-4 h-8 w-8" />
-                                        Escanear QR
-                                    </Button>
-                                </DialogTrigger>
-                            </CardContent>
-                        </Card>
-                        <DialogContent>
-                            <DialogHeader>
-                                <DialogTitle>Escanear Código QR</DialogTitle>
-                                <DialogDescription>Apunta la cámara al código QR del activo.</DialogDescription>
-                            </DialogHeader>
-                            <QrScanner onScanSuccess={handleScanSuccess} onScanError={handleScanError} isScannerOpen={isScannerOpen} />
-                        </DialogContent>
-                    </Dialog>
                 </TabsContent>
             </Tabs>
         </main>
@@ -920,3 +921,4 @@ export default function MovementsPage() {
     </>
   );
 }
+    
