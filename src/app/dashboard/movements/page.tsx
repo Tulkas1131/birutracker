@@ -7,10 +7,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import dynamic from "next/dynamic";
 import { auth, db } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { Loader2, QrCode, ArrowRight, AlertTriangle, Route as RouteIcon, PackageCheck, Pencil, X, Calendar as CalendarIcon, User, PlusCircle, Printer, FileText, History } from "lucide-react";
+import { Loader2, QrCode, ArrowRight, AlertTriangle, Route as RouteIcon, Pencil, X, Calendar as CalendarIcon, User, PlusCircle, Printer, FileText, History } from "lucide-react";
 import { differenceInDays, format } from 'date-fns';
-import { renderToStaticMarkup } from 'react-dom/server';
-
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,9 +16,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/hooks/use-toast";
-import { movementSchema, type MovementFormData, type Asset, type Customer, type Event, type MovementEventType, type Route, type RouteStop, routeSchema, UserData } from "@/lib/types";
+import { movementSchema, type MovementFormData, type Asset, type Customer, type Event, type MovementEventType, type Route, type RouteStop, UserData } from "@/lib/types";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { logAppEvent } from "@/lib/logging";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
@@ -200,7 +198,9 @@ const AssetsOnDeliveryList = ({ isRouteMode, selectedCustomers, onCustomerSelect
     );
 };
 
-const PrintRouteSheet = ({ route, usersMap }: { route: Route, usersMap: Map<string, UserData> }) => {
+const PrintRouteSheet = ({ route, usersMap }: { route: Route | null, usersMap: Map<string, UserData> }) => {
+    if (!route) return null;
+    
     const createdByUser = usersMap.get(route.createdBy);
     return (
         <div className="print-route-sheet bg-white text-black p-8 font-sans">
@@ -652,11 +652,10 @@ export default function MovementsPage() {
   
   useEffect(() => {
     if (routeToPrint) {
-      // Delay print to allow component to render
       const timer = setTimeout(() => {
           window.print();
           setRouteToPrint(null);
-      }, 300); // Small delay to ensure render
+      }, 300);
       return () => clearTimeout(timer);
     }
   }, [routeToPrint]);
@@ -694,29 +693,28 @@ export default function MovementsPage() {
         <PageHeader title="Registrar Movimiento" description="Escanea un QR para una acción rápida o gestiona las rutas de despacho." />
         <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0 space-y-8">
             
-            <Dialog open={isScannerOpen} onOpenChange={setScannerOpen}>
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Movimiento Individual</CardTitle>
-                        <CardDescription>Activa la cámara para escanear un activo y registrar una acción rápida.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <DialogTrigger asChild>
-                            <Button size="lg" className="w-full max-w-xs text-lg" onClick={() => setScannerOpen(true)}>
-                                <QrCode className="mr-4 h-8 w-8" />
-                                Escanear QR
+            <Card>
+                <CardHeader>
+                    <CardTitle>Movimiento Individual</CardTitle>
+                    <CardDescription>Activa la cámara para escanear un activo y registrar una acción rápida.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {!isScannerOpen ? (
+                        <Button size="lg" className="w-full max-w-xs text-lg" onClick={() => setScannerOpen(true)}>
+                            <QrCode className="mr-4 h-8 w-8" />
+                            Escanear QR
+                        </Button>
+                    ) : (
+                        <div>
+                             <QrScanner onScanSuccess={handleScanSuccess} onScanError={handleScanError} />
+                             <Button variant="outline" className="mt-4 w-full max-w-xs" onClick={() => setScannerOpen(false)}>
+                                <X className="mr-2 h-4 w-4" />
+                                Cerrar Escáner
                             </Button>
-                        </DialogTrigger>
-                    </CardContent>
-                </Card>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Escanear Código QR</DialogTitle>
-                        <DialogDescription>Apunta la cámara al código QR del activo.</DialogDescription>
-                    </DialogHeader>
-                    <QrScanner onScanSuccess={handleScanSuccess} onScanError={handleScanError} isScannerOpen={isScannerOpen} />
-                </DialogContent>
-            </Dialog>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="grid w-full grid-cols-2">
@@ -942,10 +940,9 @@ export default function MovementsPage() {
             </AlertDialogContent>
       </AlertDialog>
 
-       {/* Print-only component */}
-        <div className="print-only">
-          {routeToPrint && <PrintRouteSheet route={routeToPrint} usersMap={usersMap} />}
-        </div>
+      <div className="print-only">
+        <PrintRouteSheet route={routeToPrint} usersMap={usersMap} />
+      </div>
     </>
   );
 }
