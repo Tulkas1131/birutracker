@@ -562,6 +562,8 @@ export default function MovementsPage() {
   };
   
   const AssetsForDispatchList = ({ assetsList }: { assetsList: AssetForDispatch[] }) => {
+    const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c.name])), [customers]);
+
     const { groupedAssets, unassignedAssets } = useMemo(() => {
         const groups = new Map<string, AssetForDispatch[]>();
         const unassigned: AssetForDispatch[] = [];
@@ -577,12 +579,14 @@ export default function MovementsPage() {
             }
         }
         
-        const sortedGroups = Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+        const sortedGroups = Array.from(groups.entries()).sort(([, assetsA], [, assetsB]) => {
+          const customerNameA = customerMap.get(assetsA[0].assignedCustomerId!) || '';
+          const customerNameB = customerMap.get(assetsB[0].assignedCustomerId!) || '';
+          return customerNameA.localeCompare(customerNameB);
+        });
 
         return { groupedAssets: sortedGroups, unassignedAssets: unassigned };
-    }, [assetsList]);
-
-    const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c.name])), [customers]);
+    }, [assetsList, customerMap]);
 
     if (assetsList.length === 0) {
         return (
@@ -879,4 +883,5 @@ export default function MovementsPage() {
   );
 }
 
+    
     
