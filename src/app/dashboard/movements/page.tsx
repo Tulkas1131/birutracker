@@ -26,7 +26,6 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useUserRole } from "@/hooks/use-user-role";
 import { EmptyState } from "@/components/empty-state";
 import { cn } from "@/lib/utils";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const QrScanner = dynamic(() => import('@/components/qr-scanner').then(mod => mod.QrScanner), {
   ssr: false,
@@ -310,16 +309,9 @@ export default function MovementsPage() {
         }
     }
     return map;
-  }, [allAssets]); // Removed events dependency as it's now in broader scope
+  }, [allAssets]);
   
   const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c.name])), [customers]);
-  
-  const { barrelsOnDelivery, co2OnDelivery } = useMemo(() => {
-    return {
-        barrelsOnDelivery: assetsOnDelivery.filter(a => a.type === 'BARRIL'),
-        co2OnDelivery: assetsOnDelivery.filter(a => a.type === 'CO2')
-    }
-  }, [assetsOnDelivery]);
 
   
   const resetMovementState = () => {
@@ -571,32 +563,17 @@ export default function MovementsPage() {
                     <CardHeader>
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                             <div>
-                                <CardTitle>Activos en Reparto</CardTitle>
+                                <CardTitle>Activos en Reparto ({assetsOnDelivery.length})</CardTitle>
                                 <CardDescription>Visualiza los activos que están actualmente en tránsito hacia los clientes.</CardDescription>
                             </div>
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <Tabs defaultValue="barrels">
-                            <TabsList className="grid w-full grid-cols-2">
-                                <TabsTrigger value="barrels">Barriles ({barrelsOnDelivery.length})</TabsTrigger>
-                                <TabsTrigger value="co2">CO2 ({co2OnDelivery.length})</TabsTrigger>
-                            </TabsList>
-                            <TabsContent value="barrels" className="mt-4">
-                                <AssetsOnDeliveryList
-                                    assets={barrelsOnDelivery}
-                                    customerMap={customerMap}
-                                    fillDatesMap={fillDatesMap}
-                                />
-                            </TabsContent>
-                            <TabsContent value="co2" className="mt-4">
-                                 <AssetsOnDeliveryList
-                                    assets={co2OnDelivery}
-                                    customerMap={customerMap}
-                                    fillDatesMap={fillDatesMap}
-                                />
-                            </TabsContent>
-                        </Tabs>
+                        <AssetsOnDeliveryList
+                            assets={assetsOnDelivery}
+                            customerMap={customerMap}
+                            fillDatesMap={fillDatesMap}
+                        />
                     </CardContent>
                 </Card>
                 </>
@@ -749,3 +726,5 @@ export default function MovementsPage() {
     </div>
   );
 }
+
+    
