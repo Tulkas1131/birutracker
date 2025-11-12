@@ -581,8 +581,7 @@ export default function MovementsPage() {
             finalRoute = { id: routeRef.id, ...newRouteData };
             toast({ title: "Ruta Generada", description: "La hoja de ruta ha sido creada y guardada." });
         }
-
-        setRouteToPrint(finalRoute);
+        
         setIsRouteDialogOpen(false);
         setSelectedCustomers(new Set());
         setEditingRouteId(null);
@@ -664,118 +663,127 @@ export default function MovementsPage() {
                 </CardContent>
             </Card>
 
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="rutas">Rutas</TabsTrigger>
-                    <TabsTrigger value="historial">Historial de Rutas</TabsTrigger>
-                </TabsList>
-                <TabsContent value="rutas">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Gestión de Rutas</CardTitle>
-                            <CardDescription>Crea una nueva hoja de ruta a partir de los activos que están actualmente en reparto.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                           <Dialog open={isRouteDialogOpen} onOpenChange={setIsRouteDialogOpen}>
-                                <DialogTrigger asChild>
-                                    <Button size="lg" onClick={() => { setEditingRouteId(null); setSelectedCustomers(new Set()); }}>
-                                        <PlusCircle className="mr-2 h-5 w-5" />
-                                        Crear Hoja de Ruta
-                                    </Button>
-                                </DialogTrigger>
-                                <DialogContent className="max-w-2xl">
-                                    <DialogHeader>
-                                        <DialogTitle>{editingRouteId ? 'Editar Hoja de Ruta' : 'Crear Hoja de Ruta'}</DialogTitle>
-                                        <DialogDescription>
-                                            Selecciona los clientes que formarán parte de la ruta de despacho. Solo se muestran los que tienen activos en tránsito.
-                                        </DialogDescription>
-                                    </DialogHeader>
-                                    <div className="py-4 max-h-[60vh] overflow-y-auto">
-                                        {groupedAssetsOnDelivery.length > 0 ? (
-                                            <div className="space-y-4">
-                                                {groupedAssetsOnDelivery.map(([customerId, customerAssets]) => (
-                                                    <Card key={customerId} className={cn("transition-colors", selectedCustomers.has(customerId) && "border-primary ring-2 ring-primary")}>
-                                                        <CardHeader className="p-4 flex flex-row items-center gap-4 cursor-pointer" onClick={() => handleCustomerSelect(customerId, !selectedCustomers.has(customerId))}>
-                                                            <Checkbox
-                                                                id={`customer-${customerId}`}
-                                                                checked={selectedCustomers.has(customerId)}
-                                                                onCheckedChange={(checked) => handleCustomerSelect(customerId, !!checked)}
-                                                                className="h-5 w-5"
-                                                            />
-                                                            <div className="flex-1">
-                                                                <Label htmlFor={`customer-${customerId}`} className="text-base flex items-center gap-2 cursor-pointer">
-                                                                    <User className="h-5 w-5" />
-                                                                    {customerMap.get(customerId)?.name || 'Cliente desconocido'}
-                                                                </Label>
-                                                            </div>
-                                                        </CardHeader>
-                                                        <CardContent className="p-4 pt-0 space-y-2">
-                                                            {customerAssets.sort((a,b) => a.code.localeCompare(b.code)).map(asset => (
-                                                                <AssetRow key={asset.id} asset={asset} fillDatesMap={fillDatesMap} />
-                                                            ))}
-                                                        </CardContent>
-                                                    </Card>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <EmptyState
-                                                icon={<RouteIcon className="h-16 w-16" />}
-                                                title="No hay activos en reparto"
-                                                description="Actualmente no hay ningún activo lleno en tránsito hacia los clientes para crear una ruta."
-                                            />
-                                        )}
-                                    </div>
-                                    <DialogFooter>
-                                        <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
-                                        <Button onClick={handleGenerateRoute} disabled={selectedCustomers.size === 0}>
-                                            <FileText className="mr-2 h-4 w-4" />
-                                            {editingRouteId ? 'Actualizar y Guardar' : 'Crear y Guardar'}
-                                        </Button>
-                                    </DialogFooter>
-                                </DialogContent>
-                           </Dialog>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-                 <TabsContent value="historial">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Historial de Hojas de Ruta</CardTitle>
-                            <CardDescription>Consulta y reimprime las rutas generadas anteriormente.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                           {isLoading ? (
-                                <div className="flex justify-center items-center py-10"><Loader2 className="h-8 w-8 animate-spin" /></div>
-                           ) : routes.length === 0 ? (
-                                <EmptyState icon={<History className="h-16 w-16" />} title="No hay rutas guardadas" description="Crea tu primera hoja de ruta desde la pestaña de Rutas." />
-                           ) : (
-                                <div className="space-y-2">
-                                  {routes.map(route => (
-                                    <div key={route.id} className="flex items-center justify-between rounded-md border p-4">
-                                        <div className="flex flex-col">
-                                            <span className="font-semibold">Ruta del {format(route.createdAt.toDate(), 'dd/MM/yyyy HH:mm')}</span>
-                                            <span className="text-sm text-muted-foreground">{route.stops.length} parada(s)</span>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <Button variant="outline" size="sm" onClick={() => handlePrintRoute(route)}>
-                                                <Printer className="mr-2 h-4 w-4" />
-                                                Reimprimir
+            <Card>
+                <CardHeader>
+                    <CardTitle>Gestión de Rutas</CardTitle>
+                    <CardDescription>Crea y consulta las hojas de ruta para los despachos a clientes.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Tabs value={activeTab} onValueChange={setActiveTab}>
+                        <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="rutas">Rutas</TabsTrigger>
+                            <TabsTrigger value="historial">Historial de Rutas</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="rutas">
+                            <Card className="border-none shadow-none">
+                                <CardHeader>
+                                    <CardTitle>Activos en Reparto</CardTitle>
+                                    <CardDescription>Crea una nueva hoja de ruta a partir de los activos que están actualmente en tránsito.</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                <Dialog open={isRouteDialogOpen} onOpenChange={setIsRouteDialogOpen}>
+                                        <DialogTrigger asChild>
+                                            <Button size="lg" onClick={() => { setEditingRouteId(null); setSelectedCustomers(new Set()); }}>
+                                                <PlusCircle className="mr-2 h-5 w-5" />
+                                                Crear Hoja de Ruta
                                             </Button>
-                                            {userRole === 'Admin' && (
-                                                <Button variant="outline" size="sm" onClick={() => handleEditRoute(route)}>
-                                                    <Pencil className="mr-2 h-4 w-4" />
-                                                    Editar
+                                        </DialogTrigger>
+                                        <DialogContent className="max-w-2xl">
+                                            <DialogHeader>
+                                                <DialogTitle>{editingRouteId ? 'Editar Hoja de Ruta' : 'Crear Hoja de Ruta'}</DialogTitle>
+                                                <DialogDescription>
+                                                    Selecciona los clientes que formarán parte de la ruta de despacho. Solo se muestran los que tienen activos en tránsito.
+                                                </DialogDescription>
+                                            </DialogHeader>
+                                            <div className="py-4 max-h-[60vh] overflow-y-auto">
+                                                {groupedAssetsOnDelivery.length > 0 ? (
+                                                    <div className="space-y-4">
+                                                        {groupedAssetsOnDelivery.map(([customerId, customerAssets]) => (
+                                                            <Card key={customerId} className={cn("transition-colors", selectedCustomers.has(customerId) && "border-primary ring-2 ring-primary")}>
+                                                                <CardHeader className="p-4 flex flex-row items-center gap-4 cursor-pointer" onClick={() => handleCustomerSelect(customerId, !selectedCustomers.has(customerId))}>
+                                                                    <Checkbox
+                                                                        id={`customer-${customerId}`}
+                                                                        checked={selectedCustomers.has(customerId)}
+                                                                        onCheckedChange={(checked) => handleCustomerSelect(customerId, !!checked)}
+                                                                        className="h-5 w-5"
+                                                                    />
+                                                                    <div className="flex-1">
+                                                                        <Label htmlFor={`customer-${customerId}`} className="text-base flex items-center gap-2 cursor-pointer">
+                                                                            <User className="h-5 w-5" />
+                                                                            {customerMap.get(customerId)?.name || 'Cliente desconocido'}
+                                                                        </Label>
+                                                                    </div>
+                                                                </CardHeader>
+                                                                <CardContent className="p-4 pt-0 space-y-2">
+                                                                    {customerAssets.sort((a,b) => a.code.localeCompare(b.code)).map(asset => (
+                                                                        <AssetRow key={asset.id} asset={asset} fillDatesMap={fillDatesMap} />
+                                                                    ))}
+                                                                </CardContent>
+                                                            </Card>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <EmptyState
+                                                        icon={<RouteIcon className="h-16 w-16" />}
+                                                        title="No hay activos en reparto"
+                                                        description="Actualmente no hay ningún activo lleno en tránsito hacia los clientes para crear una ruta."
+                                                    />
+                                                )}
+                                            </div>
+                                            <DialogFooter>
+                                                <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
+                                                <Button onClick={handleGenerateRoute} disabled={selectedCustomers.size === 0}>
+                                                    <FileText className="mr-2 h-4 w-4" />
+                                                    {editingRouteId ? 'Actualizar y Guardar' : 'Crear y Guardar'}
                                                 </Button>
-                                            )}
+                                            </DialogFooter>
+                                        </DialogContent>
+                                </Dialog>
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+                        <TabsContent value="historial">
+                            <Card className="border-none shadow-none">
+                                <CardHeader>
+                                    <CardTitle>Historial de Hojas de Ruta</CardTitle>
+                                    <CardDescription>Consulta y reimprime las rutas generadas anteriormente.</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                {isLoading ? (
+                                        <div className="flex justify-center items-center py-10"><Loader2 className="h-8 w-8 animate-spin" /></div>
+                                ) : routes.length === 0 ? (
+                                        <EmptyState icon={<History className="h-16 w-16" />} title="No hay rutas guardadas" description="Crea tu primera hoja de ruta desde la pestaña de Rutas." />
+                                ) : (
+                                        <div className="space-y-2">
+                                        {routes.map(route => (
+                                            <div key={route.id} className="flex items-center justify-between rounded-md border p-4">
+                                                <div className="flex flex-col">
+                                                    <span className="font-semibold">Ruta del {format(route.createdAt.toDate(), 'dd/MM/yyyy HH:mm')}</span>
+                                                    <span className="text-sm text-muted-foreground">{route.stops.length} parada(s)</span>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <Button variant="outline" size="sm" onClick={() => handlePrintRoute(route)}>
+                                                        <Printer className="mr-2 h-4 w-4" />
+                                                        Reimprimir
+                                                    </Button>
+                                                    {userRole === 'Admin' && (
+                                                        <Button variant="outline" size="sm" onClick={() => handleEditRoute(route)}>
+                                                            <Pencil className="mr-2 h-4 w-4" />
+                                                            Editar
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
                                         </div>
-                                    </div>
-                                  ))}
-                                </div>
-                           )}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-            </Tabs>
+                                )}
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+                    </Tabs>
+                </CardContent>
+            </Card>
+
         </main>
       </div>
       <div className="print-only">
@@ -919,3 +927,5 @@ export default function MovementsPage() {
     </>
   );
 }
+
+    
