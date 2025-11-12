@@ -233,11 +233,9 @@ export default function MovementsPage() {
         return;
     }
     
-    // --- New Logic: Check in-memory list first ---
     let asset: AssetForDispatch | undefined = assetsForDispatch.find(a => a.id === decodedText);
 
     if (!asset) {
-        // If not in dispatch list, fetch from Firestore
         const { getDoc, doc } = await import("firebase/firestore/lite");
         const firestore = db();
         const assetRef = doc(firestore, "assets", decodedText);
@@ -278,13 +276,11 @@ export default function MovementsPage() {
         }
     }
 
-
     setScannedAsset(asset);
     setActionLogic(logic);
     form.setValue('asset_id', asset.id);
     form.setValue('event_type', logic.primary);
     
-    // --- New Logic: Prioritize already assigned customer ---
     const assignedCustomerId = asset.assignedCustomerId;
 
     if (assignedCustomerId) {
@@ -564,18 +560,15 @@ export default function MovementsPage() {
   const AssetsForDispatchList = ({ assetsList }: { assetsList: AssetForDispatch[] }) => {
     const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c.name])), [customers]);
 
-    const { groupedAssets, unassignedAssets } = useMemo(() => {
+    const { groupedAssets } = useMemo(() => {
         const groups = new Map<string, AssetForDispatch[]>();
-        const unassigned: AssetForDispatch[] = [];
-
+        
         for (const asset of assetsList) {
             if (asset.assignedCustomerId) {
                 if (!groups.has(asset.assignedCustomerId)) {
                     groups.set(asset.assignedCustomerId, []);
                 }
                 groups.get(asset.assignedCustomerId)!.push(asset);
-            } else {
-                unassigned.push(asset);
             }
         }
         
@@ -585,7 +578,7 @@ export default function MovementsPage() {
           return nameA.localeCompare(nameB);
         });
 
-        return { groupedAssets: sortedGroups, unassignedAssets: unassigned };
+        return { groupedAssets: sortedGroups };
     }, [assetsList, customerMap]);
 
     if (assetsList.length === 0) {
@@ -594,6 +587,14 @@ export default function MovementsPage() {
                 No hay activos de este tipo listos para despachar.
             </div>
         );
+    }
+    
+    if (groupedAssets.length === 0) {
+        return (
+             <div className="py-10 text-center text-muted-foreground">
+                Asigna un cliente a los activos para poder crear una ruta.
+            </div>
+        )
     }
     
     const AssetRow = ({ asset }: { asset: AssetForDispatch }) => (
@@ -647,17 +648,6 @@ export default function MovementsPage() {
                     </CardContent>
                 </Card>
             ))}
-
-            {unassignedAssets.length > 0 && (
-                <Card>
-                    <CardHeader className="p-4">
-                        <CardTitle className="text-base">Sin Asignar</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0 space-y-2">
-                         {unassignedAssets.sort((a,b) => a.code.localeCompare(b.code)).map(asset => <AssetRow key={asset.id} asset={asset} />)}
-                    </CardContent>
-                </Card>
-            )}
         </div>
     );
   };
