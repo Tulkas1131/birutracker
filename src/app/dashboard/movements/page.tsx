@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import dynamic from "next/dynamic";
 import { auth, db } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { Loader2, QrCode, ArrowRight, AlertTriangle, Route as RouteIcon, PackageCheck, ListPlus, Pencil, X, Calendar as CalendarIcon } from "lucide-react";
+import { Loader2, QrCode, ArrowRight, AlertTriangle, Route as RouteIcon, PackageCheck, ListPlus, Pencil, X, Calendar as CalendarIcon, User } from "lucide-react";
 import { differenceInDays, format } from 'date-fns';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -539,56 +539,132 @@ export default function MovementsPage() {
     );
   };
   
-  const AssetsForDispatchList = ({ assetsList }: { assetsList: AssetForDispatch[] }) => (
-    <div className="space-y-4">
-        {assetsList.length === 0 ? (
+  const AssetsForDispatchList = ({ assetsList }: { assetsList: AssetForDispatch[] }) => {
+    const groupedAssets = useMemo(() => {
+        const groups = new Map<string, AssetForDispatch[]>();
+        const unassigned: AssetForDispatch[] = [];
+
+        for (const asset of assetsList) {
+            if (asset.assignedCustomerId) {
+                if (!groups.has(asset.assignedCustomerId)) {
+                    groups.set(asset.assignedCustomerId, []);
+                }
+                groups.get(asset.assignedCustomerId)!.push(asset);
+            } else {
+                unassigned.push(asset);
+            }
+        }
+
+        return { groups, unassigned };
+    }, [assetsList]);
+
+    const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c.name])), [customers]);
+
+    if (assetsList.length === 0) {
+        return (
             <div className="py-10 text-center text-muted-foreground">
                 No hay activos de este tipo listos para despachar.
             </div>
-        ) : (
-            <div key="unassigned" className="rounded-lg border p-4">
-                <h3 className="font-semibold mb-2">Sin Asignar</h3>
-                <div className="space-y-2">
-                    {assetsList.map(asset => (
-                        <div key={asset.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 p-2 rounded-md hover:bg-muted/50">
-                            {isRouteMode && (
-                                <Checkbox 
-                                    id={`asset-${asset.id}`}
-                                    checked={!!selectedAssetsForRoute[asset.id]}
-                                    onCheckedChange={() => handleAssetSelectionForRoute(asset.id)}
-                                    disabled={!isRouteMode}
-                                />
-                            )}
-                            <Label htmlFor={`asset-${asset.id}`} className="flex-1 font-mono">
-                                <div className="flex flex-col">
-                                    <div>
-                                        {asset.code} 
-                                        <span className="text-muted-foreground ml-2">
-                                            ({asset.format}{asset.variety && asset.type === 'BARRIL' ? ` - ${asset.variety}` : ''})
-                                        </span>
+        );
+    }
+    
+    return (
+        <div className="space-y-4">
+            {Array.from(groupedAssets.groups.entries()).map(([customerId, customerAssets]) => (
+                <Card key={customerId}>
+                    <CardHeader className="p-4">
+                        <CardTitle className="text-base flex items-center gap-2">
+                           <User className="h-5 w-5" />
+                           {customerMap.get(customerId) || 'Cliente desconocido'}
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0 space-y-2">
+                        {customerAssets.map(asset => (
+                            <div key={asset.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 p-2 rounded-md hover:bg-muted/50">
+                                {isRouteMode && (
+                                    <Checkbox 
+                                        id={`asset-${asset.id}`}
+                                        checked={!!selectedAssetsForRoute[asset.id]}
+                                        onCheckedChange={() => handleAssetSelectionForRoute(asset.id)}
+                                        disabled={!isRouteMode}
+                                    />
+                                )}
+                                <Label htmlFor={`asset-${asset.id}`} className="flex-1">
+                                    <div className="flex flex-col">
+                                        <div>
+                                            {asset.code} 
+                                            <span className="text-muted-foreground ml-2">
+                                                ({asset.format}{asset.variety && asset.type === 'BARRIL' ? ` - ${asset.variety}` : ''})
+                                            </span>
+                                        </div>
+                                        <FillDateInfo fillDate={fillDatesMap.get(asset.id)} />
                                     </div>
-                                    <FillDateInfo fillDate={fillDatesMap.get(asset.id)} />
+                                </Label>
+                                <div className="w-full sm:w-60">
+                                    <Select
+                                        value={asset.assignedCustomerId}
+                                        onValueChange={(value) => handleCustomerAssignment(asset.id, value)}
+                                        disabled={!isRouteMode}
+                                    >
+                                        <SelectTrigger><SelectValue placeholder="Asignar cliente..." /></SelectTrigger>
+                                        <SelectContent>
+                                            {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
-                            </Label>
-                            <div className="w-full sm:w-60">
-                                <Select
-                                    value={asset.assignedCustomerId}
-                                    onValueChange={(value) => handleCustomerAssignment(asset.id, value)}
-                                    disabled={!isRouteMode}
-                                >
-                                    <SelectTrigger><SelectValue placeholder="Asignar cliente..." /></SelectTrigger>
-                                    <SelectContent>
-                                        {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
                             </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        )}
-    </div>
-  );
+                        ))}
+                    </CardContent>
+                </Card>
+            ))}
+
+            {groupedAssets.unassigned.length > 0 && (
+                <Card>
+                    <CardHeader className="p-4">
+                        <CardTitle className="text-base">Sin Asignar</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-0 space-y-2">
+                         {groupedAssets.unassigned.map(asset => (
+                            <div key={asset.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 p-2 rounded-md hover:bg-muted/50">
+                                {isRouteMode && (
+                                    <Checkbox 
+                                        id={`asset-${asset.id}`}
+                                        checked={!!selectedAssetsForRoute[asset.id]}
+                                        onCheckedChange={() => handleAssetSelectionForRoute(asset.id)}
+                                        disabled={!isRouteMode}
+                                    />
+                                )}
+                                <Label htmlFor={`asset-${asset.id}`} className="flex-1">
+                                    <div className="flex flex-col">
+                                        <div>
+                                            {asset.code} 
+                                            <span className="text-muted-foreground ml-2">
+                                                ({asset.format}{asset.variety && asset.type === 'BARRIL' ? ` - ${asset.variety}` : ''})
+                                            </span>
+                                        </div>
+                                        <FillDateInfo fillDate={fillDatesMap.get(asset.id)} />
+                                    </div>
+                                </Label>
+                                <div className="w-full sm:w-60">
+                                    <Select
+                                        value={asset.assignedCustomerId}
+                                        onValueChange={(value) => handleCustomerAssignment(asset.id, value)}
+                                        disabled={!isRouteMode}
+                                    >
+                                        <SelectTrigger><SelectValue placeholder="Asignar cliente..." /></SelectTrigger>
+                                        <SelectContent>
+                                            {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                        ))}
+                    </CardContent>
+                </Card>
+            )}
+        </div>
+    );
+  };
 
 
   return (
@@ -810,6 +886,3 @@ export default function MovementsPage() {
     </div>
   );
 }
-
-
-    
