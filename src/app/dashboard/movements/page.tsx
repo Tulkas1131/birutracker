@@ -219,7 +219,7 @@ const PrintRouteSheet = ({ route, usersMap }: { route: Route | null, usersMap: M
             </head>
             <body>
                 <header className="header">
-                    <h1>Hoja de Ruta Cervecería Pukalan</h1>
+                    <h1>Hoja de Ruta Cerveceria Pukalan</h1>
                     <div className="header-details">
                         <p><strong>Fecha:</strong> {format(route.createdAt.toDate(), 'dd/MM/yyyy HH:mm')}</p>
                         <p><strong>Ruta ID:</strong> {route.id}</p>
@@ -347,12 +347,26 @@ export default function MovementsPage() {
     return map;
   }, [events]);
 
+  const assetsInExistingRoutes = useMemo(() => {
+    const assetIds = new Set<string>();
+    routes.forEach(route => {
+        // Only consider assets from routes that are NOT the one being edited
+        if (!editingRouteId || route.id !== editingRouteId) {
+            route.stops.forEach(stop => {
+                stop.assets.forEach(asset => {
+                    assetIds.add(asset.id);
+                });
+            });
+        }
+    });
+    return assetIds;
+  }, [routes, editingRouteId]);
+
   const assetsOnDelivery = useMemo(() => {
     return allAssets.filter(asset => 
-        asset.location === 'EN_REPARTO' && asset.state === 'LLENO'
+        asset.location === 'EN_REPARTO' && asset.state === 'LLENO' && !assetsInExistingRoutes.has(asset.id)
     );
-  }, [allAssets]);
-
+  }, [allAssets, assetsInExistingRoutes]);
 
   const fillDatesMap = useMemo(() => {
     const map = new Map<string, Date>();
@@ -606,14 +620,14 @@ export default function MovementsPage() {
 
  const openPrintWindow = (route: Route) => {
     const printContent = renderToStaticMarkup(<PrintRouteSheet route={route} usersMap={usersMap} />);
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    const printWindow = window.open('', '_blank');
     if (printWindow) {
         printWindow.document.write(printContent);
         printWindow.document.close();
         printWindow.focus();
         setTimeout(() => {
             printWindow.print();
-        }, 500); // Small delay to ensure content is rendered
+        }, 500); 
     } else {
         toast({
             title: "Error de Impresión",
@@ -635,8 +649,21 @@ export default function MovementsPage() {
         toast({ title: "Error", description: "No se pudo identificar al usuario creador.", variant: "destructive" });
         return;
     }
+    
+    // Refresh assets on delivery to include any assets from the route being edited
+    const originalAssetsForEditedRoute = editingRouteId ? routes.find(r => r.id === editingRouteId)?.stops.flatMap(s => s.assets) || [] : [];
 
-    const stops: RouteStop[] = groupedAssetsOnDelivery
+    const stops: RouteStop[] = [...groupedAssetsOnDelivery, ...originalAssetsForEditedRoute.reduce((acc, asset) => {
+        const lastEvent = lastEventsMap.get(asset.id);
+        if (lastEvent) {
+             const customerId = lastEvent.customer_id;
+             if (!acc.has(customerId)) acc.set(customerId, []);
+             // This is a simplified asset, need to get full asset details
+             const fullAsset = allAssets.find(a => a.id === asset.id);
+             if (fullAsset) acc.get(customerId)!.push(fullAsset);
+        }
+        return acc;
+    }, new Map<string, Asset[]>())]
         .filter(([customerId]) => selectedCustomers.has(customerId))
         .map(([customerId, assets]) => {
             const customer = customerMap.get(customerId);
@@ -672,8 +699,6 @@ export default function MovementsPage() {
         }
         
         setIsRouteDialogOpen(false);
-        setSelectedCustomers(new Set());
-        setEditingRouteId(null);
         await fetchData();
 
         openPrintWindow(finalRoute);
@@ -682,6 +707,9 @@ export default function MovementsPage() {
         console.error("Error generating route: ", error);
         logAppEvent({ level: 'ERROR', message: 'Failed to generate route', component: 'MovementsPage-handleGenerateRoute', stack: error.stack });
         toast({ title: "Error", description: "No se pudo generar la hoja de ruta.", variant: "destructive" });
+    } finally {
+        setSelectedCustomers(new Set());
+        setEditingRouteId(null);
     }
   };
   
@@ -707,6 +735,7 @@ export default function MovementsPage() {
             level: 'INFO',
             message: `Admin user deleted route with ID: ${routeId}`,
             component: 'MovementsPage-handleDeleteRoute',
+            userEmail: user.email || 'unknown',
         });
     } catch (error: any) {
         console.error("Error deleting route: ", error);
@@ -715,6 +744,7 @@ export default function MovementsPage() {
             message: `Failed to delete route ${routeId}`,
             component: 'MovementsPage-handleDeleteRoute',
             stack: error.stack,
+            userEmail: user.email || 'unknown',
         });
         toast({ title: "Error", description: "No se pudo eliminar la ruta.", variant: "destructive" });
     }
@@ -738,6 +768,42 @@ export default function MovementsPage() {
     const customerEvents: MovementEventType[] = ['SALIDA_A_REPARTO', 'SALIDA_VACIO', 'DEVOLUCION', 'ENTREGA_A_CLIENTE'];
     return customerEvents.includes(currentEventType);
   }, [currentEventType]);
+
+  const getAssetsForEditedRoute = () => {
+    if (!editingRouteId) return [];
+    const route = routes.find(r => r.id === editingRouteId);
+    if (!route) return [];
+    
+    const assetDetails: [string, Asset[]][] = route.stops.map(stop => {
+        const assetsInStop = stop.assets
+            .map(asset => allAssets.find(a => a.id === asset.id))
+            .filter((a): a is Asset => !!a);
+        return [stop.customerId, assetsInStop];
+    });
+    return assetDetails;
+  };
+  
+  const combinedAssetsForDialog = useMemo(() => {
+    const combined = new Map<string, Asset[]>();
+
+    // Add assets currently on delivery and not in other routes
+    groupedAssetsOnDelivery.forEach(([customerId, assets]) => {
+        combined.set(customerId, [...(combined.get(customerId) || []), ...assets]);
+    });
+    
+    // If editing, add assets from the route being edited
+    if (editingRouteId) {
+        const assetsFromEditedRoute = getAssetsForEditedRoute();
+        assetsFromEditedRoute.forEach(([customerId, assets]) => {
+            const existing = combined.get(customerId) || [];
+            const newAssets = assets.filter(a => !existing.some(e => e.id === a.id));
+            combined.set(customerId, [...existing, ...newAssets]);
+        });
+    }
+
+    return Array.from(combined.entries()).sort((a, b) => (customerMap.get(a[0])?.name || '').localeCompare(customerMap.get(b[0])?.name || ''));
+  }, [groupedAssetsOnDelivery, editingRouteId, routes, allAssets, customerMap]);
+
 
   return (
     <>
@@ -771,7 +837,7 @@ export default function MovementsPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Gestión de Rutas</CardTitle>
-                        <CardDescription>Crea, edita y consulta las hojas de ruta para los despachos a clientes.</CardDescription>
+                         <CardDescription>Crea, edita y consulta las hojas de ruta para los despachos a clientes.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -781,13 +847,16 @@ export default function MovementsPage() {
                             </TabsList>
                             <TabsContent value="rutas">
                                 <Card className="border-none shadow-none">
-                                    <CardHeader>
-                                        <CardTitle>Rutas en Reparto</CardTitle>
-                                    </CardHeader>
                                     <CardContent className="pt-6">
-                                    <Dialog open={isRouteDialogOpen} onOpenChange={setIsRouteDialogOpen}>
+                                    <Dialog open={isRouteDialogOpen} onOpenChange={(isOpen) => {
+                                        setIsRouteDialogOpen(isOpen);
+                                        if (!isOpen) {
+                                            setEditingRouteId(null);
+                                            setSelectedCustomers(new Set());
+                                        }
+                                    }}>
                                             <DialogTrigger asChild>
-                                                <Button size="lg" onClick={() => { setEditingRouteId(null); setSelectedCustomers(new Set()); }}>
+                                                <Button size="lg" onClick={() => setIsRouteDialogOpen(true)}>
                                                     <PlusCircle className="mr-2 h-5 w-5" />
                                                     Crear Hoja de Ruta
                                                 </Button>
@@ -800,9 +869,9 @@ export default function MovementsPage() {
                                                     </DialogDescription>
                                                 </DialogHeader>
                                                 <div className="py-4 max-h-[60vh] overflow-y-auto">
-                                                    {groupedAssetsOnDelivery.length > 0 ? (
+                                                    {combinedAssetsForDialog.length > 0 ? (
                                                         <div className="space-y-4">
-                                                            {groupedAssetsOnDelivery.map(([customerId, customerAssets]) => (
+                                                            {combinedAssetsForDialog.map(([customerId, customerAssets]) => (
                                                                 <Card key={customerId} className={cn("transition-colors", selectedCustomers.has(customerId) && "border-primary ring-2 ring-primary")}>
                                                                     <CardHeader className="p-4 flex flex-row items-center gap-4 cursor-pointer" onClick={() => handleCustomerSelect(customerId, !selectedCustomers.has(customerId))}>
                                                                         <Checkbox
@@ -829,8 +898,8 @@ export default function MovementsPage() {
                                                     ) : (
                                                         <EmptyState
                                                             icon={<RouteIcon className="h-16 w-16" />}
-                                                            title="No hay activos en reparto"
-                                                            description="Actualmente no hay ningún activo lleno en tránsito hacia los clientes para crear una ruta."
+                                                            title="No hay activos disponibles para rutas"
+                                                            description="Actualmente no hay ningún activo en tránsito que no esté ya asignado a otra ruta."
                                                         />
                                                     )}
                                                 </div>
@@ -1030,3 +1099,4 @@ export default function MovementsPage() {
   );
 }
 
+    
