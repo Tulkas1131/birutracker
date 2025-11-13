@@ -252,17 +252,12 @@ function OverviewPageContent() {
         const eventTypeMatch = filters.eventType === 'ALL' || event.event_type === filters.eventType;
 
         if (filters.criticalOnly) {
-            // A critical event must be a delivery...
+            // An event is critical if it's a delivery...
             if (event.event_type !== 'ENTREGA_A_CLIENTE') {
                 return false;
             }
             // ...for an asset that is still at the customer's location.
             if (asset?.location !== 'EN_CLIENTE') {
-                return false;
-            }
-            // ...and this must be the LATEST event for that asset, to ensure we only show current possessions.
-            const lastEventForAsset = lastEventsMap.get(event.asset_id);
-            if (lastEventForAsset?.id !== event.id) {
                 return false;
             }
             // ...and it must have been there for 30+ days.
@@ -274,21 +269,19 @@ function OverviewPageContent() {
         
         return customerMatch && assetCodeMatch && assetTypeMatch && eventTypeMatch;
     });
-  }, [allEvents, assetsMap, filters, lastEventsMap]);
+  }, [allEvents, assetsMap, filters]);
 
   const daysAtCustomerMap = useMemo(() => {
     const map = new Map<string, number>();
     for (const event of filteredEvents) {
       const asset = assetsMap.get(event.asset_id);
       if (asset && asset.location === 'EN_CLIENTE' && event.event_type === 'ENTREGA_A_CLIENTE') {
-          const lastEvent = lastEventsMap.get(asset.id);
-          if(lastEvent && lastEvent.id === event.id){
-            map.set(event.id, differenceInDays(new Date(), event.timestamp.toDate()));
-          }
+        // This is the key fix: only check the asset's current location, not the global event order.
+        map.set(event.id, differenceInDays(new Date(), event.timestamp.toDate()));
       }
     }
     return map;
-  }, [filteredEvents, assetsMap, lastEventsMap]);
+  }, [filteredEvents, assetsMap]);
 
   const totalPages = Math.ceil(filteredEvents.length / ITEMS_PER_PAGE);
   const paginatedEvents = useMemo(() => {
@@ -385,7 +378,7 @@ function OverviewPageContent() {
             ) : isMobile ? (
                 <div className="space-y-4 p-4">
                     {paginatedEvents.map((event) => {
-                        const asset = assetsMap.get(event.id);
+                        const asset = assetsMap.get(event.asset_id);
                         const user = usersMap.get(event.user_id);
                         const days = daysAtCustomerMap.get(event.id) || null;
                         const { variety, valveType } = getCarryForwardData(event);
