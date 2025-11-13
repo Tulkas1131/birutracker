@@ -45,10 +45,8 @@ const formatDate = (timestamp: Timestamp) => {
     return timestamp.toDate().toLocaleString();
 };
 
-function EventCardMobile({ event, assetsMap, usersMap, currentUser, onDelete, daysAtCustomer }: { event: Event, assetsMap: Map<string, Asset>, usersMap: Map<string, UserData>, currentUser: any, onDelete: (id: string) => void, daysAtCustomer: number | null }) {
+function EventCardMobile({ event, asset, user, currentUser, onDelete, daysAtCustomer, variety, valveType }: { event: Event, asset: Asset | undefined, user: UserData | undefined, currentUser: any, onDelete: (id: string) => void, daysAtCustomer: number | null, variety?: string, valveType?: string }) {
     const userRole = useUserRole();
-    const asset = assetsMap.get(event.asset_id);
-    const user = usersMap.get(event.user_id);
     const isCurrentUserEvent = currentUser?.uid === event.user_id;
 
     return (
@@ -59,7 +57,8 @@ function EventCardMobile({ event, assetsMap, usersMap, currentUser, onDelete, da
                     <span className="text-sm font-medium">{formatEventType(event.event_type)}</span>
                     <span className="text-sm text-muted-foreground">{event.customer_name}</span>
                     <span className="text-xs text-muted-foreground">{formatDate(event.timestamp)}</span>
-                     {asset?.type === 'BARRIL' && event.valveType && <span className="text-xs text-muted-foreground">Válvula: {event.valveType}</span>}
+                     {asset?.type === 'BARRIL' && variety && <span className="text-xs text-muted-foreground">Variedad: {variety}</span>}
+                     {asset?.type === 'BARRIL' && valveType && <span className="text-xs text-muted-foreground">Válvula: {valveType}</span>}
                      {userRole === 'Admin' && user && (
                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1">
                             <User className="h-3 w-3" />
@@ -94,10 +93,8 @@ function EventCardMobile({ event, assetsMap, usersMap, currentUser, onDelete, da
     );
 }
 
-function EventTableRow({ event, assetsMap, usersMap, currentUser, onDelete, showBeerColumns, daysAtCustomer }: { event: Event, assetsMap: Map<string, Asset>, usersMap: Map<string, UserData>, currentUser: any, onDelete: (id: string) => void, showBeerColumns: boolean, daysAtCustomer: number | null }) {
+function EventTableRow({ event, asset, user, currentUser, onDelete, showBeerColumns, daysAtCustomer, variety, valveType }: { event: Event, asset: Asset | undefined, user: UserData | undefined, currentUser: any, onDelete: (id: string) => void, showBeerColumns: boolean, daysAtCustomer: number | null, variety?: string, valveType?: string }) {
   const userRole = useUserRole();
-  const asset = assetsMap.get(event.asset_id);
-  const user = usersMap.get(event.user_id);
   const isCurrentUserEvent = currentUser?.uid === event.user_id;
 
   return (
@@ -117,8 +114,8 @@ function EventTableRow({ event, assetsMap, usersMap, currentUser, onDelete, show
           '--'
         )}
       </TableCell>
-      {showBeerColumns && <TableCell className="hidden lg:table-cell">{event.variety || 'N/A'}</TableCell>}
-      {showBeerColumns && <TableCell className="hidden lg:table-cell">{event.valveType || 'N/A'}</TableCell>}
+      {showBeerColumns && <TableCell className="hidden lg:table-cell">{variety || 'N/A'}</TableCell>}
+      {showBeerColumns && <TableCell className="hidden lg:table-cell">{valveType || 'N/A'}</TableCell>}
       {userRole === 'Admin' && (
           <TableCell>{user?.email || 'Desconocido'}</TableCell>
       )}
@@ -204,6 +201,7 @@ function OverviewPageContent() {
   
   const lastEventsMap = useMemo(() => {
     const map = new Map<string, Event>();
+    // The events are already sorted desc, so the first one we see is the last one.
     for (const event of allEvents) {
       if (!map.has(event.asset_id)) {
         map.set(event.asset_id, event);
@@ -211,6 +209,38 @@ function OverviewPageContent() {
     }
     return map;
   }, [allEvents]);
+
+  const assetFillHistoryMap = useMemo(() => {
+    const fillHistory = new Map<string, { timestamp: Timestamp; variety?: string; valveType?: string }[]>();
+    const fillEvents = allEvents
+      .filter(e => e.event_type === 'LLENADO_EN_PLANTA')
+      .sort((a, b) => a.timestamp.toMillis() - b.timestamp.toMillis()); // Sort ascending
+
+    for (const event of fillEvents) {
+      if (!fillHistory.has(event.asset_id)) {
+        fillHistory.set(event.asset_id, []);
+      }
+      fillHistory.get(event.asset_id)!.push({
+        timestamp: event.timestamp,
+        variety: event.variety,
+        valveType: event.valveType,
+      });
+    }
+    return fillHistory;
+  }, [allEvents]);
+
+  const getCarryForwardData = useCallback((event: Event) => {
+    const history = assetFillHistoryMap.get(event.asset_id);
+    if (!history) {
+      return { variety: event.variety, valveType: event.valveType };
+    }
+    // Find the last fill event that happened at or before the current event
+    const lastFill = history.slice().reverse().find(fill => fill.timestamp.toMillis() <= event.timestamp.toMillis());
+    return {
+      variety: lastFill?.variety || event.variety,
+      valveType: lastFill?.valveType || event.valveType
+    };
+  }, [assetFillHistoryMap]);
 
 
   const filteredEvents = useMemo(() => {
@@ -222,18 +252,20 @@ function OverviewPageContent() {
         const eventTypeMatch = filters.eventType === 'ALL' || event.event_type === filters.eventType;
 
         if (filters.criticalOnly) {
-            const asset = assetsMap.get(event.asset_id);
-            // Event must be a delivery, and the asset must still be at the customer's location
-            if (event.event_type !== 'ENTREGA_A_CLIENTE' || asset?.location !== 'EN_CLIENTE') {
+            // A critical event must be a delivery...
+            if (event.event_type !== 'ENTREGA_A_CLIENTE') {
                 return false;
             }
-            
-            // Check if this is the latest event for the asset, ensuring we only count current possessions
+            // ...for an asset that is still at the customer's location.
+            if (asset?.location !== 'EN_CLIENTE') {
+                return false;
+            }
+            // ...and this must be the LATEST event for that asset, to ensure we only show current possessions.
             const lastEventForAsset = lastEventsMap.get(event.asset_id);
             if (lastEventForAsset?.id !== event.id) {
                 return false;
             }
-
+            // ...and it must have been there for 30+ days.
             const daysAtCustomer = differenceInDays(new Date(), event.timestamp.toDate());
             if (daysAtCustomer < 30) {
                 return false;
@@ -249,8 +281,8 @@ function OverviewPageContent() {
     for (const event of filteredEvents) {
       const asset = assetsMap.get(event.asset_id);
       if (asset && asset.location === 'EN_CLIENTE' && event.event_type === 'ENTREGA_A_CLIENTE') {
-          const lastDelivery = lastEventsMap.get(asset.id);
-          if(lastDelivery && lastDelivery.id === event.id){
+          const lastEvent = lastEventsMap.get(asset.id);
+          if(lastEvent && lastEvent.id === event.id){
             map.set(event.id, differenceInDays(new Date(), event.timestamp.toDate()));
           }
       }
@@ -352,9 +384,15 @@ function OverviewPageContent() {
                 />
             ) : isMobile ? (
                 <div className="space-y-4 p-4">
-                    {paginatedEvents.map((event) => (
-                        <EventCardMobile key={event.id} event={event} assetsMap={assetsMap} usersMap={usersMap} currentUser={currentUser} onDelete={handleDelete} daysAtCustomer={daysAtCustomerMap.get(event.id) || null} />
-                    ))}
+                    {paginatedEvents.map((event) => {
+                        const asset = assetsMap.get(event.id);
+                        const user = usersMap.get(event.user_id);
+                        const days = daysAtCustomerMap.get(event.id) || null;
+                        const { variety, valveType } = getCarryForwardData(event);
+                        return (
+                           <EventCardMobile key={event.id} event={event} asset={asset} user={user} currentUser={currentUser} onDelete={handleDelete} daysAtCustomer={days} variety={variety} valveType={valveType} />
+                        )
+                    })}
                 </div>
             ) : (
               <Table>
@@ -372,9 +410,15 @@ function OverviewPageContent() {
                       </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginatedEvents.map((event) => (
-                        <EventTableRow key={event.id} event={event} assetsMap={assetsMap} usersMap={usersMap} currentUser={currentUser} onDelete={handleDelete} showBeerColumns={showBeerColumns} daysAtCustomer={daysAtCustomerMap.get(event.id) || null} />
-                    ))}
+                    {paginatedEvents.map((event) => {
+                       const asset = assetsMap.get(event.asset_id);
+                       const user = usersMap.get(event.user_id);
+                       const days = daysAtCustomerMap.get(event.id) || null;
+                       const { variety, valveType } = getCarryForwardData(event);
+                       return (
+                           <EventTableRow key={event.id} event={event} asset={asset} user={user} currentUser={currentUser} onDelete={handleDelete} showBeerColumns={showBeerColumns} daysAtCustomer={days} variety={variety} valveType={valveType} />
+                       )
+                    })}
                   </TableBody>
               </Table>
             )}
@@ -420,5 +464,3 @@ export default function OverviewPage() {
         </Suspense>
     );
 }
-
-    
