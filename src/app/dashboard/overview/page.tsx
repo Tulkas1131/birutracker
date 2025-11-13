@@ -214,35 +214,35 @@ function OverviewPageContent() {
 
 
   const filteredEvents = useMemo(() => {
-    let eventsToFilter = allEvents;
-
-    if (filters.criticalOnly) {
-      const criticalAssetIds = new Set<string>();
-      
-      for (const asset of assets) {
-        if (asset.location === 'EN_CLIENTE') {
-          const lastEvent = lastEventsMap.get(asset.id);
-          if (lastEvent && lastEvent.event_type === 'ENTREGA_A_CLIENTE') {
-            const daysAtCustomer = differenceInDays(new Date(), lastEvent.timestamp.toDate());
-            if (daysAtCustomer >= 30) {
-              criticalAssetIds.add(asset.id);
-            }
-          }
-        }
-      }
-      // Show all events related to the critical assets
-      eventsToFilter = allEvents.filter(event => criticalAssetIds.has(event.asset_id));
-    }
-    
-    return eventsToFilter.filter(event => {
+    return allEvents.filter(event => {
         const asset = assetsMap.get(event.asset_id);
         const customerMatch = event.customer_name.toLowerCase().includes(filters.customer.toLowerCase());
         const assetCodeMatch = event.asset_code.toLowerCase().includes(filters.assetCode.toLowerCase());
         const assetTypeMatch = filters.assetType === 'ALL' || (asset?.type === filters.assetType);
         const eventTypeMatch = filters.eventType === 'ALL' || event.event_type === filters.eventType;
+
+        if (filters.criticalOnly) {
+            const asset = assetsMap.get(event.asset_id);
+            // Event must be a delivery, and the asset must still be at the customer's location
+            if (event.event_type !== 'ENTREGA_A_CLIENTE' || asset?.location !== 'EN_CLIENTE') {
+                return false;
+            }
+            
+            // Check if this is the latest event for the asset, ensuring we only count current possessions
+            const lastEventForAsset = lastEventsMap.get(event.asset_id);
+            if (lastEventForAsset?.id !== event.id) {
+                return false;
+            }
+
+            const daysAtCustomer = differenceInDays(new Date(), event.timestamp.toDate());
+            if (daysAtCustomer < 30) {
+                return false;
+            }
+        }
+        
         return customerMatch && assetCodeMatch && assetTypeMatch && eventTypeMatch;
     });
-  }, [allEvents, assets, filters, assetsMap, lastEventsMap]);
+  }, [allEvents, assetsMap, filters, lastEventsMap]);
 
   const daysAtCustomerMap = useMemo(() => {
     const map = new Map<string, number>();
