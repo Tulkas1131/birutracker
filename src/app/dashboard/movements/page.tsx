@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import dynamic from "next/dynamic";
 import { auth, db } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { Loader2, QrCode, ArrowRight, AlertTriangle, Route as RouteIcon, Pencil, X, Calendar as CalendarIcon, User, PlusCircle, Printer, FileText, History } from "lucide-react";
+import { Loader2, QrCode, ArrowRight, AlertTriangle, Route as RouteIcon, Pencil, X, Calendar as CalendarIcon, User, PlusCircle, Printer, FileText, History, Trash2 } from "lucide-react";
 import { differenceInDays, format } from 'date-fns';
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -219,7 +219,7 @@ const PrintRouteSheet = ({ route, usersMap }: { route: Route | null, usersMap: M
             </head>
             <body>
                 <header className="header">
-                    <h1>Hoja de Ruta "Cervecería Pukalan"</h1>
+                    <h1>Hoja de Ruta Cervecería Pukalan</h1>
                     <div className="header-details">
                         <p><strong>Fecha:</strong> {format(route.createdAt.toDate(), 'dd/MM/yyyy HH:mm')}</p>
                         <p><strong>Ruta ID:</strong> {route.id}</p>
@@ -691,6 +691,34 @@ export default function MovementsPage() {
     setSelectedCustomers(customerIds);
     setIsRouteDialogOpen(true);
   };
+
+  const handleDeleteRoute = async (routeId: string) => {
+    if (userRole !== 'Admin' || !user) {
+        toast({ title: "Acceso Denegado", description: "No tienes permiso para eliminar rutas.", variant: "destructive" });
+        return;
+    }
+    const { doc, deleteDoc } = await import("firebase/firestore/lite");
+    const firestore = db();
+    try {
+        await deleteDoc(doc(firestore, "routes", routeId));
+        setRoutes(prev => prev.filter(route => route.id !== routeId));
+        toast({ title: "Ruta Eliminada", description: "La hoja de ruta ha sido eliminada." });
+        logAppEvent({
+            level: 'INFO',
+            message: `Admin user deleted route with ID: ${routeId}`,
+            component: 'MovementsPage-handleDeleteRoute',
+        });
+    } catch (error: any) {
+        console.error("Error deleting route: ", error);
+        logAppEvent({
+            level: 'ERROR',
+            message: `Failed to delete route ${routeId}`,
+            component: 'MovementsPage-handleDeleteRoute',
+            stack: error.stack,
+        });
+        toast({ title: "Error", description: "No se pudo eliminar la ruta.", variant: "destructive" });
+    }
+  };
   
   const currentEventType = form.watch('event_type');
 
@@ -742,8 +770,8 @@ export default function MovementsPage() {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Despachos</CardTitle>
-                        <CardDescription>Crea y consulta las hojas de ruta para los despachos a clientes.</CardDescription>
+                        <CardTitle>Gestión de Rutas</CardTitle>
+                        <CardDescription>Crea, edita y consulta las hojas de ruta para los despachos a clientes.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -753,6 +781,9 @@ export default function MovementsPage() {
                             </TabsList>
                             <TabsContent value="rutas">
                                 <Card className="border-none shadow-none">
+                                    <CardHeader>
+                                        <CardTitle>Rutas en Reparto</CardTitle>
+                                    </CardHeader>
                                     <CardContent className="pt-6">
                                     <Dialog open={isRouteDialogOpen} onOpenChange={setIsRouteDialogOpen}>
                                             <DialogTrigger asChild>
@@ -836,10 +867,15 @@ export default function MovementsPage() {
                                                             Reimprimir
                                                         </Button>
                                                         {userRole === 'Admin' && (
-                                                            <Button variant="outline" size="sm" onClick={() => handleEditRoute(route)}>
-                                                                <Pencil className="mr-2 h-4 w-4" />
-                                                                Editar
-                                                            </Button>
+                                                            <>
+                                                                <Button variant="outline" size="sm" onClick={() => handleEditRoute(route)}>
+                                                                    <Pencil className="mr-2 h-4 w-4" />
+                                                                    Editar
+                                                                </Button>
+                                                                <Button variant="destructive" size="icon" onClick={() => handleDeleteRoute(route.id)}>
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            </>
                                                         )}
                                                     </div>
                                                 </div>
@@ -994,4 +1030,3 @@ export default function MovementsPage() {
   );
 }
 
-    
