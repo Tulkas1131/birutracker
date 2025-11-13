@@ -198,17 +198,6 @@ function OverviewPageContent() {
   
   const assetsMap = useMemo(() => new Map(assets.map(asset => [asset.id, asset])), [assets]);
   const usersMap = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
-  
-  const lastEventsMap = useMemo(() => {
-    const map = new Map<string, Event>();
-    // The events are already sorted desc, so the first one we see is the last one.
-    for (const event of allEvents) {
-      if (!map.has(event.asset_id)) {
-        map.set(event.asset_id, event);
-      }
-    }
-    return map;
-  }, [allEvents]);
 
   const assetFillHistoryMap = useMemo(() => {
     const fillHistory = new Map<string, { timestamp: Timestamp; variety?: string; valveType?: string }[]>();
@@ -242,6 +231,28 @@ function OverviewPageContent() {
     };
   }, [assetFillHistoryMap]);
 
+  const daysAtCustomerMap = useMemo(() => {
+    const map = new Map<string, number>();
+    const deliveryEvents = new Map<string, Timestamp>();
+
+    // Find the last delivery event for each asset
+    for (const event of allEvents) {
+        if (event.event_type === 'ENTREGA_A_CLIENTE' && !deliveryEvents.has(event.asset_id)) {
+            deliveryEvents.set(event.asset_id, event.timestamp);
+        }
+    }
+
+    for (const asset of assets) {
+        if (asset.location === 'EN_CLIENTE') {
+            const deliveryTimestamp = deliveryEvents.get(asset.id);
+            if (deliveryTimestamp) {
+                map.set(asset.id, differenceInDays(new Date(), deliveryTimestamp.toDate()));
+            }
+        }
+    }
+    return map;
+  }, [assets, allEvents]);
+
 
   const filteredEvents = useMemo(() => {
     return allEvents.filter(event => {
@@ -252,37 +263,16 @@ function OverviewPageContent() {
         const eventTypeMatch = filters.eventType === 'ALL' || event.event_type === filters.eventType;
 
         if (filters.criticalOnly) {
-            // An event is critical if it's a delivery...
-            if (event.event_type !== 'ENTREGA_A_CLIENTE') {
-                return false;
-            }
-            // ...for an asset that is still at the customer's location.
-            if (asset?.location !== 'EN_CLIENTE') {
-                return false;
-            }
-            // ...and it must have been there for 30+ days.
-            const daysAtCustomer = differenceInDays(new Date(), event.timestamp.toDate());
-            if (daysAtCustomer < 30) {
-                return false;
+            const days = daysAtCustomerMap.get(event.asset_id);
+            if (days === undefined || days < 30) {
+              return false;
             }
         }
         
         return customerMatch && assetCodeMatch && assetTypeMatch && eventTypeMatch;
     });
-  }, [allEvents, assetsMap, filters]);
-
-  const daysAtCustomerMap = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const event of filteredEvents) {
-      const asset = assetsMap.get(event.asset_id);
-      if (asset && asset.location === 'EN_CLIENTE' && event.event_type === 'ENTREGA_A_CLIENTE') {
-        // This is the key fix: only check the asset's current location, not the global event order.
-        map.set(event.id, differenceInDays(new Date(), event.timestamp.toDate()));
-      }
-    }
-    return map;
-  }, [filteredEvents, assetsMap]);
-
+  }, [allEvents, assetsMap, filters, daysAtCustomerMap]);
+  
   const totalPages = Math.ceil(filteredEvents.length / ITEMS_PER_PAGE);
   const paginatedEvents = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -380,10 +370,10 @@ function OverviewPageContent() {
                     {paginatedEvents.map((event) => {
                         const asset = assetsMap.get(event.asset_id);
                         const user = usersMap.get(event.user_id);
-                        const days = daysAtCustomerMap.get(event.id) || null;
+                        const days = asset ? daysAtCustomerMap.get(asset.id) : undefined;
                         const { variety, valveType } = getCarryForwardData(event);
                         return (
-                           <EventCardMobile key={event.id} event={event} asset={asset} user={user} currentUser={currentUser} onDelete={handleDelete} daysAtCustomer={days} variety={variety} valveType={valveType} />
+                           <EventCardMobile key={event.id} event={event} asset={asset} user={user} currentUser={currentUser} onDelete={handleDelete} daysAtCustomer={days === undefined ? null : days} variety={variety} valveType={valveType} />
                         )
                     })}
                 </div>
@@ -406,10 +396,10 @@ function OverviewPageContent() {
                     {paginatedEvents.map((event) => {
                        const asset = assetsMap.get(event.asset_id);
                        const user = usersMap.get(event.user_id);
-                       const days = daysAtCustomerMap.get(event.id) || null;
+                       const days = asset ? daysAtCustomerMap.get(asset.id) : undefined;
                        const { variety, valveType } = getCarryForwardData(event);
                        return (
-                           <EventTableRow key={event.id} event={event} asset={asset} user={user} currentUser={currentUser} onDelete={handleDelete} showBeerColumns={showBeerColumns} daysAtCustomer={days} variety={variety} valveType={valveType} />
+                           <EventTableRow key={event.id} event={event} asset={asset} user={user} currentUser={currentUser} onDelete={handleDelete} showBeerColumns={showBeerColumns} daysAtCustomer={days === undefined ? null : days} variety={variety} valveType={valveType} />
                        )
                     })}
                   </TableBody>
