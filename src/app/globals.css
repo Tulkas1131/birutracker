@@ -153,28 +153,7 @@
   .print-route-sheet {
     display: block;
   }
-  
-  /* When the single QR dialog is open, hide everything else */
-  body:has(.print-qr-dialog[data-state="open"]) .no-print {
-    display: none;
-  }
-  body:has(.print-qr-dialog[data-state="open"]) .print-only {
-    display: none;
-  }
 
-  /* When the single QR dialog is NOT open, hide the main container */
-  body:not(:has(.print-qr-dialog[data-state="open"])) .no-print {
-    display: none;
-  }
-
-  /* Make sure the single dialog content is visible for printing */
-  .print-qr-dialog[data-state="open"] {
-    display: block;
-    position: absolute;
-    left: 0;
-    top: 0;
-  }
-  
   .print-sheet {
     display: grid;
     gap: 0;
@@ -201,3 +180,5 @@
     border: none;
   }
 }
+
+    

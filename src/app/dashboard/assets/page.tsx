@@ -91,6 +91,7 @@ export default function AssetsPage() {
   const [activeTab, setActiveTab] = useState('barrels');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedAsset, setSelectedAsset] = useState<Asset | undefined>(undefined);
+  const [assetsToPrint, setAssetsToPrint] = useState<Asset[]>([]);
   const [locationFilter, setLocationFilter] = useState<Asset['location'] | null>(null);
   const [formatFilter, setFormatFilter] = useState<string | null>(null);
   const { toast } = useToast();
@@ -166,8 +167,26 @@ export default function AssetsPage() {
     setQrCodeOpen(true);
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = (asset?: Asset) => {
+    const listToPrint = asset 
+        ? [asset] 
+        : (activeTab === 'barrels' ? barrels : co2Cylinders);
+
+    if (listToPrint.length === 0) {
+        toast({
+            title: "Nada para Imprimir",
+            description: "No hay activos en la categoría seleccionada para imprimir.",
+            variant: "default"
+        });
+        return;
+    }
+    
+    setAssetsToPrint(listToPrint);
+
+    // Give React a moment to update the state before calling print
+    setTimeout(() => {
+        window.print();
+    }, 100);
   };
   
   const confirmDelete = (asset: Asset) => {
@@ -418,8 +437,6 @@ export default function AssetsPage() {
     };
   }, [assets]);
   
-  const assetsToPrint = activeTab === 'barrels' ? barrels : co2Cylinders;
-
   const currentAssetList = useMemo(() => {
     const baseList = activeTab === 'barrels' ? barrels : co2Cylinders;
     
@@ -708,7 +725,7 @@ export default function AssetsPage() {
             description="Gestiona tus barriles de cerveza y cilindros de CO₂."
             action={
               <div className="flex flex-col sm:flex-row items-center gap-2">
-                   <Button size="lg" variant="outline" onClick={handlePrint} disabled={assetsToPrint.length === 0}>
+                   <Button size="lg" variant="outline" onClick={() => handlePrint()} disabled={(activeTab === 'barrels' ? barrels : co2Cylinders).length === 0}>
                       <Printer className="mr-2 h-5 w-5" />
                       Imprimir Lote de QR
                   </Button>
@@ -785,7 +802,7 @@ export default function AssetsPage() {
             </DialogContent>
         </Dialog>
         <Dialog open={isQrCodeOpen} onOpenChange={setQrCodeOpen}>
-          <DialogContent className="print-qr-dialog">
+          <DialogContent>
               <DialogHeader>
                   <DialogTitle>Código QR del Activo</DialogTitle>
                   <DialogDescription>
@@ -798,7 +815,7 @@ export default function AssetsPage() {
                   </div>
               )}
               <DialogFooter>
-                  <Button variant="outline" onClick={handlePrint}>
+                  <Button variant="outline" onClick={() => selectedAsset && handlePrint(selectedAsset)}>
                       <Printer className="mr-2 h-4 w-4" />
                       Imprimir
                   </Button>
@@ -836,3 +853,5 @@ export default function AssetsPage() {
     </>
   );
 }
+
+    
