@@ -347,26 +347,48 @@ export default function MovementsPage() {
     return map;
   }, [events]);
 
-  const assetsInExistingRoutes = useMemo(() => {
-    const assetIds = new Set<string>();
+  const assetsMap = useMemo(() => new Map(allAssets.map(asset => [asset.id, asset])), [allAssets]);
+
+  const assetsInActiveRoutes = useMemo(() => {
+    const assetIdsInActiveRoutes = new Set<string>();
+
     routes.forEach(route => {
-        // Only consider assets from routes that are NOT the one being edited
-        if (!editingRouteId || route.id !== editingRouteId) {
+        // Skip the route being edited
+        if (editingRouteId && route.id === editingRouteId) {
+            return;
+        }
+        
+        let isRouteActive = false;
+        for (const stop of route.stops) {
+            for (const assetInStop of stop.assets) {
+                const fullAsset = assetsMap.get(assetInStop.id);
+                // A route is considered "active" if at least one of its assets is still 'EN_REPARTO' and 'LLENO'.
+                // This indicates it hasn't been delivered yet.
+                if (fullAsset && fullAsset.location === 'EN_REPARTO' && fullAsset.state === 'LLENO') {
+                    isRouteActive = true;
+                    break;
+                }
+            }
+            if (isRouteActive) break;
+        }
+
+        if (isRouteActive) {
             route.stops.forEach(stop => {
                 stop.assets.forEach(asset => {
-                    assetIds.add(asset.id);
+                    assetIdsInActiveRoutes.add(asset.id);
                 });
             });
         }
     });
-    return assetIds;
-  }, [routes, editingRouteId]);
+    return assetIdsInActiveRoutes;
+}, [routes, assetsMap, editingRouteId]);
+
 
   const assetsOnDelivery = useMemo(() => {
     return allAssets.filter(asset => 
-        asset.location === 'EN_REPARTO' && asset.state === 'LLENO' && !assetsInExistingRoutes.has(asset.id)
+        asset.location === 'EN_REPARTO' && asset.state === 'LLENO' && !assetsInActiveRoutes.has(asset.id)
     );
-  }, [allAssets, assetsInExistingRoutes]);
+  }, [allAssets, assetsInActiveRoutes]);
 
   const fillDatesMap = useMemo(() => {
     const map = new Map<string, Date>();
