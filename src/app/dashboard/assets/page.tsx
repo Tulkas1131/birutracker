@@ -136,7 +136,7 @@ export default function AssetsPage() {
       }
     };
     fetchData();
-  }, [toast]);
+  }, []);
 
   const lastEventsMap = useMemo(() => {
       const map = new Map<string, Event>();
@@ -853,5 +853,3 @@ export default function AssetsPage() {
     </>
   );
 }
-
-    

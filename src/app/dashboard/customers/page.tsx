@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -95,7 +96,7 @@ export default function CustomersPage() {
       }
     };
     fetchData();
-  }, [toast]);
+  }, []);
   
   const { customerAssetCounts, customerAssetHistory } = useMemo(() => {
     const counts = new Map<string, CustomerAssetCounts>();
@@ -475,5 +476,3 @@ export default function CustomersPage() {
     </div>
   );
 }
-
-    
