@@ -5,3 +5,7 @@ build:
   command: npm run build
 start:
   command: npm run start
+resources:
+  cpu: 0.5
+  memoryMiB: 512
+concurrency: 10
