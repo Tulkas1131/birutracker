@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus, ChevronLeft, ChevronRight, PackageSearch, X, User } from "lucide-react";
 import { db } from "@/lib/firebase";
 import dynamic from "next/dynamic";
-import { collection, query, where, orderBy, getDocs, limit, startAfter, getCount, onSnapshot, doc, deleteDoc, runTransaction, Timestamp, writeBatch, type DocumentData, type QueryDocumentSnapshot } from "firebase/firestore/lite";
+import { collection, query, where, orderBy, getDocs, limit, startAfter, getCount, onSnapshot, doc, deleteDoc, runTransaction, Timestamp, writeBatch, type DocumentData, type QueryDocumentSnapshot } from "firebase/firestore";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -159,7 +159,7 @@ export default function AssetsPage() {
     } finally {
         setIsLoading(false);
     }
-}, [activeTab, locationFilter, formatFilter, toast, currentPage]);
+}, [activeTab, locationFilter, formatFilter, currentPage]);
 
   useEffect(() => {
     // Reset pagination and fetch data when filters or tab change
@@ -892,4 +892,3 @@ export default function AssetsPage() {
   );
 }
 
-    

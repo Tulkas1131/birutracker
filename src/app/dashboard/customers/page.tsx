@@ -4,7 +4,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { MoreHorizontal, PlusCircle, Loader2, ChevronLeft, ChevronRight, Users2, Phone, History } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { collection, query, orderBy, getDocs, limit, startAfter, getCount, onSnapshot, where, doc, deleteDoc, updateDoc, addDoc, type DocumentData, type QueryDocumentSnapshot } from "firebase/firestore/lite";
+import { collection, query, orderBy, getDocs, limit, startAfter, getCount, onSnapshot, where, doc, deleteDoc, updateDoc, addDoc, type DocumentData, type QueryDocumentSnapshot } from "firebase/firestore";
 
 
 import { Badge } from "@/components/ui/badge";
@@ -109,7 +109,7 @@ export default function CustomersPage() {
     } finally {
         setIsLoading(false);
     }
-}, [currentPage, toast]);
+}, [currentPage]);
 
   useEffect(() => {
     fetchCustomers(1, null);
@@ -502,4 +502,3 @@ export default function CustomersPage() {
   );
 }
 
-    

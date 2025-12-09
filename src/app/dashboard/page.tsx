@@ -13,7 +13,7 @@ import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "
 import { BarChart, XAxis, YAxis, Bar, Tooltip, Legend, CartesianGrid, ResponsiveContainer } from "recharts";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { differenceInDays } from 'date-fns';
-import { collection, onSnapshot, query } from "firebase/firestore/lite";
+import { collection, onSnapshot, query } from "firebase/firestore";
 
 
 const chartConfig = {
@@ -279,4 +279,3 @@ export default function DashboardPage() {
   );
 }
 
-    

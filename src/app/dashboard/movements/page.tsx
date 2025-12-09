@@ -10,7 +10,7 @@ import { useAuthState } from "react-firebase-hooks/auth";
 import { Loader2, QrCode, ArrowRight, AlertTriangle, Route as RouteIcon, Pencil, X, Calendar as CalendarIcon, User, PlusCircle, Printer, FileText, History, Trash2 } from "lucide-react";
 import { differenceInDays, format } from 'date-fns';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { collection, query, orderBy, onSnapshot, getDoc, doc, runTransaction, Timestamp, addDoc, setDoc, deleteDoc } from "firebase/firestore/lite";
+import { collection, query, orderBy, onSnapshot, getDoc, doc, runTransaction, Timestamp, addDoc, setDoc, deleteDoc } from "firebase/firestore";
 
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -1101,4 +1101,3 @@ export default function MovementsPage() {
   );
 }
 
-    

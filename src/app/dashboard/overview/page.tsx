@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { auth, db } from "@/lib/firebase";
 import { Loader2, Trash2, ChevronLeft, ChevronRight, SearchX, User } from "lucide-react";
-import { collection, query, where, orderBy, getDocs, limit, startAfter, getCount, onSnapshot, doc, deleteDoc, type Timestamp, type DocumentData, type QueryDocumentSnapshot } from "firebase/firestore/lite";
+import { collection, query, where, orderBy, getDocs, limit, startAfter, getCount, onSnapshot, doc, deleteDoc, type Timestamp, type DocumentData, type QueryDocumentSnapshot } from "firebase/firestore";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
@@ -214,7 +214,7 @@ function OverviewPageContent() {
     } finally {
         setIsLoading(false);
     }
-  }, [filters, assets, toast, currentPage]);
+  }, [filters, assets, currentPage]);
 
   useEffect(() => {
     const firestore = db();
@@ -238,7 +238,7 @@ function OverviewPageContent() {
         setLastVisible(null);
         fetchEvents(1, null);
     }
-  }, [filters, assets]);
+  }, [filters, assets, fetchEvents]);
 
   const goToPage = (page: number) => {
     if (page < 1 || (page > currentPage && !lastVisible)) return;
@@ -480,4 +480,3 @@ export default function OverviewPage() {
     );
 }
 
-    
