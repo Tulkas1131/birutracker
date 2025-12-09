@@ -186,7 +186,7 @@ function useToast() {
 
   return {
     ...state,
-    toast,
+    toast: React.useCallback(toast, []),
     dismiss: (toastId?: string) => dispatch({ type: "DISMISS_TOAST", toastId }),
   }
 }
