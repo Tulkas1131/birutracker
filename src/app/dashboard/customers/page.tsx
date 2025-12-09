@@ -4,7 +4,8 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { MoreHorizontal, PlusCircle, Loader2, ChevronLeft, ChevronRight, Users2, Phone, History } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
-import { collection, query, orderBy, getDocs, limit, startAfter, getCount, onSnapshot, where, doc, deleteDoc, updateDoc, addDoc, type DocumentData, type QueryDocumentSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, doc, deleteDoc, updateDoc, addDoc, type DocumentData, type QueryDocumentSnapshot } from "firebase/firestore";
+import { query as liteQuery, orderBy as liteOrderBy, getDocs as liteGetDocs, limit as liteLimit, startAfter as liteStartAfter, getCount as liteGetCount, where as liteWhere } from "firebase/firestore/lite";
 
 
 import { Badge } from "@/components/ui/badge";
@@ -71,18 +72,18 @@ export default function CustomersPage() {
         
         const customersCollection = collection(firestore, "customers");
         
-        const countSnapshot = await getCount(customersCollection);
+        const countSnapshot = await liteGetCount(customersCollection);
         setTotalCustomers(countSnapshot.data().count);
         
-        let customersQuery = query(customersCollection, orderBy("name"));
+        let customersQuery = liteQuery(customersCollection, liteOrderBy("name"));
         
         if (lastDoc) {
-            customersQuery = query(customersQuery, startAfter(lastDoc));
+            customersQuery = liteQuery(customersQuery, liteStartAfter(lastDoc));
         }
         
-        customersQuery = query(customersQuery, limit(ITEMS_PER_PAGE));
+        customersQuery = liteQuery(customersQuery, liteLimit(ITEMS_PER_PAGE));
         
-        const customersSnapshot = await getDocs(customersQuery);
+        const customersSnapshot = await liteGetDocs(customersQuery);
         const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
         setCustomers(customersData);
 
@@ -118,8 +119,8 @@ export default function CustomersPage() {
   useEffect(() => {
     const firestore = db;
 
-    const assetsQuery = query(collection(firestore, "assets"), where("location", "==", "EN_CLIENTE"));
-    const eventsQuery = query(collection(firestore, "events"), where("event_type", "==", "ENTREGA_A_CLIENTE"));
+    const assetsQuery = liteQuery(collection(firestore, "assets"), liteWhere("location", "==", "EN_CLIENTE"));
+    const eventsQuery = liteQuery(collection(firestore, "events"), liteWhere("event_type", "==", "ENTREGA_A_CLIENTE"));
 
     const unsubscribeAssets = onSnapshot(assetsQuery, (snapshot) => {
         setAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)));
