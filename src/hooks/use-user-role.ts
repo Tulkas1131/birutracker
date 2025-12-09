@@ -21,7 +21,7 @@ export function useUserRole() {
   useEffect(() => {
     const fetchUserRole = async () => {
       if (user) {
-        const firestore = db(); // CORRECTO: Obtener la instancia de Firestore aquí.
+        const firestore = db();
         const userDocRef = doc(firestore, "users", user.uid);
         try {
           const docSnap = await getDoc(userDocRef);
