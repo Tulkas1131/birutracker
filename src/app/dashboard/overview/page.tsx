@@ -137,6 +137,7 @@ function EventTableRow({ event, asset, user, currentUser, onDelete, showBeerColu
 
 function OverviewPageContent() {
   const [events, setEvents] = useState<Event[]>([]);
+  const [allEventsForMap, setAllEventsForMap] = useState<Event[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [users, setUsers] = useState<UserData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -224,15 +225,19 @@ function OverviewPageContent() {
     const unsubUsers = onSnapshot(collection(firestore, "users"), (snapshot) => {
         setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserData)));
     });
+    const unsubEvents = onSnapshot(query(collection(firestore, "events"), orderBy("timestamp", "desc")), (snapshot) => {
+        setAllEventsForMap(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event)));
+    });
+
     return () => {
         unsubAssets();
         unsubUsers();
+        unsubEvents();
     };
   }, []);
 
   useEffect(() => {
-    // Reset pagination and fetch data when filters change
-    if (assets.length > 0) { // Ensure assets are loaded before firing queries that might depend on them
+    if (assets.length > 0) { 
         setCurrentPage(1);
         setPageHistory([null]);
         setLastVisible(null);
@@ -260,7 +265,7 @@ function OverviewPageContent() {
 
   const assetFillHistoryMap = useMemo(() => {
     const fillHistory = new Map<string, { timestamp: Timestamp; variety?: string; valveType?: string }[]>();
-    const fillEvents = events
+    const fillEvents = allEventsForMap
       .filter(e => e.event_type === 'LLENADO_EN_PLANTA')
       .sort((a, b) => a.timestamp.toMillis() - b.timestamp.toMillis());
 
@@ -275,7 +280,7 @@ function OverviewPageContent() {
       });
     }
     return fillHistory;
-  }, [events]);
+  }, [allEventsForMap]);
 
   const getCarryForwardData = useCallback((event: Event) => {
     const history = assetFillHistoryMap.get(event.asset_id);
@@ -293,7 +298,7 @@ function OverviewPageContent() {
     const map = new Map<string, number>();
     const deliveryEvents = new Map<string, Timestamp>();
 
-    for (const event of events) {
+    for (const event of allEventsForMap) {
         if (event.event_type === 'ENTREGA_A_CLIENTE' && !deliveryEvents.has(event.asset_id)) {
             deliveryEvents.set(event.asset_id, event.timestamp);
         }
@@ -308,7 +313,7 @@ function OverviewPageContent() {
         }
     }
     return map;
-  }, [assets, events]);
+  }, [assets, allEventsForMap]);
 
   const totalPages = Math.ceil(totalEvents / ITEMS_PER_PAGE);
 
