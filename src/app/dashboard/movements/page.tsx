@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, Suspense, useEffect, useMemo, useCallback } from "react";
@@ -1099,5 +1100,3 @@ export default function MovementsPage() {
     </>
   );
 }
-
-    
