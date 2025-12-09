@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { MoreHorizontal, PlusCircle, Loader2, ChevronLeft, ChevronRight, Users2, Phone, History } from "lucide-react";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { collection, query, orderBy, getDocs, limit, startAfter, getCount, onSnapshot, where, doc, deleteDoc, updateDoc, addDoc, type DocumentData, type QueryDocumentSnapshot } from "firebase/firestore";
 
 
@@ -501,5 +501,3 @@ export default function CustomersPage() {
     </div>
   );
 }
-
-    

@@ -238,7 +238,7 @@ function OverviewPageContent() {
         setLastVisible(null);
         fetchEvents(1, null);
     }
-  }, [filters, assets, fetchEvents]);
+  }, [filters, assets.length, fetchEvents]);
 
   const goToPage = (page: number) => {
     if (page < 1 || (page > currentPage && !lastVisible)) return;
@@ -479,5 +479,3 @@ export default function OverviewPage() {
         </Suspense>
     );
 }
-
-    

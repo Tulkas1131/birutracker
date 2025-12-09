@@ -6,7 +6,7 @@ import Link from "next/link";
 import { History, Package, Users, AlertTriangle, BarChart as BarChartIcon } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { type Asset, type Event, type Customer } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
@@ -278,5 +278,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    

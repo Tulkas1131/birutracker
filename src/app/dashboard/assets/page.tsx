@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus, ChevronLeft, ChevronRight, PackageSearch, X, User } from "lucide-react";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import dynamic from "next/dynamic";
 import { collection, query, where, orderBy, getDocs, limit, startAfter, getCount, onSnapshot, doc, deleteDoc, runTransaction, Timestamp, writeBatch, type DocumentData, type QueryDocumentSnapshot } from "firebase/firestore";
 
@@ -49,7 +49,6 @@ import { Logo } from "@/components/logo";
 import { EmptyState } from "@/components/empty-state";
 import { cn } from "@/lib/utils";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { auth } from "@/lib/firebase";
 
 
 const QRCode = dynamic(() => import('qrcode.react'), {
@@ -884,5 +883,3 @@ export default function AssetsPage() {
     </>
   );
 }
-
-    

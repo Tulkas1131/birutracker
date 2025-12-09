@@ -1,5 +1,6 @@
 
 import { auth, db } from "./firebase";
+import { collection, addDoc, Timestamp } from "firebase/firestore";
 
 interface LogData {
     level: 'ERROR' | 'INFO' | 'WARNING';
@@ -10,7 +11,6 @@ interface LogData {
 
 export const logAppEvent = async (data: LogData) => {
     try {
-        const { collection, addDoc, Timestamp } = await import("firebase/firestore/lite");
         const firestore = db();
 
         const user = auth().currentUser;

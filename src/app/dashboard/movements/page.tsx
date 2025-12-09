@@ -1100,5 +1100,3 @@ export default function MovementsPage() {
     </>
   );
 }
-
-    
