@@ -331,7 +331,7 @@ export default function MovementsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -1120,3 +1120,5 @@ export default function MovementsPage() {
     </>
   );
 }
+
+    

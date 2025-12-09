@@ -185,7 +185,7 @@ function OverviewPageContent() {
     } finally {
         setIsLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -447,3 +447,5 @@ export default function OverviewPage() {
         </Suspense>
     );
 }
+
+    
