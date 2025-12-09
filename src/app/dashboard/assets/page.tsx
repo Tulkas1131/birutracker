@@ -125,7 +125,7 @@ export default function AssetsPage() {
         const countSnapshot = await getCountFromServer(countQuery);
         setTotalAssetsInFilter(countSnapshot.data().count);
 
-        let assetsQuery = query(assetsCollection, ...conditions, orderBy("type"), orderBy("code"));
+        let assetsQuery = query(assetsCollection, ...conditions, orderBy("code"));
         if (startDoc) {
             assetsQuery = query(assetsQuery, startAfter(startDoc));
         }
