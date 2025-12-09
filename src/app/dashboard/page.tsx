@@ -13,6 +13,8 @@ import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "
 import { BarChart, XAxis, YAxis, Bar, Tooltip, Legend, CartesianGrid, ResponsiveContainer } from "recharts";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { differenceInDays } from 'date-fns';
+import { collection, onSnapshot, query } from "firebase/firestore/lite";
+
 
 const chartConfig = {
   barriles50L: {
@@ -43,16 +45,12 @@ export default function DashboardPage() {
   
   useEffect(() => {
     const firestore = db();
-    const { collection, query, onSnapshot, orderBy, where } = require("firebase/firestore/lite");
-    
-    const twentyFourHoursAgo = new Date();
-    twentyFourHoursAgo.setDate(twentyFourHoursAgo.getDate() - 1);
     
     const unsubscribers = [
       onSnapshot(collection(firestore, "assets"), (snapshot) => {
         setAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)));
       }),
-      onSnapshot(query(collection(firestore, "events"), orderBy("timestamp", "desc")), (snapshot) => {
+      onSnapshot(query(collection(firestore, "events")), (snapshot) => {
         setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event)));
       }),
       onSnapshot(collection(firestore, "customers"), (snapshot) => {
@@ -71,7 +69,7 @@ export default function DashboardPage() {
 
     // Create a map of the last known event for each asset for efficiency
     const lastEventsMap = new Map<string, Event>();
-    for (const event of events) {
+    for (const event of events.sort((a,b) => b.timestamp.toMillis() - a.timestamp.toMillis())) {
         if (!lastEventsMap.has(event.asset_id)) {
             lastEventsMap.set(event.asset_id, event);
         }
@@ -280,3 +278,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    

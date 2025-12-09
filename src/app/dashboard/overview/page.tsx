@@ -3,9 +3,9 @@
 
 import { useState, useMemo, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import type { Timestamp, DocumentData, QueryDocumentSnapshot } from "firebase/firestore/lite";
 import { auth, db } from "@/lib/firebase";
 import { Loader2, Trash2, ChevronLeft, ChevronRight, SearchX, User } from "lucide-react";
+import { collection, query, where, orderBy, getDocs, limit, startAfter, getCount, onSnapshot, doc, deleteDoc, type Timestamp, type DocumentData, type QueryDocumentSnapshot } from "firebase/firestore/lite";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
@@ -166,7 +166,6 @@ function OverviewPageContent() {
   ) => {
     setIsLoading(true);
     try {
-        const { collection, query, where, orderBy, getDocs, limit, startAfter, getCount } = await import("firebase/firestore/lite");
         const firestore = db();
         
         let conditions = [];
@@ -219,7 +218,6 @@ function OverviewPageContent() {
 
   useEffect(() => {
     const firestore = db();
-    const { collection, onSnapshot } = require("firebase/firestore/lite");
     const unsubAssets = onSnapshot(collection(firestore, "assets"), (snapshot) => {
         setAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)));
     });
@@ -319,7 +317,6 @@ function OverviewPageContent() {
       toast({ title: "Acceso Denegado", description: "No tienes permiso para eliminar eventos.", variant: "destructive" });
       return;
     }
-    const { doc, deleteDoc } = await import("firebase/firestore/lite");
     const firestore = db();
     try {
       await deleteDoc(doc(firestore, "events", id));
@@ -482,3 +479,5 @@ export default function OverviewPage() {
         </Suspense>
     );
 }
+
+    

@@ -5,6 +5,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus, ChevronLeft, ChevronRight, PackageSearch, X, User } from "lucide-react";
 import { db } from "@/lib/firebase";
 import dynamic from "next/dynamic";
+import { collection, query, where, orderBy, getDocs, limit, startAfter, getCount, onSnapshot, doc, deleteDoc, runTransaction, Timestamp, writeBatch, type DocumentData, type QueryDocumentSnapshot } from "firebase/firestore/lite";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -49,7 +50,6 @@ import { EmptyState } from "@/components/empty-state";
 import { cn } from "@/lib/utils";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth } from "@/lib/firebase";
-import type { DocumentData, QueryDocumentSnapshot } from "firebase/firestore/lite";
 
 
 const QRCode = dynamic(() => import('qrcode.react'), {
@@ -98,7 +98,7 @@ export default function AssetsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
   const [firstVisible, setFirstVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
-  const [pageHistory, setPageHistory] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
+  const [pageStartDocs, setPageStartDocs] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
   const [totalAssetsInFilter, setTotalAssetsInFilter] = useState(0);
 
   const { toast } = useToast();
@@ -109,11 +109,10 @@ export default function AssetsPage() {
   
   const fetchAssetsAndCounts = useCallback(async (
     page: number, 
-    lastDoc: QueryDocumentSnapshot<DocumentData> | null = null
+    startDoc: QueryDocumentSnapshot<DocumentData> | null = null
 ) => {
     setIsLoading(true);
     try {
-        const { collection, query, where, orderBy, getDocs, limit, startAfter, getCount } = await import("firebase/firestore/lite");
         const firestore = db();
         
         const assetType = activeTab === 'barrels' ? 'BARRIL' : 'CO2';
@@ -128,8 +127,8 @@ export default function AssetsPage() {
         setTotalAssetsInFilter(countSnapshot.data().count);
 
         let assetsQuery = query(assetsCollection, ...conditions, orderBy("code"));
-        if (lastDoc) {
-            assetsQuery = query(assetsQuery, startAfter(lastDoc));
+        if (startDoc) {
+            assetsQuery = query(assetsQuery, startAfter(startDoc));
         }
         assetsQuery = query(assetsQuery, limit(ITEMS_PER_PAGE));
         
@@ -138,12 +137,10 @@ export default function AssetsPage() {
         setAssets(assetsData);
 
         const newLastVisible = assetsSnapshot.docs[assetsSnapshot.docs.length - 1] || null;
-        const newFirstVisible = assetsSnapshot.docs[0] || null;
         setLastVisible(newLastVisible);
-        setFirstVisible(newFirstVisible);
 
         if (page > currentPage) {
-           setPageHistory(prev => [...prev, newLastVisible]);
+           setPageStartDocs(prev => [...prev.slice(0, page), newLastVisible]);
         }
 
     } catch (error: any) {
@@ -167,7 +164,7 @@ export default function AssetsPage() {
   useEffect(() => {
     // Reset pagination and fetch data when filters or tab change
     setCurrentPage(1);
-    setPageHistory([null]);
+    setPageStartDocs([null]);
     setLastVisible(null);
     setFirstVisible(null);
     fetchAssetsAndCounts(1, null);
@@ -175,7 +172,6 @@ export default function AssetsPage() {
 
   useEffect(() => {
      const firestore = db();
-     const { collection, onSnapshot, query, orderBy } = require("firebase/firestore/lite");
      
      // Only fetch all events once for the customer info logic
      const eventsQuery = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
@@ -200,8 +196,8 @@ export default function AssetsPage() {
         fetchAssetsAndCounts(page, lastVisible);
     } else if (page < currentPage) { // Going backward
         setCurrentPage(page);
-        setPageHistory(prev => prev.slice(0, page));
-        fetchAssetsAndCounts(page, pageHistory[page - 1]);
+        setPageStartDocs(prev => prev.slice(0, page));
+        fetchAssetsAndCounts(page, pageStartDocs[page - 1]);
     }
   };
 
@@ -242,7 +238,6 @@ export default function AssetsPage() {
     } else {
         setIsLoading(true);
         try {
-            const { collection, query, where, orderBy, getDocs } = await import("firebase/firestore/lite");
             const firestore = db();
             const assetType = activeTab === 'barrels' ? 'BARRIL' : 'CO2';
             const allAssetsQuery = query(collection(firestore, "assets"), where("type", "==", assetType), orderBy("code"));
@@ -292,7 +287,6 @@ export default function AssetsPage() {
       });
       return;
     }
-    const { doc, deleteDoc } = await import("firebase/firestore/lite");
     const firestore = db();
     try {
       await deleteDoc(doc(firestore, "assets", assetToDelete.id));
@@ -301,7 +295,7 @@ export default function AssetsPage() {
         title: "Activo Eliminado",
         description: `El activo ${assetToDelete.code} ha sido eliminado.`,
       });
-      fetchAssetsAndCounts(currentPage, pageHistory[currentPage -1]);
+      fetchAssetsAndCounts(currentPage, pageStartDocs[currentPage -1]);
     } catch (error: any) {
       console.error("Error eliminando activo: ", error);
       logAppEvent({
@@ -322,7 +316,6 @@ export default function AssetsPage() {
   };
 
   const generateNextCode = async (type: 'BARRIL' | 'CO2'): Promise<{prefix: string, nextNumber: number}> => {
-    const { collection, query, where, orderBy, limit, getDocs } = await import("firebase/firestore/lite");
     const firestore = db();
     const prefix = type === 'BARRIL' ? 'KEG' : 'CO2';
     const q = query(
@@ -343,7 +336,6 @@ export default function AssetsPage() {
   };
   
   const handleFormSubmit = async (data: Omit<Asset, 'id' | 'code'>) => {
-    const { doc, runTransaction, collection, Timestamp } = await import("firebase/firestore/lite");
     const firestore = db();
 
     if (!user) {
@@ -426,7 +418,6 @@ export default function AssetsPage() {
   };
 
   const handleBatchFormSubmit = async (data: AssetBatchFormData) => {
-    const { collection, writeBatch, doc } = await import("firebase/firestore/lite");
     const firestore = db();
     try {
       const { prefix, nextNumber } = await generateNextCode(data.type);
@@ -900,3 +891,5 @@ export default function AssetsPage() {
     </>
   );
 }
+
+    

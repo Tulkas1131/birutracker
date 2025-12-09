@@ -10,6 +10,8 @@ import { useAuthState } from "react-firebase-hooks/auth";
 import { Loader2, QrCode, ArrowRight, AlertTriangle, Route as RouteIcon, Pencil, X, Calendar as CalendarIcon, User, PlusCircle, Printer, FileText, History, Trash2 } from "lucide-react";
 import { differenceInDays, format } from 'date-fns';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { collection, query, orderBy, onSnapshot, getDoc, doc, runTransaction, Timestamp, addDoc, setDoc, deleteDoc } from "firebase/firestore/lite";
+
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -293,10 +295,9 @@ export default function MovementsPage() {
     defaultValues: { variety: "", valveType: "", customer_id: "INTERNAL" },
   });
   
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(() => {
     setIsLoading(true);
     const firestore = db();
-    const { collection, query, orderBy, onSnapshot } = await import("firebase/firestore/lite");
 
     const unsubscribers = [
         onSnapshot(query(collection(firestore, "assets")), (snapshot) => {
@@ -323,10 +324,8 @@ export default function MovementsPage() {
 
 
   useEffect(() => {
-    const unsubscribe = fetchData();
-    return () => {
-        unsubscribe.then(unsub => unsub());
-    };
+    const unsub = fetchData();
+    return () => unsub();
   }, [fetchData]);
   
   const lastEventsMap = useMemo(() => {
@@ -436,7 +435,6 @@ export default function MovementsPage() {
     let asset: Asset | undefined = allAssets.find(a => a.id === decodedText);
 
     if (!asset) {
-        const { getDoc, doc } = await import("firebase/firestore/lite");
         const firestore = db();
         const assetRef = doc(firestore, "assets", decodedText);
         const assetSnap = await getDoc(assetRef);
@@ -520,7 +518,6 @@ export default function MovementsPage() {
 
   async function executeMovementTransaction(data: MovementFormData, forceStateCorrection = false) {
     setIsSubmitting(true);
-    const { Timestamp, doc, runTransaction, collection } = await import("firebase/firestore/lite");
     const firestore = db();
 
     if (!user || !scannedAsset) {
@@ -648,7 +645,6 @@ export default function MovementsPage() {
   };
 
   const handleGenerateRoute = async () => {
-    const { collection, addDoc, doc, setDoc, Timestamp } = await import("firebase/firestore/lite");
     const firestore = db();
     if (selectedCustomers.size === 0) {
         toast({ title: "Error", description: "Debes seleccionar al menos un cliente.", variant: "destructive" });
@@ -733,7 +729,6 @@ export default function MovementsPage() {
         toast({ title: "Acceso Denegado", description: "No tienes permiso para eliminar rutas.", variant: "destructive" });
         return;
     }
-    const { doc, deleteDoc } = await import("firebase/firestore/lite");
     const firestore = db();
     try {
         await deleteDoc(doc(firestore, "routes", routeId));
@@ -1105,3 +1100,5 @@ export default function MovementsPage() {
     </>
   );
 }
+
+    

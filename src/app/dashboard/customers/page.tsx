@@ -4,6 +4,8 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { MoreHorizontal, PlusCircle, Loader2, ChevronLeft, ChevronRight, Users2, Phone, History } from "lucide-react";
 import { db } from "@/lib/firebase";
+import { collection, query, orderBy, getDocs, limit, startAfter, getCount, onSnapshot, where, doc, deleteDoc, updateDoc, addDoc, type DocumentData, type QueryDocumentSnapshot } from "firebase/firestore/lite";
+
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,7 +34,6 @@ import { useUserRole } from "@/hooks/use-user-role";
 import { logAppEvent } from "@/lib/logging";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { EmptyState } from "@/components/empty-state";
-import type { DocumentData, QueryDocumentSnapshot } from "firebase/firestore/lite";
 
 
 const ITEMS_PER_PAGE = 10;
@@ -66,7 +67,6 @@ export default function CustomersPage() {
 ) => {
     setIsLoading(true);
     try {
-        const { collection, query, orderBy, getDocs, limit, startAfter, getCount } = await import("firebase/firestore/lite");
         const firestore = db();
         
         const customersCollection = collection(firestore, "customers");
@@ -117,7 +117,6 @@ export default function CustomersPage() {
 
   useEffect(() => {
     const firestore = db();
-    const { collection, onSnapshot, query, where } = require("firebase/firestore/lite");
 
     const assetsQuery = query(collection(firestore, "assets"), where("location", "==", "EN_CLIENTE"));
     const eventsQuery = query(collection(firestore, "events"), where("event_type", "==", "ENTREGA_A_CLIENTE"));
@@ -209,7 +208,6 @@ export default function CustomersPage() {
       });
       return;
     }
-    const { doc, deleteDoc } = await import("firebase/firestore/lite");
     const firestore = db();
     try {
       await deleteDoc(doc(firestore, "customers", id));
@@ -235,7 +233,6 @@ export default function CustomersPage() {
   };
   
   const handleFormSubmit = async (data: Omit<Customer, 'id'>) => {
-    const { doc, updateDoc, addDoc, collection } = await import("firebase/firestore/lite");
     const firestore = db();
     try {
       if (selectedCustomer) {
@@ -504,3 +501,5 @@ export default function CustomersPage() {
     </div>
   );
 }
+
+    
