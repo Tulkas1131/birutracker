@@ -109,11 +109,11 @@ export default function CustomersPage() {
     } finally {
         setIsLoading(false);
     }
-}, [currentPage]);
+}, [currentPage, toast]);
 
   useEffect(() => {
     fetchCustomers(1, null);
-  }, []);
+  }, [fetchCustomers]);
 
   useEffect(() => {
     const firestore = db();
@@ -502,3 +502,4 @@ export default function CustomersPage() {
   );
 }
 
+    

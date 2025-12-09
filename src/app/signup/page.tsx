@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Logo } from '@/components/logo';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import { collection, query, where, getDocs, setDoc, doc } from "firebase/firestore";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -24,7 +25,6 @@ export default function SignupPage() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    const { collection, query, where, getDocs, setDoc, doc } = await import("firebase/firestore/lite");
     const firestore = db();
     const authInstance = auth();
 

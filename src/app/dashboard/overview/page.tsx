@@ -214,7 +214,7 @@ function OverviewPageContent() {
     } finally {
         setIsLoading(false);
     }
-  }, [filters, assets, currentPage]);
+  }, [filters, assets, currentPage, toast]);
 
   useEffect(() => {
     const firestore = db();
@@ -480,3 +480,4 @@ export default function OverviewPage() {
     );
 }
 
+    

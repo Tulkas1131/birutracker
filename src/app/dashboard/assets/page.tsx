@@ -97,8 +97,7 @@ export default function AssetsPage() {
   
   const [currentPage, setCurrentPage] = useState(1);
   const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
-  const [firstVisible, setFirstVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
-  const [pageStartDocs, setPageStartDocs] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
+  const [pageStartDocs, setPageStartDocs] = useState<Record<number, QueryDocumentSnapshot<DocumentData> | null>>({ 1: null });
   const [totalAssetsInFilter, setTotalAssetsInFilter] = useState(0);
 
   const { toast } = useToast();
@@ -139,8 +138,8 @@ export default function AssetsPage() {
         const newLastVisible = assetsSnapshot.docs[assetsSnapshot.docs.length - 1] || null;
         setLastVisible(newLastVisible);
 
-        if (page > currentPage) {
-           setPageStartDocs(prev => [...prev.slice(0, page), newLastVisible]);
+        if (newLastVisible) {
+          setPageStartDocs(prev => ({...prev, [page + 1]: newLastVisible }));
         }
 
     } catch (error: any) {
@@ -159,16 +158,15 @@ export default function AssetsPage() {
     } finally {
         setIsLoading(false);
     }
-}, [activeTab, locationFilter, formatFilter, currentPage]);
+}, [activeTab, locationFilter, formatFilter, toast]);
 
   useEffect(() => {
     // Reset pagination and fetch data when filters or tab change
     setCurrentPage(1);
-    setPageStartDocs([null]);
+    setPageStartDocs({ 1: null });
     setLastVisible(null);
-    setFirstVisible(null);
     fetchAssetsAndCounts(1, null);
-  }, [activeTab, locationFilter, formatFilter]);
+  }, [activeTab, locationFilter, formatFilter, fetchAssetsAndCounts]);
 
   useEffect(() => {
      const firestore = db();
@@ -191,14 +189,9 @@ export default function AssetsPage() {
   const goToPage = (page: number) => {
     if (page < 1 || (page > currentPage && !lastVisible)) return;
     
-    if (page > currentPage) { // Going forward
-        setCurrentPage(page);
-        fetchAssetsAndCounts(page, lastVisible);
-    } else if (page < currentPage) { // Going backward
-        setCurrentPage(page);
-        setPageStartDocs(prev => prev.slice(0, page));
-        fetchAssetsAndCounts(page, pageStartDocs[page - 1]);
-    }
+    const startDoc = pageStartDocs[page] || null;
+    setCurrentPage(page);
+    fetchAssetsAndCounts(page, startDoc);
   };
 
 
@@ -892,3 +885,4 @@ export default function AssetsPage() {
   );
 }
 
+    

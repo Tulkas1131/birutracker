@@ -10,7 +10,7 @@ import { Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
-import type { Timestamp } from "firebase/firestore/lite";
+import { Timestamp, collection, query, orderBy, getDocs } from "firebase/firestore";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertDialog,
@@ -55,7 +55,6 @@ export default function LogsPage() {
             const fetchLogs = async () => {
                 setIsLoading(true);
                 try {
-                    const { collection, query, orderBy, getDocs } = await import("firebase/firestore/lite");
                     const firestore = db();
                     const logsQuery = query(collection(firestore, "app_logs"), orderBy("timestamp", "desc"));
                     const logsSnapshot = await getDocs(logsQuery);
@@ -238,3 +237,5 @@ export default function LogsPage() {
         </div>
     );
 }
+
+    
