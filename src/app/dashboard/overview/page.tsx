@@ -1,12 +1,10 @@
-
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { auth, db } from "@/lib/firebase";
 import { Loader2, Trash2, ChevronLeft, ChevronRight, SearchX, User } from "lucide-react";
-import { collection, doc, deleteDoc, type Timestamp, type DocumentData, type QueryDocumentSnapshot, onSnapshot } from "firebase/firestore";
-import { query as liteQuery, where as liteWhere, orderBy as liteOrderBy, getDocs as liteGetDocs, limit as liteLimit, startAfter as liteStartAfter, getCount as liteGetCount } from "firebase/firestore/lite";
+import { collection, doc, deleteDoc, type Timestamp, type DocumentData, type QueryDocumentSnapshot, onSnapshot, query, where, orderBy, getDocs, limit, startAfter, getCountFromServer } from "firebase/firestore";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
@@ -171,34 +169,34 @@ function OverviewPageContent() {
         const firestore = db;
         
         let conditions = [];
-        if (filters.customer) conditions.push(liteWhere("customer_name", ">=", filters.customer), liteWhere("customer_name", "<=", filters.customer + '\uf8ff'));
-        if (filters.assetCode) conditions.push(liteWhere("asset_code", "==", filters.assetCode));
-        if (filters.eventType !== 'ALL') conditions.push(liteWhere("event_type", "==", filters.eventType));
+        if (filters.customer) conditions.push(where("customer_name", ">=", filters.customer), where("customer_name", "<=", filters.customer + '\uf8ff'));
+        if (filters.assetCode) conditions.push(where("asset_code", "==", filters.assetCode));
+        if (filters.eventType !== 'ALL') conditions.push(where("event_type", "==", filters.eventType));
         
         const assetsToFilter = filters.assetType !== 'ALL' ? assets.filter(a => a.type === filters.assetType).map(a => a.id) : [];
         if (filters.assetType !== 'ALL' && assetsToFilter.length > 0) {
-            conditions.push(liteWhere("asset_id", "in", assetsToFilter));
+            conditions.push(where("asset_id", "in", assetsToFilter));
         }
 
         if (filters.criticalOnly) {
             const thirtyDaysAgo = new Date();
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            conditions.push(liteWhere("timestamp", "<=", thirtyDaysAgo));
-            conditions.push(liteWhere("event_type", "==", "ENTREGA_A_CLIENTE"));
+            conditions.push(where("timestamp", "<=", thirtyDaysAgo));
+            conditions.push(where("event_type", "==", "ENTREGA_A_CLIENTE"));
         }
 
         const eventsCollection = collection(firestore, "events");
-        const countQuery = liteQuery(eventsCollection, ...conditions);
-        const countSnapshot = await liteGetCount(countQuery);
+        const countQuery = query(eventsCollection, ...conditions);
+        const countSnapshot = await getCountFromServer(countQuery);
         setTotalEvents(countSnapshot.data().count);
         
-        let eventsQuery = liteQuery(eventsCollection, ...conditions, liteOrderBy("timestamp", "desc"));
+        let eventsQuery = query(eventsCollection, ...conditions, orderBy("timestamp", "desc"));
         if (lastDoc) {
-            eventsQuery = liteQuery(eventsQuery, liteStartAfter(lastDoc));
+            eventsQuery = query(eventsQuery, startAfter(lastDoc));
         }
-        eventsQuery = liteQuery(eventsQuery, liteLimit(ITEMS_PER_PAGE));
+        eventsQuery = query(eventsQuery, limit(ITEMS_PER_PAGE));
         
-        const eventsSnapshot = await liteGetDocs(eventsQuery);
+        const eventsSnapshot = await getDocs(eventsQuery);
         const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
         setEvents(eventsData);
 
@@ -226,7 +224,7 @@ function OverviewPageContent() {
     const unsubUsers = onSnapshot(collection(firestore, "users"), (snapshot) => {
         setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserData)));
     });
-    const unsubEvents = onSnapshot(liteQuery(collection(firestore, "events"), liteOrderBy("timestamp", "desc")), (snapshot) => {
+    const unsubEvents = onSnapshot(query(collection(firestore, "events"), orderBy("timestamp", "desc")), (snapshot) => {
         setAllEventsForMap(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event)));
     });
 
@@ -485,3 +483,5 @@ export default function OverviewPage() {
         </Suspense>
     );
 }
+
+    

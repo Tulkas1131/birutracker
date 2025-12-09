@@ -4,9 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus, ChevronLeft, ChevronRight, PackageSearch, X, User } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
 import dynamic from "next/dynamic";
-import { collection, onSnapshot, doc, deleteDoc, runTransaction, Timestamp, writeBatch, type DocumentData, type QueryDocumentSnapshot } from "firebase/firestore";
-import { query as liteQuery, where as liteWhere, orderBy as liteOrderBy, getDocs as liteGetDocs, limit as liteLimit, startAfter as liteStartAfter, getCount as liteGetCount } from "firebase/firestore/lite";
-
+import { collection, onSnapshot, doc, deleteDoc, runTransaction, Timestamp, writeBatch, type DocumentData, type QueryDocumentSnapshot, query, where, orderBy, getDocs, limit, startAfter, getCountFromServer } from "firebase/firestore";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -115,23 +113,24 @@ export default function AssetsPage() {
         const firestore = db;
         
         const assetType = activeTab === 'barrels' ? 'BARRIL' : 'CO2';
-        let conditions = [liteWhere("type", "==", assetType)];
-        if (locationFilter) conditions.push(liteWhere("location", "==", locationFilter));
-        if (formatFilter) conditions.push(liteWhere("format", "==", formatFilter));
+        
+        let conditions = [where("type", "==", assetType)];
+        if (locationFilter) conditions.push(where("location", "==", locationFilter));
+        if (formatFilter) conditions.push(where("format", "==", formatFilter));
         
         const assetsCollection = collection(firestore, "assets");
         
-        const countQuery = liteQuery(assetsCollection, ...conditions);
-        const countSnapshot = await liteGetCount(countQuery);
+        const countQuery = query(assetsCollection, ...conditions);
+        const countSnapshot = await getCountFromServer(countQuery);
         setTotalAssetsInFilter(countSnapshot.data().count);
 
-        let assetsQuery = liteQuery(assetsCollection, ...conditions, liteOrderBy("code"));
+        let assetsQuery = query(assetsCollection, ...conditions, orderBy("code"));
         if (startDoc) {
-            assetsQuery = liteQuery(assetsQuery, liteStartAfter(startDoc));
+            assetsQuery = query(assetsQuery, startAfter(startDoc));
         }
-        assetsQuery = liteQuery(assetsQuery, liteLimit(ITEMS_PER_PAGE));
+        assetsQuery = query(assetsQuery, limit(ITEMS_PER_PAGE));
         
-        const assetsSnapshot = await liteGetDocs(assetsQuery);
+        const assetsSnapshot = await getDocs(assetsQuery);
         const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
         setAssets(assetsData);
 
@@ -172,8 +171,8 @@ export default function AssetsPage() {
      const firestore = db;
      
      // Only fetch all events once for the customer info logic
-     const eventsQuery = collection(firestore, "events");
-     const unsubscribeEvents = onSnapshot(liteQuery(eventsQuery, liteOrderBy("timestamp", "desc")), (snapshot) => {
+     const eventsQuery = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
+     const unsubscribeEvents = onSnapshot(eventsQuery, (snapshot) => {
         const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
         setAllEvents(eventsData);
      }, (error: any) => {
@@ -233,8 +232,8 @@ export default function AssetsPage() {
         try {
             const firestore = db;
             const assetType = activeTab === 'barrels' ? 'BARRIL' : 'CO2';
-            const allAssetsQuery = liteQuery(collection(firestore, "assets"), liteWhere("type", "==", assetType), liteOrderBy("code"));
-            const allAssetsSnapshot = await liteGetDocs(allAssetsQuery);
+            const allAssetsQuery = query(collection(firestore, "assets"), where("type", "==", assetType), orderBy("code"));
+            const allAssetsSnapshot = await getDocs(allAssetsQuery);
             listToPrint = allAssetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
         } catch(e) {
              toast({
@@ -311,14 +310,14 @@ export default function AssetsPage() {
   const generateNextCode = async (type: 'BARRIL' | 'CO2'): Promise<{prefix: string, nextNumber: number}> => {
     const firestore = db;
     const prefix = type === 'BARRIL' ? 'KEG' : 'CO2';
-    const q = liteQuery(
+    const q = query(
       collection(firestore, "assets"), 
-      liteWhere("type", "==", type),
-      liteOrderBy("code", "desc"),
-      liteLimit(1)
+      where("type", "==", type),
+      orderBy("code", "desc"),
+      limit(1)
     );
     
-    const querySnapshot = await liteGetDocs(q);
+    const querySnapshot = await getDocs(q);
     if (querySnapshot.empty) {
       return { prefix, nextNumber: 1 };
     }
@@ -884,3 +883,5 @@ export default function AssetsPage() {
     </>
   );
 }
+
+    
