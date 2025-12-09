@@ -77,10 +77,50 @@ const QrLabel = ({ asset }: { asset: Asset }) => {
   );
 };
 
+const AssetCustomerInfo = ({ assetId }: { assetId: string }) => {
+    const [customerName, setCustomerName] = useState<string | null>(null);
+
+    useEffect(() => {
+        const fetchLastEvent = async () => {
+            const firestore = db;
+            const q = query(
+                collection(firestore, "events"),
+                where("asset_id", "==", assetId),
+                orderBy("timestamp", "desc"),
+                limit(1)
+            );
+            const snapshot = await getDocs(q);
+            if (!snapshot.empty) {
+                const lastEvent = snapshot.docs[0].data() as Event;
+                const asset = (await getDoc(doc(firestore, "assets", assetId))).data() as Asset;
+
+                const showForReparto = asset.location === 'EN_REPARTO' && lastEvent.event_type === 'SALIDA_A_REPARTO';
+                const showForCliente = asset.location === 'EN_CLIENTE';
+
+                if ((showForReparto || showForCliente) && lastEvent.customer_name && lastEvent.customer_name !== 'Planta' && lastEvent.customer_name !== 'Proveedor') {
+                    setCustomerName(lastEvent.customer_name);
+                } else {
+                    setCustomerName(null);
+                }
+            }
+        };
+
+        fetchLastEvent();
+    }, [assetId]);
+
+    if (!customerName) return null;
+
+    return (
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
+            <User className="h-3 w-3" />
+            <span>{customerName}</span>
+        </div>
+    );
+};
+
 
 export default function AssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [allEvents, setAllEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setFormOpen] = useState(false);
   const [isBatchFormOpen, setBatchFormOpen] = useState(false);
@@ -152,8 +192,9 @@ export default function AssetsPage() {
         });
         toast({
           title: "Error de Carga",
-          description: "No se pudieron cargar los activos.",
-          variant: "destructive"
+          description: "No se pudieron cargar los activos. Es posible que hayas superado la cuota de lecturas del día.",
+          variant: "destructive",
+          duration: 9000,
         });
     } finally {
         setIsLoading(false);
@@ -168,24 +209,6 @@ export default function AssetsPage() {
     fetchAssetsAndCounts(1, null);
   }, [activeTab, locationFilter, formatFilter, fetchAssetsAndCounts]);
 
-  useEffect(() => {
-     const firestore = db;
-     
-     // Only fetch all events once for the customer info logic
-     const eventsQuery = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
-     const unsubscribeEvents = onSnapshot(eventsQuery, (snapshot) => {
-        const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
-        setAllEvents(eventsData);
-     }, (error: any) => {
-        console.error("Error fetching events:", error);
-        logAppEvent({ level: 'ERROR', message: 'Failed to fetch events snapshot', component: 'AssetsPage', stack: error.stack });
-     });
-
-     return () => {
-        unsubscribeEvents();
-     };
-  }, []);
-
   const goToPage = (page: number) => {
     if (page < 1 || (page > currentPage && !lastVisible)) return;
     
@@ -193,17 +216,6 @@ export default function AssetsPage() {
     setCurrentPage(page);
     fetchAssetsAndCounts(page, startDoc);
   };
-
-
-  const lastEventsMap = useMemo(() => {
-      const map = new Map<string, Event>();
-      for (const event of allEvents) {
-          if (!map.has(event.asset_id)) {
-              map.set(event.asset_id, event);
-          }
-      }
-      return map;
-  }, [allEvents]);
 
   const handleEdit = (asset: Asset) => {
     setSelectedAsset(asset);
@@ -511,24 +523,6 @@ export default function AssetsPage() {
     setLocationFilter(null);
   };
 
-  const AssetCustomerInfo = ({ asset }: { asset: Asset }) => {
-      const lastEvent = lastEventsMap.get(asset.id);
-      if (lastEvent?.customer_name && lastEvent.customer_name !== 'Planta' && lastEvent.customer_name !== 'Proveedor') {
-          const showForReparto = asset.location === 'EN_REPARTO' && lastEvent.event_type === 'SALIDA_A_REPARTO';
-          const showForCliente = asset.location === 'EN_CLIENTE';
-          if (showForReparto || showForCliente) {
-              return (
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
-                      <User className="h-3 w-3" />
-                      <span>{lastEvent.customer_name}</span>
-                  </div>
-              );
-          }
-      }
-      return null;
-  };
-
-
   const AssetCardMobile = ({ asset }: { asset: Asset }) => (
     <div className="flex items-center justify-between rounded-lg border bg-card p-4">
       <div className="flex flex-col gap-1">
@@ -548,7 +542,7 @@ export default function AssetsPage() {
              <Badge variant={getLocationVariant(asset.location)}>
                 {getLocationText(asset.location)}
              </Badge>
-             <AssetCustomerInfo asset={asset} />
+             <AssetCustomerInfo assetId={asset.id} />
            </div>
         </div>
       </div>
@@ -614,7 +608,7 @@ export default function AssetsPage() {
                     <Badge variant={getLocationVariant(asset.location)}>
                     {getLocationText(asset.location)}
                     </Badge>
-                    <AssetCustomerInfo asset={asset} />
+                    <AssetCustomerInfo assetId={asset.id} />
                 </div>
               </TableCell>
               <TableCell>
