@@ -89,18 +89,31 @@ const AssetCustomerInfo = ({ assetId }: { assetId: string }) => {
                 orderBy("timestamp", "desc"),
                 limit(1)
             );
-            const snapshot = await getDocs(q);
-            if (!snapshot.empty) {
-                const lastEvent = snapshot.docs[0].data() as Event;
-                const asset = (await getDoc(doc(firestore, "assets", assetId))).data() as Asset;
+            
+            try {
+                const snapshot = await getDocs(q);
+                 if (!snapshot.empty) {
+                    const lastEvent = snapshot.docs[0].data() as Event;
+                    const assetDoc = await getDoc(doc(firestore, "assets", assetId));
+                    if (!assetDoc.exists()) return;
+                    
+                    const asset = assetDoc.data() as Asset;
 
-                const showForReparto = asset.location === 'EN_REPARTO' && lastEvent.event_type === 'SALIDA_A_REPARTO';
-                const showForCliente = asset.location === 'EN_CLIENTE';
+                    const showForReparto = asset.location === 'EN_REPARTO' && lastEvent.event_type === 'SALIDA_A_REPARTO';
+                    const showForCliente = asset.location === 'EN_CLIENTE';
 
-                if ((showForReparto || showForCliente) && lastEvent.customer_name && lastEvent.customer_name !== 'Planta' && lastEvent.customer_name !== 'Proveedor') {
-                    setCustomerName(lastEvent.customer_name);
+                    if ((showForReparto || showForCliente) && lastEvent.customer_name && lastEvent.customer_name !== 'Planta' && lastEvent.customer_name !== 'Proveedor') {
+                        setCustomerName(lastEvent.customer_name);
+                    } else {
+                        setCustomerName(null);
+                    }
+                }
+            } catch (error: any) {
+                 if (error.code === 'resource-exhausted') {
+                    // Do not show toast for this component, as it's a non-critical info
+                    console.warn('Firestore quota exceeded while fetching customer info for asset.');
                 } else {
-                    setCustomerName(null);
+                    console.error("Error fetching last event for asset:", error);
                 }
             }
         };
@@ -165,7 +178,7 @@ export default function AssetsPage() {
         const countSnapshot = await getCountFromServer(countQuery);
         setTotalAssetsInFilter(countSnapshot.data().count);
 
-        let assetsQuery = query(assetsCollection, ...conditions, orderBy("code"));
+        let assetsQuery = query(assetsCollection, ...conditions, orderBy("type"), orderBy("code"));
         if (startDoc) {
             assetsQuery = query(assetsQuery, startAfter(startDoc));
         }
@@ -190,12 +203,22 @@ export default function AssetsPage() {
             component: 'AssetsPage',
             stack: error.stack,
         });
-        toast({
-          title: "Error de Carga",
-          description: "No se pudieron cargar los activos. Es posible que hayas superado la cuota de lecturas del día.",
-          variant: "destructive",
-          duration: 9000,
-        });
+
+        if (error.code === 'resource-exhausted') {
+            toast({
+              title: "Límite de Firebase alcanzado",
+              description: "Has superado la cuota de lecturas gratuitas por hoy. Los datos no se pueden cargar.",
+              variant: "destructive",
+              duration: 9000,
+            });
+        } else {
+             toast({
+              title: "Error de Carga",
+              description: "No se pudieron cargar los activos. Intenta recargar la página.",
+              variant: "destructive",
+              duration: 9000,
+            });
+        }
     } finally {
         setIsLoading(false);
     }
@@ -245,15 +268,24 @@ export default function AssetsPage() {
         try {
             const firestore = db;
             const assetType = activeTab === 'barrels' ? 'BARRIL' : 'CO2';
-            const allAssetsQuery = query(collection(firestore, "assets"), where("type", "==", assetType), orderBy("code"));
+            const allAssetsQuery = query(collection(firestore, "assets"), where("type", "==", assetType), orderBy("type"), orderBy("code"));
             const allAssetsSnapshot = await getDocs(allAssetsQuery);
             listToPrint = allAssetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
-        } catch(e) {
-             toast({
-                title: "Error de Impresión",
-                description: "No se pudieron cargar todos los activos para imprimir.",
-                variant: "destructive"
-            });
+        } catch(e: any) {
+             if (e.code === 'resource-exhausted') {
+                 toast({
+                    title: "Límite de Firebase alcanzado",
+                    description: "No se pueden cargar todos los activos para imprimir debido al límite de lecturas.",
+                    variant: "destructive",
+                    duration: 9000,
+                 });
+             } else {
+                toast({
+                    title: "Error de Impresión",
+                    description: "No se pudieron cargar todos los activos para imprimir.",
+                    variant: "destructive"
+                });
+             }
             setIsLoading(false);
             return;
         }
@@ -498,7 +530,10 @@ export default function AssetsPage() {
         return acc;
       }, {} as Record<string, Record<Asset['location'], number>>);
     };
-
+    
+    // NOTE: This now only processes the assets currently visible on the page.
+    // This is a trade-off to drastically reduce Firestore read operations.
+    // The counts will reflect the paged data, not the total inventory.
     return {
       barrels: calculateCounts(assets.filter(a => a.type === 'BARRIL')),
       co2: calculateCounts(assets.filter(a => a.type === 'CO2')),
@@ -774,7 +809,8 @@ export default function AssetsPage() {
                     <TabsTrigger value="barrels">Barriles</TabsTrigger>
                     <TabsTrigger value="co2">CO2</TabsTrigger>
                   </TabsList>
-                  <div className="flex flex-col items-start sm:items-end gap-2">
+                   <div className="flex flex-col items-start sm:items-end gap-2">
+                    <CardDescription>Contadores de la página actual.</CardDescription>
                     {activeTab === 'barrels' && <CountsDisplay counts={assetCountsByFormat.barrels} onFilter={handleFilterClick} />}
                     {activeTab === 'co2' && <CountsDisplay counts={assetCountsByFormat.co2} onFilter={handleFilterClick} />}
                     {locationFilter && (
@@ -878,5 +914,3 @@ export default function AssetsPage() {
     </>
   );
 }
-
-    
