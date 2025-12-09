@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -9,7 +10,7 @@ import { db } from "@/lib/firebase";
 import { type Asset, type Event, type Customer } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { BarChart, XAxis, YAxis, Bar, Tooltip, Legend, CartesianGrid } from "recharts";
+import { BarChart, XAxis, YAxis, Bar, Tooltip, Legend, CartesianGrid, ResponsiveContainer } from "recharts";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { differenceInDays } from 'date-fns';
 
@@ -190,6 +191,7 @@ export default function DashboardPage() {
                         </div>
                      ) : (
                         <ChartContainer config={chartConfig} className="h-60 w-full">
+                          <ResponsiveContainer>
                             <BarChart accessibilityLayer data={metrics.locationDistribution} layout="vertical">
                                 <CartesianGrid vertical={false} />
                                 <XAxis type="number" />
@@ -210,6 +212,7 @@ export default function DashboardPage() {
                                 <Bar dataKey="barriles30L" stackId="a" fill={chartConfig.barriles30L.color} />
                                 <Bar dataKey="co2" stackId="a" fill={chartConfig.co2.color} />
                             </BarChart>
+                          </ResponsiveContainer>
                         </ChartContainer>
                      )}
                 </CardContent>
@@ -234,6 +237,7 @@ export default function DashboardPage() {
                         </div>
                     ) : (
                         <ChartContainer config={{...chartConfig, assets: {label: "Activos"}}} className="h-60 w-full">
+                          <ResponsiveContainer>
                             <BarChart accessibilityLayer data={metrics.topCustomers} layout="vertical" margin={{ left: 10, right: 30 }}>
                                 <CartesianGrid horizontal={false} />
                                 <XAxis type="number" dataKey="assets" />
@@ -252,6 +256,7 @@ export default function DashboardPage() {
                                 />
                                 <Bar dataKey="assets" radius={4} fill="hsl(var(--primary))" />
                             </BarChart>
+                          </ResponsiveContainer>
                         </ChartContainer>
                     )}
                 </CardContent>
@@ -287,3 +292,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    

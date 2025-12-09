@@ -162,7 +162,7 @@ export default function HistoryPage() {
     
     getEvents();
     getAssets();
-  }, [toast]);
+  }, []);
 
   const [filters, setFilters] = useState({
     customer: '',
@@ -264,3 +264,5 @@ export default function HistoryPage() {
     </div>
   );
 }
+
+    
