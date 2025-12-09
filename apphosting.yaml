@@ -5,5 +5,3 @@ build:
   command: npm run build
 start:
   command: npm run start
-scaling:
-  maxInstances: 10
