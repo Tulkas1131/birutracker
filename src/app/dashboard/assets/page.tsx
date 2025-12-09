@@ -1,12 +1,10 @@
 
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus, ChevronLeft, ChevronRight, PackageSearch, X, User } from "lucide-react";
 import { db } from "@/lib/firebase";
 import dynamic from "next/dynamic";
-import { renderToStaticMarkup } from 'react-dom/server';
-
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,7 +36,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/page-header";
-import type { Asset, AssetBatchFormData, Event, Customer } from "@/lib/types";
+import type { Asset, AssetBatchFormData, Event } from "@/lib/types";
 import { AssetForm } from "@/components/asset-form";
 import { AssetBatchForm } from "@/components/asset-batch-form";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -51,6 +49,8 @@ import { EmptyState } from "@/components/empty-state";
 import { cn } from "@/lib/utils";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth } from "@/lib/firebase";
+import type { DocumentData, QueryDocumentSnapshot } from "firebase/firestore/lite";
+
 
 const QRCode = dynamic(() => import('qrcode.react'), {
   loading: () => <div className="flex h-[128px] w-[128px] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>,
@@ -81,7 +81,7 @@ const QrLabel = ({ asset }: { asset: Asset }) => {
 
 export default function AssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [events, setEvents] = useState<Event[]>([]);
+  const [allEvents, setAllEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setFormOpen] = useState(false);
   const [isBatchFormOpen, setBatchFormOpen] = useState(false);
@@ -89,64 +89,132 @@ export default function AssetsPage() {
   const [isConfirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [assetToDelete, setAssetToDelete] = useState<Asset | null>(null);
   const [activeTab, setActiveTab] = useState('barrels');
-  const [currentPage, setCurrentPage] = useState(1);
   const [selectedAsset, setSelectedAsset] = useState<Asset | undefined>(undefined);
   const [assetsToPrint, setAssetsToPrint] = useState<Asset[]>([]);
+  
   const [locationFilter, setLocationFilter] = useState<Asset['location'] | null>(null);
   const [formatFilter, setFormatFilter] = useState<string | null>(null);
+  
+  const [currentPage, setCurrentPage] = useState(1);
+  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [firstVisible, setFirstVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [pageHistory, setPageHistory] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
+  const [totalAssetsInFilter, setTotalAssetsInFilter] = useState(0);
+
   const { toast } = useToast();
   const userRole = useUserRole();
   const isMobile = useIsMobile();
   const [user] = useAuthState(auth());
   
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        const { collection, query, orderBy, getDocs } = await import("firebase/firestore/lite");
+  
+  const fetchAssetsAndCounts = useCallback(async (
+    page: number, 
+    lastDoc: QueryDocumentSnapshot<DocumentData> | null = null
+) => {
+    setIsLoading(true);
+    try {
+        const { collection, query, where, orderBy, getDocs, limit, startAfter, getCount } = await import("firebase/firestore/lite");
         const firestore = db();
-        const assetsQuery = query(collection(firestore, "assets"), orderBy("code"));
-        const eventsQuery = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
         
-        const [assetsSnapshot, eventsSnapshot] = await Promise.all([
-          getDocs(assetsQuery),
-          getDocs(eventsQuery),
-        ]);
+        const assetType = activeTab === 'barrels' ? 'BARRIL' : 'CO2';
+        let conditions = [where("type", "==", assetType)];
+        if (locationFilter) conditions.push(where("location", "==", locationFilter));
+        if (formatFilter) conditions.push(where("format", "==", formatFilter));
+        
+        const assetsCollection = collection(firestore, "assets");
+        
+        const countQuery = query(assetsCollection, ...conditions);
+        const countSnapshot = await getCount(countQuery);
+        setTotalAssetsInFilter(countSnapshot.data().count);
 
-        const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
-        const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
+        let assetsQuery = query(assetsCollection, ...conditions, orderBy("code"));
+        if (lastDoc) {
+            assetsQuery = query(assetsQuery, startAfter(lastDoc));
+        }
+        assetsQuery = query(assetsQuery, limit(ITEMS_PER_PAGE));
         
+        const assetsSnapshot = await getDocs(assetsQuery);
+        const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
         setAssets(assetsData);
-        setEvents(eventsData);
-      } catch (error: any) {
-        console.error("Error fetching data: ", error);
+
+        const newLastVisible = assetsSnapshot.docs[assetsSnapshot.docs.length - 1] || null;
+        const newFirstVisible = assetsSnapshot.docs[0] || null;
+        setLastVisible(newLastVisible);
+        setFirstVisible(newFirstVisible);
+
+        if (page > currentPage) {
+           setPageHistory(prev => [...prev, newLastVisible]);
+        }
+
+    } catch (error: any) {
+        console.error("Error fetching assets: ", error);
         logAppEvent({
             level: 'ERROR',
-            message: 'Failed to fetch assets or events',
+            message: 'Failed to fetch paginated assets',
             component: 'AssetsPage',
             stack: error.stack,
         });
         toast({
           title: "Error de Carga",
-          description: "No se pudieron cargar los activos o eventos.",
+          description: "No se pudieron cargar los activos.",
           variant: "destructive"
         });
-      } finally {
+    } finally {
         setIsLoading(false);
-      }
-    };
-    fetchData();
+    }
+}, [activeTab, locationFilter, formatFilter, toast, currentPage]);
+
+  useEffect(() => {
+    // Reset pagination and fetch data when filters or tab change
+    setCurrentPage(1);
+    setPageHistory([null]);
+    setLastVisible(null);
+    setFirstVisible(null);
+    fetchAssetsAndCounts(1, null);
+  }, [activeTab, locationFilter, formatFilter]);
+
+  useEffect(() => {
+     const firestore = db();
+     const { collection, onSnapshot, query, orderBy } = require("firebase/firestore/lite");
+     
+     // Only fetch all events once for the customer info logic
+     const eventsQuery = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
+     const unsubscribeEvents = onSnapshot(eventsQuery, (snapshot) => {
+        const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
+        setAllEvents(eventsData);
+     }, (error: any) => {
+        console.error("Error fetching events:", error);
+        logAppEvent({ level: 'ERROR', message: 'Failed to fetch events snapshot', component: 'AssetsPage', stack: error.stack });
+     });
+
+     return () => {
+        unsubscribeEvents();
+     };
   }, []);
+
+  const goToPage = (page: number) => {
+    if (page < 1 || (page > currentPage && !lastVisible)) return;
+    
+    if (page > currentPage) { // Going forward
+        setCurrentPage(page);
+        fetchAssetsAndCounts(page, lastVisible);
+    } else if (page < currentPage) { // Going backward
+        setCurrentPage(page);
+        setPageHistory(prev => prev.slice(0, page));
+        fetchAssetsAndCounts(page, pageHistory[page - 1]);
+    }
+  };
+
 
   const lastEventsMap = useMemo(() => {
       const map = new Map<string, Event>();
-      for (const event of events) {
+      for (const event of allEvents) {
           if (!map.has(event.asset_id)) {
               map.set(event.asset_id, event);
           }
       }
       return map;
-  }, [events]);
+  }, [allEvents]);
 
   const handleEdit = (asset: Asset) => {
     setSelectedAsset(asset);
@@ -167,10 +235,30 @@ export default function AssetsPage() {
     setQrCodeOpen(true);
   };
 
-  const handlePrint = (asset?: Asset) => {
-    const listToPrint = asset 
-        ? [asset] 
-        : (activeTab === 'barrels' ? barrels : co2Cylinders);
+  const handlePrint = async (asset?: Asset) => {
+    let listToPrint: Asset[] = [];
+    if (asset) {
+        listToPrint = [asset];
+    } else {
+        setIsLoading(true);
+        try {
+            const { collection, query, where, orderBy, getDocs } = await import("firebase/firestore/lite");
+            const firestore = db();
+            const assetType = activeTab === 'barrels' ? 'BARRIL' : 'CO2';
+            const allAssetsQuery = query(collection(firestore, "assets"), where("type", "==", assetType), orderBy("code"));
+            const allAssetsSnapshot = await getDocs(allAssetsQuery);
+            listToPrint = allAssetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
+        } catch(e) {
+             toast({
+                title: "Error de Impresión",
+                description: "No se pudieron cargar todos los activos para imprimir.",
+                variant: "destructive"
+            });
+            setIsLoading(false);
+            return;
+        }
+        setIsLoading(false);
+    }
 
     if (listToPrint.length === 0) {
         toast({
@@ -183,7 +271,6 @@ export default function AssetsPage() {
     
     setAssetsToPrint(listToPrint);
 
-    // Give React a moment to update the state before calling print
     setTimeout(() => {
         window.print();
     }, 100);
@@ -214,6 +301,7 @@ export default function AssetsPage() {
         title: "Activo Eliminado",
         description: `El activo ${assetToDelete.code} ha sido eliminado.`,
       });
+      fetchAssetsAndCounts(currentPage, pageHistory[currentPage -1]);
     } catch (error: any) {
       console.error("Error eliminando activo: ", error);
       logAppEvent({
@@ -275,7 +363,6 @@ export default function AssetsPage() {
                 valveType: data.state === 'LLENO' ? data.valveType || "" : "",
             };
 
-            // Only allow changing format and type if asset is in plant
             if (selectedAsset.location === 'EN_PLANTA') {
                 assetDataToUpdate.format = data.format;
                 assetDataToUpdate.type = data.type;
@@ -288,10 +375,6 @@ export default function AssetsPage() {
                 });
             }
 
-            // --- Business Logic for Event Creation ---
-            // A new fill event is only created if the asset goes from VACIO to LLENO.
-            // Any other state change (e.g., from EN_CLIENTE to EN_PLANTA) is a correction
-            // and should NOT create a new fill event, preserving the original fill date.
             if (data.state === 'LLENO' && selectedAsset.state === 'VACIO') {
                 const newEventRef = doc(collection(firestore, "events"));
                 transaction.set(newEventRef, {
@@ -308,9 +391,6 @@ export default function AssetsPage() {
             }
 
             transaction.update(assetRef, assetDataToUpdate);
-
-            // Update local state for immediate UI feedback
-            setAssets(prev => prev.map(asset => asset.id === selectedAsset.id ? { ...asset, ...assetDataToUpdate } : asset));
             toast({ title: "Activo Actualizado", description: "Los cambios han sido guardados." });
 
         } else {
@@ -321,15 +401,13 @@ export default function AssetsPage() {
             
             const newAssetRef = doc(collection(firestore, "assets"));
             transaction.set(newAssetRef, newAssetData);
-            
-            // Update local state
-            setAssets(prev => [...prev, { id: newAssetRef.id, ...newAssetData }]);
             toast({ title: "Activo Creado", description: `El nuevo activo ha sido añadido con el código ${newCode}.` });
         }
       });
       
       setFormOpen(false);
       setSelectedAsset(undefined);
+      fetchAssetsAndCounts(1, null);
 
     } catch (error: any) {
       console.error("Error guardando activo: ", error);
@@ -353,7 +431,6 @@ export default function AssetsPage() {
     try {
       const { prefix, nextNumber } = await generateNextCode(data.type);
       const batch = writeBatch(firestore);
-      const newAssets: Asset[] = [];
       
       for (let i = 0; i < data.quantity; i++) {
         const currentNumber = nextNumber + i;
@@ -369,11 +446,10 @@ export default function AssetsPage() {
         };
         const newAssetRef = doc(collection(firestore, "assets"));
         batch.set(newAssetRef, newAssetData);
-        newAssets.push({ id: newAssetRef.id, ...newAssetData });
       }
       
       await batch.commit();
-      setAssets(prev => [...prev, ...newAssets]);
+      fetchAssetsAndCounts(1, null);
       toast({
         title: "Lote Creado Exitosamente",
         description: `Se han creado ${data.quantity} nuevos activos de tipo ${data.type}.`,
@@ -414,10 +490,6 @@ export default function AssetsPage() {
     }
   };
   
-  const barrels = useMemo(() => assets.filter(asset => asset.type === 'BARRIL'), [assets]);
-  const co2Cylinders = useMemo(() => assets.filter(asset => asset.type === 'CO2'), [assets]);
-
-
   const assetCountsByFormat = useMemo(() => {
     const calculateCounts = (assetList: Asset[]) => {
       return assetList.reduce((acc, asset) => {
@@ -432,55 +504,27 @@ export default function AssetsPage() {
     };
 
     return {
-      barrels: calculateCounts(barrels),
-      co2: calculateCounts(co2Cylinders),
+      barrels: calculateCounts(assets.filter(a => a.type === 'BARRIL')),
+      co2: calculateCounts(assets.filter(a => a.type === 'CO2')),
     };
   }, [assets]);
   
-  const currentAssetList = useMemo(() => {
-    const baseList = activeTab === 'barrels' ? barrels : co2Cylinders;
-    
-    let filteredList = baseList;
-    if (locationFilter && formatFilter) {
-      filteredList = baseList.filter(asset => asset.location === locationFilter && asset.format === formatFilter);
-    }
-    
-    // Nueva lógica de ordenamiento
-    return filteredList.sort((a, b) => {
-      // Prioridad 1: Estado ('LLENO' antes que 'VACIO')
-      if (a.state === 'LLENO' && b.state === 'VACIO') {
-        return -1;
-      }
-      if (a.state === 'VACIO' && b.state === 'LLENO') {
-        return 1;
-      }
-      
-      // Prioridad 2: Código correlativo (orden natural)
-      return a.code.localeCompare(b.code, undefined, { numeric: true });
-    });
-    
-  }, [activeTab, barrels, co2Cylinders, locationFilter, formatFilter]);
-
-  const totalPages = Math.ceil(currentAssetList.length / ITEMS_PER_PAGE);
-  const paginatedAssets = currentAssetList.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(totalAssetsInFilter / ITEMS_PER_PAGE);
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
     setFormatFilter(null);
     setLocationFilter(null);
-    setCurrentPage(1);
   };
   
   const handleFilterClick = (format: string, location: Asset['location']) => {
     setFormatFilter(format);
     setLocationFilter(location);
-    setCurrentPage(1);
   };
 
   const clearFilters = () => {
     setFormatFilter(null);
     setLocationFilter(null);
-    setCurrentPage(1);
   };
 
   const AssetCustomerInfo = ({ asset }: { asset: Asset }) => {
@@ -619,14 +663,16 @@ export default function AssetsPage() {
       </Table>
   );
 
-  const AssetList = ({ assetList, type }: { assetList: Asset[], type: 'BARRIL' | 'CO2' }) => (
+  const AssetList = ({ assetList, type }: { assetList: Asset[], type: 'BARRIL' | 'CO2' }) => {
+    const typeName = type === 'BARRIL' ? 'barriles' : 'cilindros';
+    return (
      <Card>
         <CardHeader className="hidden md:flex">
           <CardTitle className="text-xl">{type === 'BARRIL' ? 'Barriles' : 'Cilindros de CO2'}</CardTitle>
           <CardDescription>
             {locationFilter && formatFilter 
-                ? `Mostrando ${assetList.length} activos de formato "${formatFilter}" en "${getLocationText(locationFilter as Asset['location'])}".`
-                : `Un listado de todos los activos de tipo ${type === 'BARRIL' ? 'barril' : 'CO2'} en tu inventario.`}
+                ? `Mostrando ${totalAssetsInFilter} activos de formato "${formatFilter}" en "${getLocationText(locationFilter as Asset['location'])}".`
+                : `Un listado de todos los activos de tipo ${typeName} en tu inventario.`}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0 md:p-6 md:pt-0">
@@ -637,8 +683,8 @@ export default function AssetsPage() {
           ) : assetList.length === 0 ? (
             <EmptyState 
                 icon={<PackageSearch className="h-16 w-16" />}
-                title={locationFilter ? 'No hay activos para este filtro' : `No hay ${type === 'BARRIL' ? 'barriles' : 'cilindros'} aún`}
-                description={locationFilter ? 'Prueba a seleccionar otro filtro o límpialo para ver todos los activos.' : `Crea tu primer activo para empezar a rastrear tu inventario de ${type === 'BARRIL' ? 'barriles' : 'cilindros'}.`}
+                title={locationFilter ? 'No hay activos para este filtro' : `No hay ${typeName} aún`}
+                description={locationFilter ? 'Prueba a seleccionar otro filtro o límpialo para ver todos los activos.' : `Crea tu primer activo para empezar a rastrear tu inventario de ${typeName}.`}
                 action={
                     locationFilter ? (
                          <Button onClick={clearFilters}>
@@ -672,7 +718,7 @@ export default function AssetsPage() {
                   <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      onClick={() => goToPage(currentPage - 1)}
                       disabled={currentPage === 1}
                   >
                       <ChevronLeft className="h-4 w-4" />
@@ -681,8 +727,8 @@ export default function AssetsPage() {
                   <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                      disabled={currentPage === totalPages}
+                      onClick={() => goToPage(currentPage + 1)}
+                      disabled={currentPage === totalPages || !lastVisible}
                   >
                       Siguiente
                       <ChevronRight className="h-4 w-4" />
@@ -691,7 +737,8 @@ export default function AssetsPage() {
           </CardFooter>
         )}
       </Card>
-  );
+    );
+  };
 
   const CountsDisplay = ({ counts, onFilter }: { counts: Record<string, Record<Asset['location'], number>>, onFilter: (format: string, location: Asset['location']) => void }) => (
     <div className="flex flex-col gap-y-2 text-sm text-muted-foreground">
@@ -725,7 +772,7 @@ export default function AssetsPage() {
             description="Gestiona tus barriles de cerveza y cilindros de CO₂."
             action={
               <div className="flex flex-col sm:flex-row items-center gap-2">
-                   <Button size="lg" variant="outline" onClick={() => handlePrint()} disabled={(activeTab === 'barrels' ? barrels : co2Cylinders).length === 0}>
+                   <Button size="lg" variant="outline" onClick={() => handlePrint()} disabled={isLoading}>
                       <Printer className="mr-2 h-5 w-5" />
                       Imprimir Lote de QR
                   </Button>
@@ -746,8 +793,8 @@ export default function AssetsPage() {
               <Tabs defaultValue={activeTab} onValueChange={handleTabChange}>
                 <div className="flex flex-col sm:flex-row items-start justify-between gap-4 mb-4">
                   <TabsList>
-                    <TabsTrigger value="barrels">Barriles ({barrels.length})</TabsTrigger>
-                    <TabsTrigger value="co2">CO2 ({co2Cylinders.length})</TabsTrigger>
+                    <TabsTrigger value="barrels">Barriles</TabsTrigger>
+                    <TabsTrigger value="co2">CO2</TabsTrigger>
                   </TabsList>
                   <div className="flex flex-col items-start sm:items-end gap-2">
                     {activeTab === 'barrels' && <CountsDisplay counts={assetCountsByFormat.barrels} onFilter={handleFilterClick} />}
@@ -761,10 +808,10 @@ export default function AssetsPage() {
                   </div>
                 </div>
                 <TabsContent value="barrels">
-                   <AssetList assetList={paginatedAssets} type="BARRIL" />
+                   <AssetList assetList={assets} type="BARRIL" />
                 </TabsContent>
                 <TabsContent value="co2">
-                   <AssetList assetList={paginatedAssets} type="CO2" />
+                   <AssetList assetList={assets} type="CO2" />
                 </TabsContent>
               </Tabs>
           </main>
@@ -853,7 +900,3 @@ export default function AssetsPage() {
     </>
   );
 }
-
-    
-
-    

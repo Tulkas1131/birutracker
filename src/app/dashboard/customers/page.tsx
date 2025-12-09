@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { MoreHorizontal, PlusCircle, Loader2, ChevronLeft, ChevronRight, Users2, Phone, History } from "lucide-react";
 import { db } from "@/lib/firebase";
 
@@ -32,6 +32,8 @@ import { useUserRole } from "@/hooks/use-user-role";
 import { logAppEvent } from "@/lib/logging";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { EmptyState } from "@/components/empty-state";
+import type { DocumentData, QueryDocumentSnapshot } from "firebase/firestore/lite";
+
 
 const ITEMS_PER_PAGE = 10;
 
@@ -48,98 +50,130 @@ export default function CustomersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setFormOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | undefined>(undefined);
+  
   const [currentPage, setCurrentPage] = useState(1);
+  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [pageHistory, setPageHistory] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
+  const [totalCustomers, setTotalCustomers] = useState(0);
+
   const { toast } = useToast();
   const userRole = useUserRole();
   const isMobile = useIsMobile();
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        const { collection, query, orderBy, getDocs } = await import("firebase/firestore/lite");
+  const fetchCustomers = useCallback(async (
+    page: number, 
+    lastDoc: QueryDocumentSnapshot<DocumentData> | null = null
+) => {
+    setIsLoading(true);
+    try {
+        const { collection, query, orderBy, getDocs, limit, startAfter, getCount } = await import("firebase/firestore/lite");
         const firestore = db();
         
-        const customersQuery = query(collection(firestore, "customers"), orderBy("name"));
-        const assetsQuery = query(collection(firestore, "assets"));
-        const eventsQuery = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
+        const customersCollection = collection(firestore, "customers");
         
-        const [customersSnapshot, assetsSnapshot, eventsSnapshot] = await Promise.all([
-          getDocs(customersQuery),
-          getDocs(assetsQuery),
-          getDocs(eventsQuery),
-        ]);
+        const countSnapshot = await getCount(customersCollection);
+        setTotalCustomers(countSnapshot.data().count);
         
+        let customersQuery = query(customersCollection, orderBy("name"));
+        
+        if (lastDoc) {
+            customersQuery = query(customersQuery, startAfter(lastDoc));
+        }
+        
+        customersQuery = query(customersQuery, limit(ITEMS_PER_PAGE));
+        
+        const customersSnapshot = await getDocs(customersQuery);
         const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
-        const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
-        const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
-
         setCustomers(customersData);
-        setAssets(assetsData);
-        setEvents(eventsData);
 
-      } catch (error: any) {
+        const newLastVisible = customersSnapshot.docs[customersSnapshot.docs.length - 1] || null;
+        setLastVisible(newLastVisible);
+
+        if (page > currentPage) {
+            setPageHistory(prev => [...prev, lastDoc]);
+        }
+
+    } catch (error: any) {
         console.error("Error fetching customers data: ", error);
         logAppEvent({
             level: 'ERROR',
-            message: 'Failed to fetch comprehensive customer data',
+            message: 'Failed to fetch paginated customers',
             component: 'CustomersPage',
             stack: error.stack,
         });
         toast({
           title: "Error de Carga",
-          description: "No se pudieron cargar todos los datos de clientes.",
+          description: "No se pudieron cargar los datos de clientes.",
           variant: "destructive"
         });
-      } finally {
+    } finally {
         setIsLoading(false);
-      }
-    };
-    fetchData();
+    }
+}, [currentPage, toast]);
+
+  useEffect(() => {
+    fetchCustomers(1, null);
   }, []);
+
+  useEffect(() => {
+    const firestore = db();
+    const { collection, onSnapshot, query, where } = require("firebase/firestore/lite");
+
+    const assetsQuery = query(collection(firestore, "assets"), where("location", "==", "EN_CLIENTE"));
+    const eventsQuery = query(collection(firestore, "events"), where("event_type", "==", "ENTREGA_A_CLIENTE"));
+
+    const unsubscribeAssets = onSnapshot(assetsQuery, (snapshot) => {
+        setAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)));
+    }, (error: any) => {
+        console.error("Error fetching assets snapshot:", error);
+    });
+
+    const unsubscribeEvents = onSnapshot(eventsQuery, (snapshot) => {
+        setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event)));
+    }, (error: any) => {
+        console.error("Error fetching events snapshot:", error);
+    });
+    
+    return () => {
+        unsubscribeAssets();
+        unsubscribeEvents();
+    };
+  }, []);
+
+  const goToPage = (page: number) => {
+    if (page < 1 || (page > currentPage && !lastVisible)) return;
+
+    setCurrentPage(page);
+    const lastDocForPage = page > currentPage ? lastVisible : pageHistory[page - 1];
+    if (page < currentPage) {
+      setPageHistory(prev => prev.slice(0, page));
+    }
+    fetchCustomers(page, lastDocForPage);
+  };
   
   const { customerAssetCounts, customerAssetHistory } = useMemo(() => {
     const counts = new Map<string, CustomerAssetCounts>();
     const history = new Map<string, number>();
     const deliveredAssetsByCustomer = new Map<string, Set<string>>();
 
-    if (!assets.length || !events.length) {
-      return { customerAssetCounts: counts, customerAssetHistory: history };
-    }
-    
-    // Create a map of last known events for each asset for efficiency
-    const lastEventsMap = new Map<string, Event>();
-    for (const event of events) {
-      if (!lastEventsMap.has(event.asset_id)) {
-        lastEventsMap.set(event.asset_id, event);
-      }
-    }
-
-    // Calculate current assets in possession
+    // Calculate current assets in possession from the optimized asset list
     for (const asset of assets) {
-      if (asset.location === 'EN_CLIENTE') {
-        const lastEvent = lastEventsMap.get(asset.id);
-        
-        // Ensure the last event was a delivery, not a collection that failed to update the asset location
-        if (lastEvent && lastEvent.event_type === 'ENTREGA_A_CLIENTE') {
+      const lastEvent = events.find(e => e.asset_id === asset.id);
+      if (lastEvent && lastEvent.customer_id) {
           const customerId = lastEvent.customer_id;
-          
           if (!counts.has(customerId)) {
             counts.set(customerId, { total: 0 });
           }
-          
           const customerCounts = counts.get(customerId)!;
           const formatKey = asset.type === 'CO2' ? `${asset.format} (CO2)` : asset.format;
-
           customerCounts[formatKey] = (customerCounts[formatKey] || 0) + 1;
           customerCounts.total += 1;
-        }
       }
     }
     
     // Calculate historical asset deliveries
     for (const event of events) {
-      if (event.event_type === 'ENTREGA_A_CLIENTE' && event.customer_id) {
+      if (event.customer_id) {
         if (!deliveredAssetsByCustomer.has(event.customer_id)) {
           deliveredAssetsByCustomer.set(event.customer_id, new Set());
         }
@@ -154,12 +188,7 @@ export default function CustomersPage() {
     return { customerAssetCounts: counts, customerAssetHistory: history };
   }, [assets, events]);
 
-  const totalPages = Math.ceil(customers.length / ITEMS_PER_PAGE);
-  const paginatedCustomers = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return customers.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [customers, currentPage]);
-
+  const totalPages = Math.ceil(totalCustomers / ITEMS_PER_PAGE);
 
   const handleEdit = (customer: Customer) => {
     setSelectedCustomer(customer);
@@ -184,11 +213,11 @@ export default function CustomersPage() {
     const firestore = db();
     try {
       await deleteDoc(doc(firestore, "customers", id));
-      setCustomers(prev => prev.filter(customer => customer.id !== id));
       toast({
         title: "Cliente Eliminado",
         description: "El cliente ha sido eliminado de la base de datos.",
       });
+      fetchCustomers(1, null);
     } catch (error: any) {
        console.error("Error eliminando cliente: ", error);
        logAppEvent({
@@ -211,14 +240,12 @@ export default function CustomersPage() {
     try {
       if (selectedCustomer) {
         await updateDoc(doc(firestore, "customers", selectedCustomer.id), data);
-        setCustomers(prev => prev.map(c => c.id === selectedCustomer.id ? { ...c, ...data } : c).sort((a, b) => a.name.localeCompare(b.name)));
         toast({
           title: "Cliente Actualizado",
           description: "Los cambios han sido guardados.",
         });
       } else {
-        const newDocRef = await addDoc(collection(firestore, "customers"), data);
-        setCustomers(prev => [...prev, { id: newDocRef.id, ...data }].sort((a, b) => a.name.localeCompare(b.name)));
+        await addDoc(collection(firestore, "customers"), data);
         toast({
           title: "Cliente Creado",
           description: "El nuevo cliente ha sido añadido.",
@@ -226,6 +253,7 @@ export default function CustomersPage() {
       }
       setFormOpen(false);
       setSelectedCustomer(undefined);
+      fetchCustomers(1, null);
     } catch (error: any) {
       console.error("Error guardando cliente: ", error);
       logAppEvent({
@@ -354,11 +382,11 @@ export default function CustomersPage() {
         <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
           <Card>
             <CardContent className="p-0 md:p-6 md:pt-0">
-              {isLoading ? (
+              {isLoading && customers.length === 0 ? (
                 <div className="flex justify-center items-center py-20 h-60">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
-              ) : customers.length === 0 ? (
+              ) : !isLoading && customers.length === 0 ? (
                 <EmptyState 
                     icon={<Users2 className="h-16 w-16" />}
                     title="Aún no tienes clientes"
@@ -374,7 +402,7 @@ export default function CustomersPage() {
                 />
               ) : isMobile ? (
                   <div className="space-y-4 p-4">
-                     {paginatedCustomers.map(customer => <CustomerCardMobile key={customer.id} customer={customer} counts={customerAssetCounts.get(customer.id)} historyCount={customerAssetHistory.get(customer.id)} />)}
+                     {customers.map(customer => <CustomerCardMobile key={customer.id} customer={customer} counts={customerAssetCounts.get(customer.id)} historyCount={customerAssetHistory.get(customer.id)} />)}
                   </div>
               ) : (
                 <Table>
@@ -391,7 +419,7 @@ export default function CustomersPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginatedCustomers.map((customer) => (
+                    {customers.map((customer) => (
                       <TableRow key={customer.id}>
                         <TableCell className="font-medium">{customer.name}</TableCell>
                         <TableCell>
@@ -427,7 +455,7 @@ export default function CustomersPage() {
                 </Table>
               )}
             </CardContent>
-             {totalPages > 1 && !isLoading && customers.length > 0 && (
+             {totalPages > 1 && (
                 <CardFooter className="flex items-center justify-between py-4">
                     <span className="text-sm text-muted-foreground">
                         Página {currentPage} de {totalPages}
@@ -436,7 +464,7 @@ export default function CustomersPage() {
                         <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                            onClick={() => goToPage(currentPage - 1)}
                             disabled={currentPage === 1}
                         >
                              <ChevronLeft className="h-4 w-4" />
@@ -445,8 +473,8 @@ export default function CustomersPage() {
                         <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                            disabled={currentPage === totalPages}
+                            onClick={() => goToPage(currentPage + 1)}
+                            disabled={currentPage === totalPages || !lastVisible}
                         >
                             Siguiente
                             <ChevronRight className="h-4 w-4" />
@@ -476,7 +504,3 @@ export default function CustomersPage() {
     </div>
   );
 }
-
-    
-
-    

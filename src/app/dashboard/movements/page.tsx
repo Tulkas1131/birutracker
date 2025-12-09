@@ -295,46 +295,38 @@ export default function MovementsPage() {
   
   const fetchData = useCallback(async () => {
     setIsLoading(true);
-    try {
-      const { collection, query, orderBy, getDocs } = await import("firebase/firestore/lite");
-      const firestore = db();
-      const assetsQuery = query(collection(firestore, "assets"));
-      const customersQuery = query(collection(firestore, "customers"), orderBy("name"));
-      const eventsQuery = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
-      const routesQuery = query(collection(firestore, "routes"), orderBy("createdAt", "desc"));
-      const usersQuery = query(collection(firestore, "users"));
+    const firestore = db();
+    const { collection, query, orderBy, onSnapshot } = await import("firebase/firestore/lite");
 
-      const [assetsSnapshot, customersSnapshot, eventsSnapshot, routesSnapshot, usersSnapshot] = await Promise.all([
-        getDocs(assetsQuery),
-        getDocs(customersQuery),
-        getDocs(eventsQuery),
-        getDocs(routesQuery),
-        getDocs(usersQuery)
-      ]);
+    const unsubscribers = [
+        onSnapshot(query(collection(firestore, "assets")), (snapshot) => {
+            setAllAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)));
+        }),
+        onSnapshot(query(collection(firestore, "customers"), orderBy("name")), (snapshot) => {
+            setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer)));
+        }),
+        onSnapshot(query(collection(firestore, "events"), orderBy("timestamp", "desc")), (snapshot) => {
+            setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event)));
+        }),
+        onSnapshot(query(collection(firestore, "routes"), orderBy("createdAt", "desc")), (snapshot) => {
+            setRoutes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Route)));
+        }),
+        onSnapshot(query(collection(firestore, "users")), (snapshot) => {
+            setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserData)));
+        })
+    ];
 
-      const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
-      const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
-      const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
-      const routesData = routesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Route));
-      const usersData = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserData));
-      
-      setAllAssets(assetsData);
-      setEvents(eventsData);
-      setCustomers(customersData);
-      setRoutes(routesData);
-      setUsers(usersData);
-      
-    } catch (error: any) {
-      console.error("Error fetching data for movements page: ", error);
-      logAppEvent({ level: 'ERROR', message: 'Failed to fetch data', component: 'MovementsPage', stack: error.stack });
-      toast({ title: "Error de Carga", description: "No se pudieron cargar los datos.", variant: "destructive" });
-    } finally {
-      setIsLoading(false);
-    }
+    setIsLoading(false); // Set loading to false after setting up listeners
+
+    return () => unsubscribers.forEach(unsub => unsub());
   }, []);
 
+
   useEffect(() => {
-    fetchData();
+    const unsubscribe = fetchData();
+    return () => {
+        unsubscribe.then(unsub => unsub());
+    };
   }, [fetchData]);
   
   const lastEventsMap = useMemo(() => {
@@ -353,7 +345,6 @@ export default function MovementsPage() {
     const assetIdsInActiveRoutes = new Set<string>();
 
     routes.forEach(route => {
-        // Skip the route being edited
         if (editingRouteId && route.id === editingRouteId) {
             return;
         }
@@ -362,8 +353,6 @@ export default function MovementsPage() {
         for (const stop of route.stops) {
             for (const assetInStop of stop.assets) {
                 const fullAsset = assetsMap.get(assetInStop.id);
-                // A route is considered "active" if at least one of its assets is still 'EN_REPARTO' and 'LLENO'.
-                // This indicates it hasn't been delivered yet.
                 if (fullAsset && fullAsset.location === 'EN_REPARTO' && fullAsset.state === 'LLENO') {
                     isRouteActive = true;
                     break;
@@ -617,7 +606,6 @@ export default function MovementsPage() {
 
       toast({ title: "Movimiento Registrado", description: `El activo ${scannedAsset.code} ha sido actualizado.` });
       resetMovementState();
-      await fetchData();
 
     } catch (e: any) {
       console.error("La transacción falló: ", e);
@@ -721,8 +709,6 @@ export default function MovementsPage() {
         }
         
         setIsRouteDialogOpen(false);
-        await fetchData();
-
         openPrintWindow(finalRoute);
 
     } catch (error: any) {
@@ -751,7 +737,6 @@ export default function MovementsPage() {
     const firestore = db();
     try {
         await deleteDoc(doc(firestore, "routes", routeId));
-        setRoutes(prev => prev.filter(route => route.id !== routeId));
         toast({ title: "Ruta Eliminada", description: "La hoja de ruta ha sido eliminada." });
         logAppEvent({
             level: 'INFO',
@@ -1120,7 +1105,3 @@ export default function MovementsPage() {
     </>
   );
 }
-
-    
-
-    

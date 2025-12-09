@@ -42,37 +42,26 @@ export default function DashboardPage() {
   const isMobile = useIsMobile();
   
   useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        const { collection, query, getDocs, orderBy } = await import("firebase/firestore/lite");
-        const firestore = db();
-        
-        const assetsQuery = query(collection(firestore, "assets"));
-        const eventsQuery = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
-        const customersQuery = query(collection(firestore, "customers"));
-        
-        const [assetsSnapshot, eventsSnapshot, customersSnapshot] = await Promise.all([
-          getDocs(assetsQuery),
-          getDocs(eventsQuery),
-          getDocs(customersQuery),
-        ]);
-        
-        const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
-        const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
-        const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
-
-        setAssets(assetsData);
-        setEvents(eventsData);
-        setCustomers(customersData);
-      } catch (error) {
-        console.error("Error fetching dashboard data: ", error);
-        // Handle toast notification if needed
-      } finally {
+    const firestore = db();
+    const { collection, query, onSnapshot, orderBy, where } = require("firebase/firestore/lite");
+    
+    const twentyFourHoursAgo = new Date();
+    twentyFourHoursAgo.setDate(twentyFourHoursAgo.getDate() - 1);
+    
+    const unsubscribers = [
+      onSnapshot(collection(firestore, "assets"), (snapshot) => {
+        setAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)));
+      }),
+      onSnapshot(query(collection(firestore, "events"), orderBy("timestamp", "desc")), (snapshot) => {
+        setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event)));
+      }),
+      onSnapshot(collection(firestore, "customers"), (snapshot) => {
+        setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer)));
         setIsLoading(false);
-      }
-    };
-    fetchData();
+      }),
+    ];
+
+    return () => unsubscribers.forEach(unsub => unsub());
   }, []);
 
   const metrics = useMemo(() => {
@@ -89,14 +78,12 @@ export default function DashboardPage() {
     }
     
     const activosCriticos = assets.reduce((count, asset) => {
-        // An asset is ONLY critical if it's currently at a customer's location.
         if (asset.location !== 'EN_CLIENTE') {
             return count;
         }
 
         const lastEvent = lastEventsMap.get(asset.id);
         
-        // The last event must be a delivery and must be over 30 days ago.
         if (lastEvent && lastEvent.event_type === 'ENTREGA_A_CLIENTE') {
             const daysAtCustomer = differenceInDays(now, lastEvent.timestamp.toDate());
             if (daysAtCustomer >= 30) {
@@ -124,7 +111,8 @@ export default function DashboardPage() {
     const locationDistribution = Object.values(assetsByLocation);
 
     const customerAssetCount = Array.from(lastEventsMap.values()).reduce((acc, event) => {
-        if (event.event_type === 'ENTREGA_A_CLIENTE') {
+        const asset = assets.find(a => a.id === event.asset_id);
+        if (event.event_type === 'ENTREGA_A_CLIENTE' && asset?.location === 'EN_CLIENTE') {
             acc[event.customer_name] = (acc[event.customer_name] || 0) + 1;
         }
         return acc;
@@ -207,10 +195,10 @@ export default function DashboardPage() {
                                 <ChartTooltip 
                                     content={<ChartTooltipContent />} 
                                 />
-                                <Bar dataKey="barriles50L" stackId="a" fill={chartConfig.barriles50L.color} />
-                                <Bar dataKey="barriles30LSLIM" stackId="a" fill={chartConfig.barriles30LSLIM.color} />
-                                <Bar dataKey="barriles30L" stackId="a" fill={chartConfig.barriles30L.color} />
-                                <Bar dataKey="co2" stackId="a" fill={chartConfig.co2.color} />
+                                <Bar dataKey="barriles50L" stackId="a" fill={chartConfig.barriles50L.color} name="50L" />
+                                <Bar dataKey="barriles30LSLIM" stackId="a" fill={chartConfig.barriles30LSLIM.color} name="30L SLIM" />
+                                <Bar dataKey="barriles30L" stackId="a" fill={chartConfig.barriles30L.color} name="30L" />
+                                <Bar dataKey="co2" stackId="a" fill={chartConfig.co2.color} name="CO2" />
                             </BarChart>
                           </ResponsiveContainer>
                         </ChartContainer>
@@ -292,5 +280,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    

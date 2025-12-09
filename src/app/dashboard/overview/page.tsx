@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import type { Timestamp } from "firebase/firestore/lite";
+import type { Timestamp, DocumentData, QueryDocumentSnapshot } from "firebase/firestore/lite";
 import { auth, db } from "@/lib/firebase";
 import { Loader2, Trash2, ChevronLeft, ChevronRight, SearchX, User } from "lucide-react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
@@ -136,7 +136,7 @@ function EventTableRow({ event, asset, user, currentUser, onDelete, showBeerColu
 }
 
 function OverviewPageContent() {
-  const [allEvents, setAllEvents] = useState<Event[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [users, setUsers] = useState<UserData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -149,34 +149,64 @@ function OverviewPageContent() {
     eventType: 'ALL',
     criticalOnly: searchParams.get('critical') === 'true',
   });
+  
   const [currentPage, setCurrentPage] = useState(1);
+  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [pageHistory, setPageHistory] = useState<(QueryDocumentSnapshot<DocumentData> | null)[]>([null]);
+  const [totalEvents, setTotalEvents] = useState(0);
+
   const { toast } = useToast();
   const userRole = useUserRole();
   const [currentUser] = useAuthState(auth());
   const isMobile = useIsMobile();
 
-  const fetchData = useCallback(async () => {
+  const fetchEvents = useCallback(async (
+    page: number, 
+    lastDoc: QueryDocumentSnapshot<DocumentData> | null = null
+  ) => {
     setIsLoading(true);
     try {
-        const { collection, query, orderBy, getDocs } = await import("firebase/firestore/lite");
+        const { collection, query, where, orderBy, getDocs, limit, startAfter, getCount } = await import("firebase/firestore/lite");
         const firestore = db();
-        const eventsQuery = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
-        const assetsQuery = query(collection(firestore, "assets"));
-        const usersQuery = query(collection(firestore, "users"));
         
-        const [eventsSnapshot, assetsSnapshot, usersSnapshot] = await Promise.all([
-            getDocs(eventsQuery),
-            getDocs(assetsQuery),
-            getDocs(usersQuery),
-        ]);
+        let conditions = [];
+        if (filters.customer) conditions.push(where("customer_name", ">=", filters.customer), where("customer_name", "<=", filters.customer + '\uf8ff'));
+        if (filters.assetCode) conditions.push(where("asset_code", "==", filters.assetCode));
+        if (filters.eventType !== 'ALL') conditions.push(where("event_type", "==", filters.eventType));
+        
+        const assetsToFilter = filters.assetType !== 'ALL' ? assets.filter(a => a.type === filters.assetType).map(a => a.id) : [];
+        if (filters.assetType !== 'ALL' && assetsToFilter.length > 0) {
+            conditions.push(where("asset_id", "in", assetsToFilter));
+        }
 
-        const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
-        const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
-        const usersData = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserData));
+        if (filters.criticalOnly) {
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            conditions.push(where("timestamp", "<=", thirtyDaysAgo));
+            conditions.push(where("event_type", "==", "ENTREGA_A_CLIENTE"));
+        }
+
+        const eventsCollection = collection(firestore, "events");
+        const countQuery = query(eventsCollection, ...conditions);
+        const countSnapshot = await getCount(countQuery);
+        setTotalEvents(countSnapshot.data().count);
         
-        setAllEvents(eventsData);
-        setAssets(assetsData);
-        setUsers(usersData);
+        let eventsQuery = query(eventsCollection, ...conditions, orderBy("timestamp", "desc"));
+        if (lastDoc) {
+            eventsQuery = query(eventsQuery, startAfter(lastDoc));
+        }
+        eventsQuery = query(eventsQuery, limit(ITEMS_PER_PAGE));
+        
+        const eventsSnapshot = await getDocs(eventsQuery);
+        const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
+        setEvents(eventsData);
+
+        const newLastVisible = eventsSnapshot.docs[eventsSnapshot.docs.length - 1] || null;
+        setLastVisible(newLastVisible);
+
+        if (page > currentPage) {
+            setPageHistory(prev => [...prev, lastDoc]);
+        }
 
     } catch(error: any) {
         console.error("Error fetching data: ", error);
@@ -185,15 +215,46 @@ function OverviewPageContent() {
     } finally {
         setIsLoading(false);
     }
+  }, [filters, assets, toast, currentPage]);
+
+  useEffect(() => {
+    const firestore = db();
+    const { collection, onSnapshot } = require("firebase/firestore/lite");
+    const unsubAssets = onSnapshot(collection(firestore, "assets"), (snapshot) => {
+        setAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)));
+    });
+    const unsubUsers = onSnapshot(collection(firestore, "users"), (snapshot) => {
+        setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserData)));
+    });
+    return () => {
+        unsubAssets();
+        unsubUsers();
+    };
   }, []);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    // Reset pagination and fetch data when filters change
+    if (assets.length > 0) { // Ensure assets are loaded before firing queries that might depend on them
+        setCurrentPage(1);
+        setPageHistory([null]);
+        setLastVisible(null);
+        fetchEvents(1, null);
+    }
+  }, [filters, assets]);
+
+  const goToPage = (page: number) => {
+    if (page < 1 || (page > currentPage && !lastVisible)) return;
+
+    setCurrentPage(page);
+    const lastDocForPage = page > currentPage ? lastVisible : pageHistory[page - 1];
+    if (page < currentPage) {
+      setPageHistory(prev => prev.slice(0, page));
+    }
+    fetchEvents(page, lastDocForPage);
+  };
   
   const handleFilterChange = (filterName: keyof typeof filters, value: string | boolean) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
-    setCurrentPage(1);
   };
   
   const assetsMap = useMemo(() => new Map(assets.map(asset => [asset.id, asset])), [assets]);
@@ -201,9 +262,9 @@ function OverviewPageContent() {
 
   const assetFillHistoryMap = useMemo(() => {
     const fillHistory = new Map<string, { timestamp: Timestamp; variety?: string; valveType?: string }[]>();
-    const fillEvents = allEvents
+    const fillEvents = events
       .filter(e => e.event_type === 'LLENADO_EN_PLANTA')
-      .sort((a, b) => a.timestamp.toMillis() - b.timestamp.toMillis()); // Sort ascending
+      .sort((a, b) => a.timestamp.toMillis() - b.timestamp.toMillis());
 
     for (const event of fillEvents) {
       if (!fillHistory.has(event.asset_id)) {
@@ -216,14 +277,13 @@ function OverviewPageContent() {
       });
     }
     return fillHistory;
-  }, [allEvents]);
+  }, [events]);
 
   const getCarryForwardData = useCallback((event: Event) => {
     const history = assetFillHistoryMap.get(event.asset_id);
     if (!history) {
       return { variety: event.variety, valveType: event.valveType };
     }
-    // Find the last fill event that happened at or before the current event
     const lastFill = history.slice().reverse().find(fill => fill.timestamp.toMillis() <= event.timestamp.toMillis());
     return {
       variety: lastFill?.variety || event.variety,
@@ -235,8 +295,7 @@ function OverviewPageContent() {
     const map = new Map<string, number>();
     const deliveryEvents = new Map<string, Timestamp>();
 
-    // Find the last delivery event for each asset
-    for (const event of allEvents) {
+    for (const event of events) {
         if (event.event_type === 'ENTREGA_A_CLIENTE' && !deliveryEvents.has(event.asset_id)) {
             deliveryEvents.set(event.asset_id, event.timestamp);
         }
@@ -251,33 +310,9 @@ function OverviewPageContent() {
         }
     }
     return map;
-  }, [assets, allEvents]);
+  }, [assets, events]);
 
-
-  const filteredEvents = useMemo(() => {
-    return allEvents.filter(event => {
-        const asset = assetsMap.get(event.asset_id);
-        const customerMatch = event.customer_name.toLowerCase().includes(filters.customer.toLowerCase());
-        const assetCodeMatch = event.asset_code.toLowerCase().includes(filters.assetCode.toLowerCase());
-        const assetTypeMatch = filters.assetType === 'ALL' || (asset?.type === filters.assetType);
-        const eventTypeMatch = filters.eventType === 'ALL' || event.event_type === filters.eventType;
-
-        if (filters.criticalOnly) {
-            const days = daysAtCustomerMap.get(event.asset_id);
-            if (days === undefined || days < 30) {
-              return false;
-            }
-        }
-        
-        return customerMatch && assetCodeMatch && assetTypeMatch && eventTypeMatch;
-    });
-  }, [allEvents, assetsMap, filters, daysAtCustomerMap]);
-  
-  const totalPages = Math.ceil(filteredEvents.length / ITEMS_PER_PAGE);
-  const paginatedEvents = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredEvents.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredEvents, currentPage]);
+  const totalPages = Math.ceil(totalEvents / ITEMS_PER_PAGE);
 
   const handleDelete = async (id: string) => {
     if (userRole !== 'Admin') {
@@ -288,8 +323,8 @@ function OverviewPageContent() {
     const firestore = db();
     try {
       await deleteDoc(doc(firestore, "events", id));
-      setAllEvents(prevEvents => prevEvents.filter(event => event.id !== id));
       toast({ title: "Evento Eliminado", description: "El evento ha sido eliminado del historial." });
+      fetchEvents(currentPage, pageHistory[currentPage - 1]);
     } catch (error: any) {
       console.error("Error eliminando evento: ", error);
        logAppEvent({ level: 'ERROR', message: `Failed to delete event ${id}`, component: 'HistoryPage', stack: error.stack });
@@ -359,7 +394,7 @@ function OverviewPageContent() {
                 <div className="flex justify-center items-center py-20 h-60">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
-            ) : paginatedEvents.length === 0 ? (
+            ) : events.length === 0 ? (
                 <EmptyState 
                     icon={<SearchX className="h-16 w-16" />}
                     title="No se encontraron movimientos"
@@ -367,7 +402,7 @@ function OverviewPageContent() {
                 />
             ) : isMobile ? (
                 <div className="space-y-4 p-4">
-                    {paginatedEvents.map((event) => {
+                    {events.map((event) => {
                         const asset = assetsMap.get(event.asset_id);
                         const user = usersMap.get(event.user_id);
                         const days = asset ? daysAtCustomerMap.get(asset.id) : undefined;
@@ -393,7 +428,7 @@ function OverviewPageContent() {
                       </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginatedEvents.map((event) => {
+                    {events.map((event) => {
                        const asset = assetsMap.get(event.asset_id);
                        const user = usersMap.get(event.user_id);
                        const days = asset ? daysAtCustomerMap.get(asset.id) : undefined;
@@ -406,7 +441,7 @@ function OverviewPageContent() {
               </Table>
             )}
           </CardContent>
-           {totalPages > 1 && !isLoading && paginatedEvents.length > 0 && (
+           {totalPages > 1 && !isLoading && events.length > 0 && (
             <CardFooter className="flex items-center justify-between border-t py-4">
                 <span className="text-sm text-muted-foreground">
                     Página {currentPage} de {totalPages}
@@ -415,7 +450,7 @@ function OverviewPageContent() {
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        onClick={() => goToPage(currentPage - 1)}
                         disabled={currentPage === 1}
                     >
                         <ChevronLeft className="h-4 w-4" />
@@ -424,8 +459,8 @@ function OverviewPageContent() {
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                        disabled={currentPage === totalPages}
+                        onClick={() => goToPage(currentPage + 1)}
+                        disabled={currentPage === totalPages || !lastVisible}
                     >
                         Siguiente
                         <ChevronRight className="h-4 w-4" />
@@ -447,7 +482,3 @@ export default function OverviewPage() {
         </Suspense>
     );
 }
-
-    
-
-    
