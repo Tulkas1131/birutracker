@@ -14,7 +14,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // This will run only once when the app mounts
     initializeAuth();
-    const unsubscribe = onAuthStateChanged(auth(), (user) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
       // Once we get the first response from Firebase auth, we are done loading.
       setLoading(false); 
     });

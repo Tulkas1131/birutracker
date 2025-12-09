@@ -67,7 +67,7 @@ export default function CustomersPage() {
 ) => {
     setIsLoading(true);
     try {
-        const firestore = db();
+        const firestore = db;
         
         const customersCollection = collection(firestore, "customers");
         
@@ -116,7 +116,7 @@ export default function CustomersPage() {
   }, [fetchCustomers]);
 
   useEffect(() => {
-    const firestore = db();
+    const firestore = db;
 
     const assetsQuery = query(collection(firestore, "assets"), where("location", "==", "EN_CLIENTE"));
     const eventsQuery = query(collection(firestore, "events"), where("event_type", "==", "ENTREGA_A_CLIENTE"));
@@ -208,7 +208,7 @@ export default function CustomersPage() {
       });
       return;
     }
-    const firestore = db();
+    const firestore = db;
     try {
       await deleteDoc(doc(firestore, "customers", id));
       toast({
@@ -233,7 +233,7 @@ export default function CustomersPage() {
   };
   
   const handleFormSubmit = async (data: Omit<Customer, 'id'>) => {
-    const firestore = db();
+    const firestore = db;
     try {
       if (selectedCustomer) {
         await updateDoc(doc(firestore, "customers", selectedCustomer.id), data);

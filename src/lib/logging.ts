@@ -11,8 +11,8 @@ interface LogData {
 
 export const logAppEvent = async (data: LogData) => {
     try {
-        const firestore = db();
-        const user = auth().currentUser;
+        const firestore = db;
+        const user = auth.currentUser;
 
         await addDoc(collection(firestore, "app_logs"), {
             timestamp: Timestamp.now(),

@@ -158,7 +158,7 @@ function OverviewPageContent() {
 
   const { toast } = useToast();
   const userRole = useUserRole();
-  const [currentUser] = useAuthState(auth());
+  const [currentUser] = useAuthState(auth);
   const isMobile = useIsMobile();
 
   const fetchEvents = useCallback(async (
@@ -167,7 +167,7 @@ function OverviewPageContent() {
   ) => {
     setIsLoading(true);
     try {
-        const firestore = db();
+        const firestore = db;
         
         let conditions = [];
         if (filters.customer) conditions.push(where("customer_name", ">=", filters.customer), where("customer_name", "<=", filters.customer + '\uf8ff'));
@@ -218,7 +218,7 @@ function OverviewPageContent() {
   }, [filters, assets, currentPage, toast]);
 
   useEffect(() => {
-    const firestore = db();
+    const firestore = db;
     const unsubAssets = onSnapshot(collection(firestore, "assets"), (snapshot) => {
         setAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)));
     });
@@ -322,7 +322,7 @@ function OverviewPageContent() {
       toast({ title: "Acceso Denegado", description: "No tienes permiso para eliminar eventos.", variant: "destructive" });
       return;
     }
-    const firestore = db();
+    const firestore = db;
     try {
       await deleteDoc(doc(firestore, "events", id));
       toast({ title: "Evento Eliminado", description: "El evento ha sido eliminado del historial." });

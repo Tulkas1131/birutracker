@@ -174,7 +174,7 @@ export function DashboardLayoutContent({ children, user }: { children: React.Rea
   const isMobile = useIsMobile();
 
   const handleSignOut = async () => {
-    const authInstance = auth();
+    const authInstance = auth;
     await signOut(authInstance);
     window.location.href = '/';
   };

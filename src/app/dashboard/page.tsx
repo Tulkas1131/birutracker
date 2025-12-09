@@ -44,7 +44,7 @@ export default function DashboardPage() {
   const isMobile = useIsMobile();
   
   useEffect(() => {
-    const firestore = db();
+    const firestore = db;
     
     const unsubscribers = [
       onSnapshot(collection(firestore, "assets"), (snapshot) => {

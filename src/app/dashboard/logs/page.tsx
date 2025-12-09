@@ -55,7 +55,7 @@ export default function LogsPage() {
             const fetchLogs = async () => {
                 setIsLoading(true);
                 try {
-                    const firestore = db();
+                    const firestore = db;
                     const logsQuery = query(collection(firestore, "app_logs"), orderBy("timestamp", "desc"));
                     const logsSnapshot = await getDocs(logsQuery);
                     const logsData = logsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AppLog));

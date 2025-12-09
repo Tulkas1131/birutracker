@@ -11,7 +11,7 @@ export function useUserRole() {
   const [userRole, setUserRole] = useState<string | null>(null);
   
   useEffect(() => {
-    const authInstance = auth();
+    const authInstance = auth;
     const unsubscribe = onAuthStateChanged(authInstance, (currentUser) => {
       setUser(currentUser);
     });
@@ -21,7 +21,7 @@ export function useUserRole() {
   useEffect(() => {
     const fetchUserRole = async () => {
       if (user) {
-        const firestore = db();
+        const firestore = db;
         const userDocRef = doc(firestore, "users", user.uid);
         try {
           const docSnap = await getDoc(userDocRef);

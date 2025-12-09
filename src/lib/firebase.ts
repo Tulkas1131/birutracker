@@ -1,6 +1,6 @@
 
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
-import { getFirestore, type Firestore } from "firebase/firestore/lite";
+import { getFirestore, type Firestore } from "firebase/firestore";
 import { getAuth, type Auth, browserSessionPersistence, setPersistence } from "firebase/auth";
 
 const firebaseConfig = {
@@ -14,23 +14,15 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase App
-let app: FirebaseApp;
-if (!getApps().length) {
-    app = initializeApp(firebaseConfig);
-} else {
-    app = getApp();
-}
-
-const db = (): Firestore => getFirestore(app);
-const auth = (): Auth => getAuth(app);
+const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
+const db: Firestore = getFirestore(app);
+const auth: Auth = getAuth(app);
 
 // Set persistence on the client-side via AuthProvider
 const initializeAuth = () => {
-  const authInstance = auth();
-  setPersistence(authInstance, browserSessionPersistence).catch((error) => {
+  setPersistence(auth, browserSessionPersistence).catch((error) => {
     console.error("Error setting auth persistence:", error);
   });
 };
-
 
 export { app, db, auth, initializeAuth };

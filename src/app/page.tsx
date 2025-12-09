@@ -27,7 +27,7 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    const authInstance = auth();
+    const authInstance = auth;
     try {
       await signInWithEmailAndPassword(authInstance, email, password);
       router.push('/dashboard');

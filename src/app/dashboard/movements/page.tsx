@@ -266,7 +266,7 @@ const PrintRouteSheet = ({ route, usersMap }: { route: Route | null, usersMap: M
 
 export default function MovementsPage() {
   const { toast } = useToast();
-  const [user] = useAuthState(auth());
+  const [user] = useAuthState(auth);
   const userRole = useUserRole();
   
   const [allAssets, setAllAssets] = useState<Asset[]>([]);
@@ -297,7 +297,7 @@ export default function MovementsPage() {
   
   const fetchData = useCallback(() => {
     setIsLoading(true);
-    const firestore = db();
+    const firestore = db;
 
     const unsubscribers = [
         onSnapshot(query(collection(firestore, "assets")), (snapshot) => {
@@ -435,7 +435,7 @@ export default function MovementsPage() {
     let asset: Asset | undefined = allAssets.find(a => a.id === decodedText);
 
     if (!asset) {
-        const firestore = db();
+        const firestore = db;
         const assetRef = doc(firestore, "assets", decodedText);
         const assetSnap = await getDoc(assetRef);
 
@@ -518,7 +518,7 @@ export default function MovementsPage() {
 
   async function executeMovementTransaction(data: MovementFormData, forceStateCorrection = false) {
     setIsSubmitting(true);
-    const firestore = db();
+    const firestore = db;
 
     if (!user || !scannedAsset) {
        toast({ title: "Error", description: "Falta información del usuario o del activo.", variant: "destructive" });
@@ -645,7 +645,7 @@ export default function MovementsPage() {
   };
 
   const handleGenerateRoute = async () => {
-    const firestore = db();
+    const firestore = db;
     if (selectedCustomers.size === 0) {
         toast({ title: "Error", description: "Debes seleccionar al menos un cliente.", variant: "destructive" });
         return;
@@ -729,7 +729,7 @@ export default function MovementsPage() {
         toast({ title: "Acceso Denegado", description: "No tienes permiso para eliminar rutas.", variant: "destructive" });
         return;
     }
-    const firestore = db();
+    const firestore = db;
     try {
         await deleteDoc(doc(firestore, "routes", routeId));
         toast({ title: "Ruta Eliminada", description: "La hoja de ruta ha sido eliminada." });

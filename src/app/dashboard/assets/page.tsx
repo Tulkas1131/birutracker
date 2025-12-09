@@ -102,7 +102,7 @@ export default function AssetsPage() {
   const { toast } = useToast();
   const userRole = useUserRole();
   const isMobile = useIsMobile();
-  const [user] = useAuthState(auth());
+  const [user] = useAuthState(auth);
   
   
   const fetchAssetsAndCounts = useCallback(async (
@@ -111,7 +111,7 @@ export default function AssetsPage() {
 ) => {
     setIsLoading(true);
     try {
-        const firestore = db();
+        const firestore = db;
         
         const assetType = activeTab === 'barrels' ? 'BARRIL' : 'CO2';
         let conditions = [where("type", "==", assetType)];
@@ -168,7 +168,7 @@ export default function AssetsPage() {
   }, [activeTab, locationFilter, formatFilter, fetchAssetsAndCounts]);
 
   useEffect(() => {
-     const firestore = db();
+     const firestore = db;
      
      // Only fetch all events once for the customer info logic
      const eventsQuery = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
@@ -230,7 +230,7 @@ export default function AssetsPage() {
     } else {
         setIsLoading(true);
         try {
-            const firestore = db();
+            const firestore = db;
             const assetType = activeTab === 'barrels' ? 'BARRIL' : 'CO2';
             const allAssetsQuery = query(collection(firestore, "assets"), where("type", "==", assetType), orderBy("code"));
             const allAssetsSnapshot = await getDocs(allAssetsQuery);
@@ -279,7 +279,7 @@ export default function AssetsPage() {
       });
       return;
     }
-    const firestore = db();
+    const firestore = db;
     try {
       await deleteDoc(doc(firestore, "assets", assetToDelete.id));
       setAssets(prev => prev.filter(asset => asset.id !== assetToDelete.id));
@@ -308,7 +308,7 @@ export default function AssetsPage() {
   };
 
   const generateNextCode = async (type: 'BARRIL' | 'CO2'): Promise<{prefix: string, nextNumber: number}> => {
-    const firestore = db();
+    const firestore = db;
     const prefix = type === 'BARRIL' ? 'KEG' : 'CO2';
     const q = query(
       collection(firestore, "assets"), 
@@ -328,7 +328,7 @@ export default function AssetsPage() {
   };
   
   const handleFormSubmit = async (data: Omit<Asset, 'id' | 'code'>) => {
-    const firestore = db();
+    const firestore = db;
 
     if (!user) {
         toast({ title: "Error", description: "No se ha podido identificar al usuario.", variant: "destructive"});
@@ -410,7 +410,7 @@ export default function AssetsPage() {
   };
 
   const handleBatchFormSubmit = async (data: AssetBatchFormData) => {
-    const firestore = db();
+    const firestore = db;
     try {
       const { prefix, nextNumber } = await generateNextCode(data.type);
       const batch = writeBatch(firestore);

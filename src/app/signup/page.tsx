@@ -25,8 +25,8 @@ export default function SignupPage() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    const firestore = db();
-    const authInstance = auth();
+    const firestore = db;
+    const authInstance = auth;
 
     try {
       // 1. Check if email is in the allowed list and get its role
