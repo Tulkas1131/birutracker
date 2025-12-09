@@ -11,7 +11,8 @@ export function useUserRole() {
   const [userRole, setUserRole] = useState<string | null>(null);
   
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth(), (currentUser) => {
+    const authInstance = auth();
+    const unsubscribe = onAuthStateChanged(authInstance, (currentUser) => {
       setUser(currentUser);
     });
     return () => unsubscribe();
@@ -20,7 +21,7 @@ export function useUserRole() {
   useEffect(() => {
     const fetchUserRole = async () => {
       if (user) {
-        const firestore = db();
+        const firestore = db(); // CORRECTO: Obtener la instancia de Firestore aquí.
         const userDocRef = doc(firestore, "users", user.uid);
         try {
           const docSnap = await getDoc(userDocRef);
@@ -42,5 +43,3 @@ export function useUserRole() {
 
   return userRole;
 }
-
-    
