@@ -135,7 +135,7 @@ export default function AssetsPage() {
         const countSnapshot = await getCountFromServer(countQuery);
         setTotalAssetsInFilter(countSnapshot.data().count);
 
-        let assetsQuery = query(assetsCollection, ...conditions, orderBy("type"), orderBy("code"));
+        let assetsQuery = query(assetsCollection, ...conditions, orderBy("code"));
         if (startDoc) {
             assetsQuery = query(assetsQuery, startAfter(startDoc));
         }
@@ -276,7 +276,7 @@ export default function AssetsPage() {
         try {
             const firestore = db;
             const assetType = activeTab === 'barrels' ? 'BARRIL' : 'CO2';
-            const allAssetsQuery = query(collection(firestore, "assets"), where("type", "==", assetType), orderBy("type"), orderBy("code"));
+            const allAssetsQuery = query(collection(firestore, "assets"), where("type", "==", assetType), orderBy("code"));
             const allAssetsSnapshot = await getDocs(allAssetsQuery);
             listToPrint = allAssetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
         } catch(e: any) {
@@ -919,4 +919,3 @@ export default function AssetsPage() {
     </>
   );
 }
-    
