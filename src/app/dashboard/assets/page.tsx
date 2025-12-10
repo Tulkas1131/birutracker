@@ -90,6 +90,7 @@ const AssetCustomerInfo = ({ customerName }: { customerName: string | null }) =>
 
 export default function AssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [allDbAssets, setAllDbAssets] = useState<Asset[]>([]);
   const [assetCustomerInfo, setAssetCustomerInfo] = useState<Record<string, string | null>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setFormOpen] = useState(false);
@@ -113,7 +114,21 @@ export default function AssetsPage() {
   const userRole = useUserRole();
   const isMobile = useIsMobile();
   const [user] = useAuthState(auth);
-  
+
+  useEffect(() => {
+    // Escucha en tiempo real solo la colección de activos para los contadores.
+    // Esto es mucho más eficiente que escuchar todos los eventos.
+    const firestore = db;
+    const assetsCollection = collection(firestore, "assets");
+    const unsubscribe = onSnapshot(assetsCollection, (snapshot) => {
+        const assetsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
+        setAllDbAssets(assetsData);
+    }, (error) => {
+        console.error("Error listening to assets collection: ", error);
+    });
+
+    return () => unsubscribe();
+  }, []);
   
   const fetchAssetsAndCounts = useCallback(async (
     page: number, 
@@ -122,7 +137,6 @@ export default function AssetsPage() {
     setIsLoading(true);
     try {
         const firestore = db;
-        
         const assetType = activeTab === 'barrels' ? 'BARRIL' : 'CO2';
         
         let conditions = [where("type", "==", assetType)];
@@ -131,11 +145,13 @@ export default function AssetsPage() {
         
         const assetsCollection = collection(firestore, "assets");
         
-        const countQuery = query(assetsCollection, ...conditions);
-        const countSnapshot = await getCountFromServer(countQuery);
+        // La consulta para contar debe ser idéntica a la consulta para obtener datos (excepto paginación)
+        const baseQuery = query(assetsCollection, ...conditions, orderBy("code"));
+        
+        const countSnapshot = await getCountFromServer(baseQuery);
         setTotalAssetsInFilter(countSnapshot.data().count);
 
-        let assetsQuery = query(assetsCollection, ...conditions, orderBy("code"));
+        let assetsQuery = baseQuery;
         if (startDoc) {
             assetsQuery = query(assetsQuery, startAfter(startDoc));
         }
@@ -171,7 +187,7 @@ export default function AssetsPage() {
         } else {
              toast({
               title: "Error de Carga",
-              description: "No se pudieron cargar los activos. Intenta recargar la página.",
+              description: `No se pudieron cargar los activos. Error: ${error.message}`,
               variant: "destructive",
               duration: 9000,
             });
@@ -182,55 +198,56 @@ export default function AssetsPage() {
 }, [activeTab, locationFilter, formatFilter, toast]);
 
     useEffect(() => {
-        if (assets.length === 0) {
-            setAssetCustomerInfo({});
-            return;
-        }
-
         const fetchCustomerInfoForVisibleAssets = async () => {
-            const assetsToQuery = assets.filter(a => a.location === 'EN_CLIENTE' || (a.location === 'EN_REPARTO' && a.state === 'LLENO'));
-            if (assetsToQuery.length === 0) {
-                setAssetCustomerInfo({});
-                return;
-            }
+            const assetsInNeedOfInfo = assets.filter(a => 
+                (a.location === 'EN_CLIENTE' || a.location === 'EN_REPARTO') &&
+                !assetCustomerInfo.hasOwnProperty(a.id)
+            );
+
+            if (assetsInNeedOfInfo.length === 0) return;
 
             try {
                 const firestore = db;
                 const newInfo: Record<string, string | null> = {};
-                const assetIds = assetsToQuery.map(a => a.id);
-
-                // This is still complex. Let's simplify.
-                // We only need the *last* event for each of these assets to find the customer.
-                const lastEventsPromises = assetIds.map(id => 
-                    getDocs(query(collection(firestore, 'events'), where('asset_id', '==', id), orderBy('timestamp', 'desc'), limit(1)))
-                );
                 
+                const lastEventsPromises = assetsInNeedOfInfo.map(asset => {
+                    const q = query(
+                        collection(firestore, 'events'),
+                        where('asset_id', '==', asset.id),
+                        orderBy('timestamp', 'desc'),
+                        limit(1)
+                    );
+                    return getDocs(q);
+                });
+
                 const eventSnapshots = await Promise.all(lastEventsPromises);
 
                 eventSnapshots.forEach((snapshot, index) => {
+                    const assetId = assetsInNeedOfInfo[index].id;
                     if (!snapshot.empty) {
                         const event = snapshot.docs[0].data() as Event;
-                        const assetId = assetIds[index];
-                         if (event && event.customer_name && event.customer_name !== 'Planta' && event.customer_name !== 'Proveedor') {
+                        if (event.customer_name && event.customer_name !== 'Planta' && event.customer_name !== 'Proveedor') {
                             newInfo[assetId] = event.customer_name;
                         } else {
                             newInfo[assetId] = null;
                         }
+                    } else {
+                        newInfo[assetId] = null;
                     }
                 });
 
                 setAssetCustomerInfo(prev => ({ ...prev, ...newInfo }));
             } catch (error: any) {
-                if (error.code === 'resource-exhausted') {
-                    console.warn('Firestore quota exceeded while fetching customer info for assets.');
-                } else {
-                    console.error("Error fetching last events for assets:", error);
+                if (error.code !== 'resource-exhausted') {
+                    console.error("Error fetching customer info for assets:", error);
                 }
             }
         };
 
-        fetchCustomerInfoForVisibleAssets();
-    }, [assets]);
+        if (assets.length > 0) {
+            fetchCustomerInfoForVisibleAssets();
+        }
+    }, [assets, assetCustomerInfo]);
 
 
   useEffect(() => {
@@ -527,8 +544,9 @@ export default function AssetsPage() {
   };
   
   const assetCountsByFormat = useMemo(() => {
-    const calculateCounts = (assetList: Asset[]) => {
-      return assetList.reduce((acc, asset) => {
+    const assetList = activeTab === 'barrels' ? allDbAssets.filter(a => a.type === 'BARRIL') : allDbAssets.filter(a => a.type === 'CO2');
+    
+    return assetList.reduce((acc, asset) => {
         if (!acc[asset.format]) {
           acc[asset.format] = { EN_PLANTA: 0, EN_CLIENTE: 0, EN_REPARTO: 0 };
         }
@@ -537,13 +555,7 @@ export default function AssetsPage() {
         }
         return acc;
       }, {} as Record<string, Record<Asset['location'], number>>);
-    };
-    
-    return {
-      barrels: calculateCounts(assets.filter(a => a.type === 'BARRIL')),
-      co2: calculateCounts(assets.filter(a => a.type === 'CO2')),
-    };
-  }, [assets]);
+  }, [allDbAssets, activeTab]);
   
   const totalPages = Math.ceil(totalAssetsInFilter / ITEMS_PER_PAGE);
 
@@ -815,9 +827,8 @@ export default function AssetsPage() {
                     <TabsTrigger value="co2">CO2</TabsTrigger>
                   </TabsList>
                    <div className="flex flex-col items-start sm:items-end gap-2">
-                    <CardDescription>Contadores de la página actual.</CardDescription>
-                    {activeTab === 'barrels' && <CountsDisplay counts={assetCountsByFormat.barrels} onFilter={handleFilterClick} />}
-                    {activeTab === 'co2' && <CountsDisplay counts={assetCountsByFormat.co2} onFilter={handleFilterClick} />}
+                    <CardDescription>Contadores totales del inventario.</CardDescription>
+                    <CountsDisplay counts={assetCountsByFormat} onFilter={handleFilterClick} />
                     {locationFilter && (
                        <Button variant="ghost" size="sm" onClick={clearFilters} className="text-destructive hover:text-destructive">
                             <X className="mr-2 h-4 w-4" />
