@@ -151,6 +151,8 @@ export default function AssetsPage() {
         
         const assetsCollection = collection(firestore, "assets");
         
+        // The query for counting and the query for fetching must be identical (except for pagination clauses)
+        // to ensure they can use the same Firestore index.
         const baseQuery = query(assetsCollection, ...conditions, orderBy("code"));
         
         const countSnapshot = await getCountFromServer(baseQuery);
@@ -190,10 +192,17 @@ export default function AssetsPage() {
               variant: "destructive",
               duration: 9000,
             });
+        } else if (error.code === 'failed-precondition') {
+             toast({
+              title: "Índice de Firestore Requerido",
+              description: "Esta consulta necesita un índice. Por favor, crea el índice en la consola de Firebase para continuar.",
+              variant: "destructive",
+              duration: 9000,
+            });
         } else {
              toast({
               title: "Error de Carga",
-              description: `No se pudieron cargar los activos. Si el problema persiste, es posible que se requiera un índice en Firestore.`,
+              description: `No se pudieron cargar los activos. Error: ${error.message}`,
               variant: "destructive",
               duration: 9000,
             });
@@ -201,7 +210,7 @@ export default function AssetsPage() {
     } finally {
         setIsLoading(false);
     }
-}, [activeTab, locationFilter, formatFilter, toast]);
+}, [activeTab, locationFilter, formatFilter]);
 
     const fetchCustomerInfoForVisibleAssets = useCallback(async (visibleAssets: Asset[]) => {
             const assetsInNeedOfInfo = visibleAssets.filter(a => 
@@ -215,29 +224,33 @@ export default function AssetsPage() {
                 const firestore = db;
                 const newInfo: Record<string, string | null> = {};
                 
-                const lastEventsPromises = assetsInNeedOfInfo.map(asset => {
-                    const q = query(
-                        collection(firestore, 'events'),
-                        where('asset_id', '==', asset.id),
-                        orderBy('timestamp', 'desc'),
-                        limit(1)
-                    );
-                    return getDocs(q);
+                // Batch asset IDs to use 'in' query
+                const assetIds = assetsInNeedOfInfo.map(a => a.id);
+                if (assetIds.length === 0) return;
+
+                const eventsQuery = query(
+                    collection(firestore, 'events'),
+                    where('asset_id', 'in', assetIds),
+                    orderBy('timestamp', 'desc')
+                );
+
+                const eventSnapshots = await getDocs(eventsQuery);
+                const lastEventsMap = new Map<string, Event>();
+
+                // Get the last event for each asset
+                eventSnapshots.docs.forEach(doc => {
+                    const event = doc.data() as Event;
+                    if (!lastEventsMap.has(event.asset_id)) {
+                        lastEventsMap.set(event.asset_id, event);
+                    }
                 });
 
-                const eventSnapshots = await Promise.all(lastEventsPromises);
-
-                eventSnapshots.forEach((snapshot, index) => {
-                    const assetId = assetsInNeedOfInfo[index].id;
-                    if (!snapshot.empty) {
-                        const event = snapshot.docs[0].data() as Event;
-                        if (event.customer_name && event.customer_name !== 'Planta' && event.customer_name !== 'Proveedor') {
-                            newInfo[assetId] = event.customer_name;
-                        } else {
-                            newInfo[assetId] = null;
-                        }
+                assetsInNeedOfInfo.forEach(asset => {
+                    const lastEvent = lastEventsMap.get(asset.id);
+                    if (lastEvent && lastEvent.customer_name && lastEvent.customer_name !== 'Planta' && lastEvent.customer_name !== 'Proveedor') {
+                        newInfo[asset.id] = lastEvent.customer_name;
                     } else {
-                        newInfo[assetId] = null;
+                        newInfo[asset.id] = null;
                     }
                 });
 
