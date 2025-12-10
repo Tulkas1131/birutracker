@@ -182,7 +182,10 @@ export default function AssetsPage() {
 }, [activeTab, locationFilter, formatFilter, toast]);
 
     useEffect(() => {
-        if (assets.length === 0) return;
+        if (assets.length === 0) {
+            setAssetCustomerInfo({});
+            return;
+        }
 
         const fetchCustomerInfoForVisibleAssets = async () => {
             const assetsToQuery = assets.filter(a => a.location === 'EN_CLIENTE' || (a.location === 'EN_REPARTO' && a.state === 'LLENO'));
@@ -194,36 +197,28 @@ export default function AssetsPage() {
             try {
                 const firestore = db;
                 const newInfo: Record<string, string | null> = {};
+                const assetIds = assetsToQuery.map(a => a.id);
 
-                // Fetch last event for each asset in batches of 10 (Firestore 'in' query limit)
-                for (let i = 0; i < assetsToQuery.length; i += 10) {
-                    const batchAssets = assetsToQuery.slice(i, i + 10);
-                    const assetIds = batchAssets.map(a => a.id);
+                // This is still complex. Let's simplify.
+                // We only need the *last* event for each of these assets to find the customer.
+                const lastEventsPromises = assetIds.map(id => 
+                    getDocs(query(collection(firestore, 'events'), where('asset_id', '==', id), orderBy('timestamp', 'desc'), limit(1)))
+                );
+                
+                const eventSnapshots = await Promise.all(lastEventsPromises);
 
-                    const eventsQuery = query(
-                        collection(firestore, "events"),
-                        where("asset_id", "in", assetIds),
-                        orderBy("timestamp", "desc")
-                    );
-
-                    const eventsSnapshot = await getDocs(eventsQuery);
-                    const lastEventsMap = new Map<string, Event>();
-                    eventsSnapshot.docs.forEach(doc => {
-                        const event = doc.data() as Event;
-                        if (!lastEventsMap.has(event.asset_id)) {
-                            lastEventsMap.set(event.asset_id, event);
-                        }
-                    });
-
-                    batchAssets.forEach(asset => {
-                        const lastEvent = lastEventsMap.get(asset.id);
-                        if (lastEvent && lastEvent.customer_name && lastEvent.customer_name !== 'Planta' && lastEvent.customer_name !== 'Proveedor') {
-                            newInfo[asset.id] = lastEvent.customer_name;
+                eventSnapshots.forEach((snapshot, index) => {
+                    if (!snapshot.empty) {
+                        const event = snapshot.docs[0].data() as Event;
+                        const assetId = assetIds[index];
+                         if (event && event.customer_name && event.customer_name !== 'Planta' && event.customer_name !== 'Proveedor') {
+                            newInfo[assetId] = event.customer_name;
                         } else {
-                            newInfo[asset.id] = null;
+                            newInfo[assetId] = null;
                         }
-                    });
-                }
+                    }
+                });
+
                 setAssetCustomerInfo(prev => ({ ...prev, ...newInfo }));
             } catch (error: any) {
                 if (error.code === 'resource-exhausted') {
@@ -924,5 +919,4 @@ export default function AssetsPage() {
     </>
   );
 }
-
     
