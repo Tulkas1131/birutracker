@@ -1,11 +1,10 @@
-
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus, ChevronLeft, ChevronRight, PackageSearch, X, User } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
 import dynamic from "next/dynamic";
-import { collection, onSnapshot, doc, deleteDoc, runTransaction, Timestamp, writeBatch, type DocumentData, type QueryDocumentSnapshot, query, where, orderBy, getDocs, limit, startAfter, getCountFromServer } from "firebase/firestore";
+import { collection, onSnapshot, doc, getDoc, deleteDoc, runTransaction, Timestamp, writeBatch, type DocumentData, type QueryDocumentSnapshot, query, where, orderBy, getDocs, limit, startAfter, getCountFromServer } from "firebase/firestore";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -77,50 +76,7 @@ const QrLabel = ({ asset }: { asset: Asset }) => {
   );
 };
 
-const AssetCustomerInfo = ({ assetId }: { assetId: string }) => {
-    const [customerName, setCustomerName] = useState<string | null>(null);
-
-    useEffect(() => {
-        const fetchLastEvent = async () => {
-            const firestore = db;
-            const q = query(
-                collection(firestore, "events"),
-                where("asset_id", "==", assetId),
-                orderBy("timestamp", "desc"),
-                limit(1)
-            );
-            
-            try {
-                const snapshot = await getDocs(q);
-                 if (!snapshot.empty) {
-                    const lastEvent = snapshot.docs[0].data() as Event;
-                    const assetDoc = await getDoc(doc(firestore, "assets", assetId));
-                    if (!assetDoc.exists()) return;
-                    
-                    const asset = assetDoc.data() as Asset;
-
-                    const showForReparto = asset.location === 'EN_REPARTO' && lastEvent.event_type === 'SALIDA_A_REPARTO';
-                    const showForCliente = asset.location === 'EN_CLIENTE';
-
-                    if ((showForReparto || showForCliente) && lastEvent.customer_name && lastEvent.customer_name !== 'Planta' && lastEvent.customer_name !== 'Proveedor') {
-                        setCustomerName(lastEvent.customer_name);
-                    } else {
-                        setCustomerName(null);
-                    }
-                }
-            } catch (error: any) {
-                 if (error.code === 'resource-exhausted') {
-                    // Do not show toast for this component, as it's a non-critical info
-                    console.warn('Firestore quota exceeded while fetching customer info for asset.');
-                } else {
-                    console.error("Error fetching last event for asset:", error);
-                }
-            }
-        };
-
-        fetchLastEvent();
-    }, [assetId]);
-
+const AssetCustomerInfo = ({ customerName }: { customerName: string | null }) => {
     if (!customerName) return null;
 
     return (
@@ -134,6 +90,7 @@ const AssetCustomerInfo = ({ assetId }: { assetId: string }) => {
 
 export default function AssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [assetCustomerInfo, setAssetCustomerInfo] = useState<Record<string, string | null>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setFormOpen] = useState(false);
   const [isBatchFormOpen, setBatchFormOpen] = useState(false);
@@ -224,8 +181,64 @@ export default function AssetsPage() {
     }
 }, [activeTab, locationFilter, formatFilter, toast]);
 
+    useEffect(() => {
+        if (assets.length === 0) return;
+
+        const fetchCustomerInfoForVisibleAssets = async () => {
+            const assetsToQuery = assets.filter(a => a.location === 'EN_CLIENTE' || (a.location === 'EN_REPARTO' && a.state === 'LLENO'));
+            if (assetsToQuery.length === 0) {
+                setAssetCustomerInfo({});
+                return;
+            }
+
+            try {
+                const firestore = db;
+                const newInfo: Record<string, string | null> = {};
+
+                // Fetch last event for each asset in batches of 10 (Firestore 'in' query limit)
+                for (let i = 0; i < assetsToQuery.length; i += 10) {
+                    const batchAssets = assetsToQuery.slice(i, i + 10);
+                    const assetIds = batchAssets.map(a => a.id);
+
+                    const eventsQuery = query(
+                        collection(firestore, "events"),
+                        where("asset_id", "in", assetIds),
+                        orderBy("timestamp", "desc")
+                    );
+
+                    const eventsSnapshot = await getDocs(eventsQuery);
+                    const lastEventsMap = new Map<string, Event>();
+                    eventsSnapshot.docs.forEach(doc => {
+                        const event = doc.data() as Event;
+                        if (!lastEventsMap.has(event.asset_id)) {
+                            lastEventsMap.set(event.asset_id, event);
+                        }
+                    });
+
+                    batchAssets.forEach(asset => {
+                        const lastEvent = lastEventsMap.get(asset.id);
+                        if (lastEvent && lastEvent.customer_name && lastEvent.customer_name !== 'Planta' && lastEvent.customer_name !== 'Proveedor') {
+                            newInfo[asset.id] = lastEvent.customer_name;
+                        } else {
+                            newInfo[asset.id] = null;
+                        }
+                    });
+                }
+                setAssetCustomerInfo(prev => ({ ...prev, ...newInfo }));
+            } catch (error: any) {
+                if (error.code === 'resource-exhausted') {
+                    console.warn('Firestore quota exceeded while fetching customer info for assets.');
+                } else {
+                    console.error("Error fetching last events for assets:", error);
+                }
+            }
+        };
+
+        fetchCustomerInfoForVisibleAssets();
+    }, [assets]);
+
+
   useEffect(() => {
-    // Reset pagination and fetch data when filters or tab change
     setCurrentPage(1);
     setPageStartDocs({ 1: null });
     setLastVisible(null);
@@ -531,9 +544,6 @@ export default function AssetsPage() {
       }, {} as Record<string, Record<Asset['location'], number>>);
     };
     
-    // NOTE: This now only processes the assets currently visible on the page.
-    // This is a trade-off to drastically reduce Firestore read operations.
-    // The counts will reflect the paged data, not the total inventory.
     return {
       barrels: calculateCounts(assets.filter(a => a.type === 'BARRIL')),
       co2: calculateCounts(assets.filter(a => a.type === 'CO2')),
@@ -577,7 +587,7 @@ export default function AssetsPage() {
              <Badge variant={getLocationVariant(asset.location)}>
                 {getLocationText(asset.location)}
              </Badge>
-             <AssetCustomerInfo assetId={asset.id} />
+             <AssetCustomerInfo customerName={assetCustomerInfo[asset.id]} />
            </div>
         </div>
       </div>
@@ -643,7 +653,7 @@ export default function AssetsPage() {
                     <Badge variant={getLocationVariant(asset.location)}>
                     {getLocationText(asset.location)}
                     </Badge>
-                    <AssetCustomerInfo assetId={asset.id} />
+                    <AssetCustomerInfo customerName={assetCustomerInfo[asset.id]} />
                 </div>
               </TableCell>
               <TableCell>
@@ -914,3 +924,5 @@ export default function AssetsPage() {
     </>
   );
 }
+
+    

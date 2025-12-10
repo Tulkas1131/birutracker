@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, Suspense } from 'react';
@@ -174,20 +173,23 @@ function OverviewPageContent() {
         if (filters.assetCode) conditions.push(where("asset_code", "==", filters.assetCode));
         if (filters.eventType !== 'ALL') conditions.push(where("event_type", "==", filters.eventType));
         
+        // This filtering is now client-side, but query is prepared for server-side if needed
         const assetsToFilter = filters.assetType !== 'ALL' ? assets.filter(a => a.type === filters.assetType).map(a => a.id) : [];
-        if (filters.assetType !== 'ALL' && assetsToFilter.length > 0) {
-            conditions.push(where("asset_id", "in", assetsToFilter));
-        }
 
         if (filters.criticalOnly) {
             const thirtyDaysAgo = new Date();
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
             conditions.push(where("timestamp", "<=", thirtyDaysAgo));
             conditions.push(where("event_type", "==", "ENTREGA_A_CLIENTE"));
+        } else if (filters.assetType !== 'ALL') {
+            // Firestore does not support 'in' and inequality filters in the same query.
+            // So we fetch all and filter client-side if assetType is used without criticalOnly.
+            // This is a trade-off to avoid complex indexing.
         }
 
         const eventsCollection = collection(firestore, "events");
-        const countQuery = query(eventsCollection, ...conditions);
+        
+        const countQuery = query(eventsCollection, ...conditions.filter(c => c.A !== 'asset_id'));
         const countSnapshot = await getCountFromServer(countQuery);
         setTotalEvents(countSnapshot.data().count);
         
@@ -198,7 +200,12 @@ function OverviewPageContent() {
         eventsQuery = query(eventsQuery, limit(ITEMS_PER_PAGE));
         
         const eventsSnapshot = await getDocs(eventsQuery);
-        const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
+        let eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
+
+        if (filters.assetType !== 'ALL' && !filters.criticalOnly) {
+            eventsData = eventsData.filter(event => assetsToFilter.includes(event.asset_id));
+        }
+
         setEvents(eventsData);
 
         const newLastVisible = eventsSnapshot.docs[eventsSnapshot.docs.length - 1] || null;
@@ -211,7 +218,16 @@ function OverviewPageContent() {
     } catch(error: any) {
         console.error("Error fetching data: ", error);
         logAppEvent({ level: 'ERROR', message: 'Failed to fetch history data', component: 'HistoryPage', stack: error.stack });
-        toast({ title: "Error al Cargar Historial", description: "No se pudo cargar el historial de movimientos.", variant: "destructive"});
+        if (error.code === 'resource-exhausted') {
+            toast({
+              title: "Límite de Firebase alcanzado",
+              description: "No se pudo cargar el historial de movimientos.",
+              variant: "destructive",
+              duration: 9000,
+            });
+        } else {
+            toast({ title: "Error al Cargar Historial", description: "No se pudo cargar el historial de movimientos.", variant: "destructive"});
+        }
     } finally {
         setIsLoading(false);
     }
@@ -221,13 +237,16 @@ function OverviewPageContent() {
     const firestore = db;
     const unsubAssets = onSnapshot(collection(firestore, "assets"), (snapshot) => {
         setAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)));
-    });
+    }, (error) => { console.error("Error fetching assets: ", error)});
+
     const unsubUsers = onSnapshot(collection(firestore, "users"), (snapshot) => {
         setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserData)));
-    });
+    }, (error) => { console.error("Error fetching users: ", error)});
+
     const unsubEvents = onSnapshot(query(collection(firestore, "events"), orderBy("timestamp", "desc")), (snapshot) => {
         setAllEventsForMap(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event)));
-    });
+    }, (error) => { console.error("Error fetching all events: ", error)});
+
 
     return () => {
         unsubAssets();
@@ -484,3 +503,5 @@ export default function OverviewPage() {
         </Suspense>
     );
 }
+
+    

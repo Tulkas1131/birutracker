@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -44,8 +43,8 @@ type CustomerAssetCounts = {
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [events, setEvents] = useState<Event[]>([]);
+  const [customerAssetCounts, setCustomerAssetCounts] = useState<Map<string, CustomerAssetCounts>>(new Map());
+  const [customerAssetHistory, setCustomerAssetHistory] = useState<Map<string, number>>(new Map());
 
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setFormOpen] = useState(false);
@@ -59,6 +58,76 @@ export default function CustomersPage() {
   const { toast } = useToast();
   const userRole = useUserRole();
   const isMobile = useIsMobile();
+
+  const fetchCustomerData = useCallback(async () => {
+    const firestore = db;
+    try {
+        // Fetch current assets in possession
+        const assetsInPossessionQuery = query(collection(firestore, "assets"), where("location", "==", "EN_CLIENTE"));
+        const assetsSnapshot = await getDocs(assetsInPossessionQuery);
+        const assetsInPossession = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
+
+        // Fetch all delivery events to determine which customer has which asset
+        const eventsQuery = query(collection(firestore, "events"), where("event_type", "==", "ENTREGA_A_CLIENTE"), orderBy("timestamp", "desc"));
+        const eventsSnapshot = await getDocs(eventsQuery);
+        const deliveryEvents = eventsSnapshot.docs.map(doc => doc.data() as Event);
+
+        // --- Process data ---
+
+        // Map last delivery event to each asset
+        const lastDeliveryEventMap = new Map<string, Event>();
+        for (const event of deliveryEvents) {
+            if (!lastDeliveryEventMap.has(event.asset_id)) {
+                lastDeliveryEventMap.set(event.asset_id, event);
+            }
+        }
+        
+        // Calculate current counts
+        const newCounts = new Map<string, CustomerAssetCounts>();
+        for (const asset of assetsInPossession) {
+            const lastEvent = lastDeliveryEventMap.get(asset.id);
+            if (lastEvent && lastEvent.customer_id) {
+                const customerId = lastEvent.customer_id;
+                if (!newCounts.has(customerId)) {
+                    newCounts.set(customerId, { total: 0 });
+                }
+                const customerCounts = newCounts.get(customerId)!;
+                const formatKey = asset.type === 'CO2' ? `${asset.format} (CO2)` : asset.format;
+                customerCounts[formatKey] = (customerCounts[formatKey] || 0) + 1;
+                customerCounts.total += 1;
+            }
+        }
+        setCustomerAssetCounts(newCounts);
+
+        // Calculate historical counts
+        const deliveredAssetsByCustomer = new Map<string, Set<string>>();
+        for (const event of deliveryEvents) {
+            if (event.customer_id) {
+                if (!deliveredAssetsByCustomer.has(event.customer_id)) {
+                    deliveredAssetsByCustomer.set(event.customer_id, new Set());
+                }
+                deliveredAssetsByCustomer.get(event.customer_id)!.add(event.asset_id);
+            }
+        }
+
+        const newHistory = new Map<string, number>();
+        for (const [customerId, assetSet] of deliveredAssetsByCustomer.entries()) {
+            newHistory.set(customerId, assetSet.size);
+        }
+        setCustomerAssetHistory(newHistory);
+
+    } catch (error: any) {
+        console.error("Error fetching customer asset data: ", error);
+        if (error.code === 'resource-exhausted') {
+            toast({
+                title: "Límite de Firebase alcanzado",
+                description: "No se pudieron cargar los contadores de activos para los clientes.",
+                variant: "destructive",
+                duration: 9000,
+            });
+        }
+    }
+  }, [toast]);
 
   const fetchCustomers = useCallback(async (
     page: number, 
@@ -100,11 +169,20 @@ export default function CustomersPage() {
             component: 'CustomersPage',
             stack: error.stack,
         });
-        toast({
-          title: "Error de Carga",
-          description: "No se pudieron cargar los datos de clientes.",
-          variant: "destructive"
-        });
+        if (error.code === 'resource-exhausted') {
+            toast({
+              title: "Límite de Firebase alcanzado",
+              description: "No se pudieron cargar los clientes debido a la cuota.",
+              variant: "destructive",
+              duration: 9000,
+            });
+        } else {
+             toast({
+              title: "Error de Carga",
+              description: "No se pudieron cargar los datos de clientes.",
+              variant: "destructive"
+            });
+        }
     } finally {
         setIsLoading(false);
     }
@@ -112,31 +190,8 @@ export default function CustomersPage() {
 
   useEffect(() => {
     fetchCustomers(1, null);
-  }, [fetchCustomers]);
-
-  useEffect(() => {
-    const firestore = db;
-
-    const assetsQuery = query(collection(firestore, "assets"), where("location", "==", "EN_CLIENTE"));
-    const eventsQuery = query(collection(firestore, "events"), where("event_type", "==", "ENTREGA_A_CLIENTE"));
-
-    const unsubscribeAssets = onSnapshot(assetsQuery, (snapshot) => {
-        setAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)));
-    }, (error: any) => {
-        console.error("Error fetching assets snapshot:", error);
-    });
-
-    const unsubscribeEvents = onSnapshot(eventsQuery, (snapshot) => {
-        setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event)));
-    }, (error: any) => {
-        console.error("Error fetching events snapshot:", error);
-    });
-    
-    return () => {
-        unsubscribeAssets();
-        unsubscribeEvents();
-    };
-  }, []);
+    fetchCustomerData();
+  }, [fetchCustomers, fetchCustomerData]);
 
   const goToPage = (page: number) => {
     if (page < 1 || (page > currentPage && !lastVisible)) return;
@@ -149,43 +204,6 @@ export default function CustomersPage() {
     fetchCustomers(page, lastDocForPage);
   };
   
-  const { customerAssetCounts, customerAssetHistory } = useMemo(() => {
-    const counts = new Map<string, CustomerAssetCounts>();
-    const history = new Map<string, number>();
-    const deliveredAssetsByCustomer = new Map<string, Set<string>>();
-
-    // Calculate current assets in possession from the optimized asset list
-    for (const asset of assets) {
-      const lastEvent = events.find(e => e.asset_id === asset.id);
-      if (lastEvent && lastEvent.customer_id) {
-          const customerId = lastEvent.customer_id;
-          if (!counts.has(customerId)) {
-            counts.set(customerId, { total: 0 });
-          }
-          const customerCounts = counts.get(customerId)!;
-          const formatKey = asset.type === 'CO2' ? `${asset.format} (CO2)` : asset.format;
-          customerCounts[formatKey] = (customerCounts[formatKey] || 0) + 1;
-          customerCounts.total += 1;
-      }
-    }
-    
-    // Calculate historical asset deliveries
-    for (const event of events) {
-      if (event.customer_id) {
-        if (!deliveredAssetsByCustomer.has(event.customer_id)) {
-          deliveredAssetsByCustomer.set(event.customer_id, new Set());
-        }
-        deliveredAssetsByCustomer.get(event.customer_id)!.add(event.asset_id);
-      }
-    }
-
-    for (const [customerId, assetSet] of deliveredAssetsByCustomer.entries()) {
-        history.set(customerId, assetSet.size);
-    }
-    
-    return { customerAssetCounts: counts, customerAssetHistory: history };
-  }, [assets, events]);
-
   const totalPages = Math.ceil(totalCustomers / ITEMS_PER_PAGE);
 
   const handleEdit = (customer: Customer) => {
@@ -317,7 +335,7 @@ export default function CustomersPage() {
            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="text-sm font-semibold mr-2 flex items-center gap-1.5"><History className="h-4 w-4"/>Histórico:</span>
               <Badge variant="outline" className="text-xs">
-                  Total: <span className="font-bold ml-1">{historyCount}</span>
+                  Total Entregados: <span className="font-bold ml-1">{historyCount}</span>
               </Badge>
           </div>
         )}
@@ -500,3 +518,5 @@ export default function CustomersPage() {
     </div>
   );
 }
+
+    
