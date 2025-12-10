@@ -116,21 +116,27 @@ export default function AssetsPage() {
   const [user] = useAuthState(auth);
 
   useEffect(() => {
-    // Escucha en tiempo real solo la colección de activos para los contadores.
-    // Esto es mucho más eficiente que escuchar todos los eventos.
     const firestore = db;
     const assetsCollection = collection(firestore, "assets");
     const unsubscribe = onSnapshot(assetsCollection, (snapshot) => {
         const assetsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
         setAllDbAssets(assetsData);
     }, (error) => {
-        console.error("Error listening to assets collection: ", error);
+        if (error.code === 'resource-exhausted') {
+            toast({
+              title: "Límite de Firebase alcanzado",
+              description: "No se pudieron cargar los contadores de activos.",
+              variant: "destructive",
+              duration: 9000,
+            });
+        }
+        console.error("Error listening to assets collection for counts: ", error);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [toast]);
   
-  const fetchAssetsAndCounts = useCallback(async (
+ const fetchAssetsAndCounts = useCallback(async (
     page: number, 
     startDoc: QueryDocumentSnapshot<DocumentData> | null = null
 ) => {
@@ -145,7 +151,6 @@ export default function AssetsPage() {
         
         const assetsCollection = collection(firestore, "assets");
         
-        // La consulta para contar debe ser idéntica a la consulta para obtener datos (excepto paginación)
         const baseQuery = query(assetsCollection, ...conditions, orderBy("code"));
         
         const countSnapshot = await getCountFromServer(baseQuery);
@@ -159,6 +164,7 @@ export default function AssetsPage() {
         
         const assetsSnapshot = await getDocs(assetsQuery);
         const assetsData = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
+        
         setAssets(assetsData);
 
         const newLastVisible = assetsSnapshot.docs[assetsSnapshot.docs.length - 1] || null;
@@ -187,7 +193,7 @@ export default function AssetsPage() {
         } else {
              toast({
               title: "Error de Carga",
-              description: `No se pudieron cargar los activos. Error: ${error.message}`,
+              description: `No se pudieron cargar los activos. Si el problema persiste, es posible que se requiera un índice en Firestore.`,
               variant: "destructive",
               duration: 9000,
             });
@@ -197,9 +203,8 @@ export default function AssetsPage() {
     }
 }, [activeTab, locationFilter, formatFilter, toast]);
 
-    useEffect(() => {
-        const fetchCustomerInfoForVisibleAssets = async () => {
-            const assetsInNeedOfInfo = assets.filter(a => 
+    const fetchCustomerInfoForVisibleAssets = useCallback(async (visibleAssets: Asset[]) => {
+            const assetsInNeedOfInfo = visibleAssets.filter(a => 
                 (a.location === 'EN_CLIENTE' || a.location === 'EN_REPARTO') &&
                 !assetCustomerInfo.hasOwnProperty(a.id)
             );
@@ -242,12 +247,13 @@ export default function AssetsPage() {
                     console.error("Error fetching customer info for assets:", error);
                 }
             }
-        };
+        }, [assetCustomerInfo]);
 
+    useEffect(() => {
         if (assets.length > 0) {
-            fetchCustomerInfoForVisibleAssets();
+            fetchCustomerInfoForVisibleAssets(assets);
         }
-    }, [assets, assetCustomerInfo]);
+    }, [assets, fetchCustomerInfoForVisibleAssets]);
 
 
   useEffect(() => {
