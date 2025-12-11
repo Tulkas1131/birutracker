@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, Suspense, useEffect, useMemo, useCallback } from "react";
@@ -9,7 +10,7 @@ import { useAuthState } from "react-firebase-hooks/auth";
 import { Loader2, QrCode, ArrowRight, AlertTriangle, Route as RouteIcon, Pencil, X, Calendar as CalendarIcon, User, PlusCircle, Printer, FileText, History, Trash2 } from "lucide-react";
 import { differenceInDays, format } from 'date-fns';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { collection, query, orderBy, onSnapshot, getDoc, getDocs, doc, runTransaction, Timestamp, addDoc, setDoc, deleteDoc } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, getDoc, getDocs, doc, runTransaction, Timestamp, addDoc, setDoc, deleteDoc, where } from "firebase/firestore";
 
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -270,7 +271,8 @@ export default function MovementsPage() {
   
   const [allAssets, setAllAssets] = useState<Asset[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [events, setEvents] = useState<Event[]>([]);
+  const [lastEventsMap, setLastEventsMap] = useState<Map<string, Event>>(new Map());
+  const [fillDatesMap, setFillDatesMap] = useState<Map<string, Date>>(new Map());
   const [routes, setRoutes] = useState<Route[]>([]);
   const [users, setUsers] = useState<UserData[]>([]);
   
@@ -294,54 +296,61 @@ export default function MovementsPage() {
     defaultValues: { variety: "", valveType: "", customer_id: "INTERNAL" },
   });
   
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(() => {
     setIsLoading(true);
     const firestore = db;
-    try {
-        const [assetsSnap, customersSnap, eventsSnap, routesSnap, usersSnap] = await Promise.all([
-            getDocs(query(collection(firestore, "assets"))),
-            getDocs(query(collection(firestore, "customers"), orderBy("name"))),
-            getDocs(query(collection(firestore, "events"), orderBy("timestamp", "desc"))),
-            getDocs(query(collection(firestore, "routes"), orderBy("createdAt", "desc"))),
-            getDocs(query(collection(firestore, "users")))
-        ]);
+    
+    // Use onSnapshot for real-time updates on all collections needed for this page
+    const unsubscribers = [
+        onSnapshot(query(collection(firestore, "assets")), (snap) => {
+            setAllAssets(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)))
+        }),
+        onSnapshot(query(collection(firestore, "customers"), orderBy("name")), (snap) => {
+            setCustomers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer)))
+        }),
+        onSnapshot(query(collection(firestore, "routes"), orderBy("createdAt", "desc")), (snap) => {
+            setRoutes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Route)))
+        }),
+        onSnapshot(query(collection(firestore, "users")), (snap) => {
+            setUsers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserData)))
+        }),
+        onSnapshot(query(collection(firestore, "events"), orderBy("timestamp", "desc")), (snap) => {
+            const events = snap.docs.map(doc => doc.data() as Event);
+            const newLastEventsMap = new Map<string, Event>();
+            const newFillDatesMap = new Map<string, Date>();
+            const lastFillEvents = new Map<string, Event>();
 
-        setAllAssets(assetsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)));
-        setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer)));
-        setEvents(eventsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event)));
-        setRoutes(routesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Route)));
-        setUsers(usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserData)));
-    } catch (error: any) {
-        console.error("Error fetching initial data: ", error);
-        logAppEvent({ level: 'ERROR', message: 'Failed to fetch initial data for Movements page', component: 'MovementsPage-fetchData', stack: error.stack });
-        if (error.code === 'resource-exhausted') {
-            toast({
-              title: "Límite de Firebase alcanzado",
-              description: "No se pudieron cargar los datos necesarios para esta página.",
-              variant: "destructive",
-              duration: 9000,
+            // Process all events in one go
+            for (const event of events) {
+                // Get last event for each asset
+                if (!newLastEventsMap.has(event.asset_id)) {
+                    newLastEventsMap.set(event.asset_id, event);
+                }
+                // Get last fill event for each asset
+                if (event.event_type === 'LLENADO_EN_PLANTA') {
+                    if (!lastFillEvents.has(event.asset_id) || event.timestamp.toMillis() > lastFillEvents.get(event.asset_id)!.timestamp.toMillis()) {
+                        lastFillEvents.set(event.asset_id, event);
+                    }
+                }
+            }
+            lastFillEvents.forEach((event, assetId) => {
+                newFillDatesMap.set(assetId, event.timestamp.toDate());
             });
-        }
-    } finally {
-        setIsLoading(false);
-    }
-  }, [toast]);
 
+            setLastEventsMap(newLastEventsMap);
+            setFillDatesMap(newFillDatesMap);
+            setIsLoading(false);
+        })
+    ];
+
+    return () => unsubscribers.forEach(unsub => unsub());
+  }, []);
 
   useEffect(() => {
-    fetchData();
+    const unsubscribe = fetchData();
+    return () => unsubscribe();
   }, [fetchData]);
   
-  const lastEventsMap = useMemo(() => {
-    const map = new Map<string, Event>();
-    for (const event of events) {
-      if (!map.has(event.asset_id)) {
-        map.set(event.asset_id, event);
-      }
-    }
-    return map;
-  }, [events]);
-
   const assetsMap = useMemo(() => new Map(allAssets.map(asset => [asset.id, asset])), [allAssets]);
 
   const assetsInActiveRoutes = useMemo(() => {
@@ -381,25 +390,6 @@ export default function MovementsPage() {
         asset.location === 'EN_REPARTO' && asset.state === 'LLENO' && !assetsInActiveRoutes.has(asset.id)
     );
   }, [allAssets, assetsInActiveRoutes]);
-
-  const fillDatesMap = useMemo(() => {
-    const map = new Map<string, Date>();
-    const lastFillEvents = new Map<string, Event>();
-    
-    events.filter(e => e.event_type === 'LLENADO_EN_PLANTA').forEach(event => {
-        if (!lastFillEvents.has(event.asset_id) || event.timestamp.toMillis() > lastFillEvents.get(event.asset_id)!.timestamp.toMillis()) {
-            lastFillEvents.set(event.asset_id, event);
-        }
-    });
-
-    for (const asset of allAssets) {
-        const lastFillEvent = lastFillEvents.get(asset.id);
-        if (lastFillEvent) {
-            map.set(asset.id, lastFillEvent.timestamp.toDate());
-        }
-    }
-    return map;
-  }, [allAssets, events]);
   
   const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
   const usersMap = useMemo(() => new Map(users.map(u => [u.id, u])), [users]);
@@ -607,7 +597,7 @@ export default function MovementsPage() {
 
       toast({ title: "Movimiento Registrado", description: `El activo ${scannedAsset.code} ha sido actualizado.` });
       resetMovementState();
-      await fetchData(); // Refresh data after transaction
+      // onSnapshot will handle the state update automatically
 
     } catch (e: any) {
       console.error("La transacción falló: ", e);
@@ -661,15 +651,13 @@ export default function MovementsPage() {
         return;
     }
     
-    // Refresh assets on delivery to include any assets from the route being edited
     const originalAssetsForEditedRoute = editingRouteId ? routes.find(r => r.id === editingRouteId)?.stops.flatMap(s => s.assets) || [] : [];
-
+    
     const stops: RouteStop[] = [...groupedAssetsOnDelivery, ...originalAssetsForEditedRoute.reduce((acc, asset) => {
         const lastEvent = lastEventsMap.get(asset.id);
         if (lastEvent) {
              const customerId = lastEvent.customer_id;
              if (!acc.has(customerId)) acc.set(customerId, []);
-             // This is a simplified asset, need to get full asset details
              const fullAsset = allAssets.find(a => a.id === asset.id);
              if (fullAsset) acc.get(customerId)!.push(fullAsset);
         }
@@ -711,7 +699,7 @@ export default function MovementsPage() {
         
         setIsRouteDialogOpen(false);
         openPrintWindow(finalRoute);
-        await fetchData(); // Refresh routes list
+        // onSnapshot will handle refetch
 
     } catch (error: any) {
         console.error("Error generating route: ", error);
@@ -745,7 +733,7 @@ export default function MovementsPage() {
             component: 'MovementsPage-handleDeleteRoute',
             userEmail: user.email || 'unknown',
         });
-        await fetchData(); // Refresh routes list
+        // onSnapshot will handle refetch
     } catch (error: any) {
         console.error("Error deleting route: ", error);
         logAppEvent({
@@ -1108,4 +1096,5 @@ export default function MovementsPage() {
   );
 }
 
+    
     

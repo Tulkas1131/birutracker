@@ -13,7 +13,7 @@ import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "
 import { BarChart, XAxis, YAxis, Bar, Tooltip, Legend, CartesianGrid, ResponsiveContainer } from "recharts";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { differenceInDays } from 'date-fns';
-import { collection, onSnapshot, query } from "firebase/firestore";
+import { collection, onSnapshot, query, where, orderBy } from "firebase/firestore";
 
 
 const chartConfig = {
@@ -46,16 +46,24 @@ export default function DashboardPage() {
   useEffect(() => {
     const firestore = db;
     
+    // Efficiently fetch only data needed for the dashboard
+    const assetsQuery = query(collection(firestore, "assets"));
+    const lastDay = new Date();
+    lastDay.setDate(lastDay.getDate() - 1);
+    const recentEventsQuery = query(collection(firestore, "events"), where("timestamp", ">=", lastDay));
+    const allEventsQuery = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
+    const customersQuery = query(collection(firestore, "customers"));
+
     const unsubscribers = [
-      onSnapshot(collection(firestore, "assets"), (snapshot) => {
+      onSnapshot(assetsQuery, (snapshot) => {
         setAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)));
+        setIsLoading(false); // Consider loading finished when assets (main data) arrive
       }),
-      onSnapshot(query(collection(firestore, "events")), (snapshot) => {
+      onSnapshot(allEventsQuery, (snapshot) => {
         setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event)));
       }),
-      onSnapshot(collection(firestore, "customers"), (snapshot) => {
+      onSnapshot(customersQuery, (snapshot) => {
         setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer)));
-        setIsLoading(false);
       }),
     ];
 
@@ -65,31 +73,36 @@ export default function DashboardPage() {
   const metrics = useMemo(() => {
     const now = new Date();
     const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+    
     const movimientosUltimas24h = events.filter(event => event.timestamp.toDate() > twentyFourHoursAgo).length;
 
-    // Create a map of the last known event for each asset for efficiency
+    const assetsEnCliente = assets.filter(asset => asset.location === 'EN_CLIENTE');
     const lastEventsMap = new Map<string, Event>();
-    for (const event of events.sort((a,b) => b.timestamp.toMillis() - a.timestamp.toMillis())) {
+
+    // Sort events once to get the last event for each asset
+    const sortedEvents = [...events].sort((a,b) => b.timestamp.toMillis() - a.timestamp.toMillis());
+    for (const event of sortedEvents) {
         if (!lastEventsMap.has(event.asset_id)) {
             lastEventsMap.set(event.asset_id, event);
         }
     }
     
-    const activosCriticos = assets.reduce((count, asset) => {
-        if (asset.location !== 'EN_CLIENTE') {
-            return count;
-        }
+    let activosCriticos = 0;
+    const customerAssetCount: Record<string, number> = {};
 
+    for (const asset of assetsEnCliente) {
         const lastEvent = lastEventsMap.get(asset.id);
-        
-        if (lastEvent && lastEvent.event_type === 'ENTREGA_A_CLIENTE') {
+        if (lastEvent?.event_type === 'ENTREGA_A_CLIENTE') {
+            // Increment customer count
+            customerAssetCount[lastEvent.customer_name] = (customerAssetCount[lastEvent.customer_name] || 0) + 1;
+
+            // Check for critical status
             const daysAtCustomer = differenceInDays(now, lastEvent.timestamp.toDate());
             if (daysAtCustomer >= 30) {
-                return count + 1;
+                activosCriticos++;
             }
         }
-        return count;
-    }, 0);
+    }
     
     const assetsByLocation = assets.reduce((acc, asset) => {
         const location = asset.location.replace('_', ' ');
@@ -107,14 +120,6 @@ export default function DashboardPage() {
     }, {} as Record<string, { location: string; barriles50L: number; barriles30LSLIM: number; barriles30L: number; co2: number }>);
     
     const locationDistribution = Object.values(assetsByLocation);
-
-    const customerAssetCount = Array.from(lastEventsMap.values()).reduce((acc, event) => {
-        const asset = assets.find(a => a.id === event.asset_id);
-        if (event.event_type === 'ENTREGA_A_CLIENTE' && asset?.location === 'EN_CLIENTE') {
-            acc[event.customer_name] = (acc[event.customer_name] || 0) + 1;
-        }
-        return acc;
-    }, {} as Record<string, number>);
 
     const topCustomers = Object.entries(customerAssetCount)
       .sort(([, a], [, b]) => b - a)
@@ -278,3 +283,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    

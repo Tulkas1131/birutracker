@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -62,29 +63,36 @@ export default function CustomersPage() {
   const fetchCustomerData = useCallback(async () => {
     const firestore = db;
     try {
-        // Fetch current assets in possession
-        const assetsInPossessionQuery = query(collection(firestore, "assets"), where("location", "==", "EN_CLIENTE"));
-        const assetsSnapshot = await getDocs(assetsInPossessionQuery);
-        const assetsInPossession = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
+        // Optimized query: only get assets currently at customers
+        const assetsInClientQuery = query(collection(firestore, "assets"), where("location", "==", "EN_CLIENTE"));
+        const assetsSnapshot = await getDocs(assetsInClientQuery);
+        const assetsInClient = assetsSnapshot.docs.map(doc => doc.data() as Asset);
+        const assetIds = assetsSnapshot.docs.map(doc => doc.id);
 
-        // Fetch all delivery events to determine which customer has which asset
-        const eventsQuery = query(collection(firestore, "events"), where("event_type", "==", "ENTREGA_A_CLIENTE"), orderBy("timestamp", "desc"));
+        if (assetIds.length === 0) {
+            setCustomerAssetCounts(new Map());
+            setCustomerAssetHistory(new Map());
+            return;
+        }
+
+        // Fetch all delivery events only for assets currently in client
+        const eventsQuery = query(
+            collection(firestore, "events"), 
+            where("asset_id", "in", assetIds),
+            orderBy("timestamp", "desc")
+        );
         const eventsSnapshot = await getDocs(eventsQuery);
-        const deliveryEvents = eventsSnapshot.docs.map(doc => doc.data() as Event);
 
-        // --- Process data ---
-
-        // Map last delivery event to each asset
         const lastDeliveryEventMap = new Map<string, Event>();
-        for (const event of deliveryEvents) {
-            if (!lastDeliveryEventMap.has(event.asset_id)) {
+        for (const doc of eventsSnapshot.docs) {
+            const event = doc.data() as Event;
+            if (event.event_type === 'ENTREGA_A_CLIENTE' && !lastDeliveryEventMap.has(event.asset_id)) {
                 lastDeliveryEventMap.set(event.asset_id, event);
             }
         }
         
-        // Calculate current counts
         const newCounts = new Map<string, CustomerAssetCounts>();
-        for (const asset of assetsInPossession) {
+        for (const asset of assetsInClient) {
             const lastEvent = lastDeliveryEventMap.get(asset.id);
             if (lastEvent && lastEvent.customer_id) {
                 const customerId = lastEvent.customer_id;
@@ -99,21 +107,25 @@ export default function CustomersPage() {
         }
         setCustomerAssetCounts(newCounts);
 
-        // Calculate historical counts
+        // Calculate historical counts (this is still heavy, could be optimized with a cloud function)
+        const allDeliveryEventsQuery = query(collection(firestore, "events"), where("event_type", "==", "ENTREGA_A_CLIENTE"));
+        const allEventsSnapshot = await getDocs(allDeliveryEventsQuery);
+
         const deliveredAssetsByCustomer = new Map<string, Set<string>>();
-        for (const event of deliveryEvents) {
+        allEventsSnapshot.docs.forEach(doc => {
+            const event = doc.data() as Event;
             if (event.customer_id) {
                 if (!deliveredAssetsByCustomer.has(event.customer_id)) {
                     deliveredAssetsByCustomer.set(event.customer_id, new Set());
                 }
                 deliveredAssetsByCustomer.get(event.customer_id)!.add(event.asset_id);
             }
-        }
+        });
 
         const newHistory = new Map<string, number>();
-        for (const [customerId, assetSet] of deliveredAssetsByCustomer.entries()) {
+        deliveredAssetsByCustomer.forEach((assetSet, customerId) => {
             newHistory.set(customerId, assetSet.size);
-        }
+        });
         setCustomerAssetHistory(newHistory);
 
     } catch (error: any) {
@@ -189,8 +201,11 @@ export default function CustomersPage() {
 }, [currentPage, toast]);
 
   useEffect(() => {
-    fetchCustomers(1, null);
-    fetchCustomerData();
+    const unsub = onSnapshot(collection(db, "customers"), () => {
+        fetchCustomers(1, null);
+        fetchCustomerData();
+    });
+    return () => unsub();
   }, [fetchCustomers, fetchCustomerData]);
 
   const goToPage = (page: number) => {
@@ -232,7 +247,7 @@ export default function CustomersPage() {
         title: "Cliente Eliminado",
         description: "El cliente ha sido eliminado de la base de datos.",
       });
-      fetchCustomers(1, null);
+      // The onSnapshot will trigger a refetch
     } catch (error: any) {
        console.error("Error eliminando cliente: ", error);
        logAppEvent({
@@ -267,7 +282,7 @@ export default function CustomersPage() {
       }
       setFormOpen(false);
       setSelectedCustomer(undefined);
-      fetchCustomers(1, null);
+      // The onSnapshot will trigger a refetch
     } catch (error: any) {
       console.error("Error guardando cliente: ", error);
       logAppEvent({
@@ -519,4 +534,5 @@ export default function CustomersPage() {
   );
 }
 
+    
     
