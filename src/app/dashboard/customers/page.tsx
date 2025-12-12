@@ -1,9 +1,10 @@
+
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { MoreHorizontal, PlusCircle, Loader2, ChevronLeft, ChevronRight, Users2, Phone, History } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Loader2, ChevronLeft, ChevronRight, Users2, Phone } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
-import { collection, onSnapshot, doc, deleteDoc, updateDoc, addDoc, type DocumentData, type QueryDocumentSnapshot, query, orderBy, getDocs, limit, startAfter, getCountFromServer, where } from "firebase/firestore";
+import { collection, doc, deleteDoc, updateDoc, addDoc, type DocumentData, type QueryDocumentSnapshot, query, orderBy, getDocs, limit, startAfter, getCountFromServer } from "firebase/firestore";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
-import type { Customer, Asset, Event } from "@/lib/types";
+import type { Customer } from "@/lib/types";
 import { CustomerForm } from "@/components/customer-form";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -35,18 +36,9 @@ import { EmptyState } from "@/components/empty-state";
 
 
 const ITEMS_PER_PAGE = 10;
-const FIRESTORE_IN_LIMIT = 30;
-
-type CustomerAssetCounts = {
-    [format: string]: number;
-    total: number;
-};
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [customerAssetCounts, setCustomerAssetCounts] = useState<Map<string, CustomerAssetCounts>>(new Map());
-  const [customerAssetHistory, setCustomerAssetHistory] = useState<Map<string, number>>(new Map());
-
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setFormOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | undefined>(undefined);
@@ -59,90 +51,6 @@ export default function CustomersPage() {
   const { toast } = useToast();
   const userRole = useUserRole();
   const isMobile = useIsMobile();
-
-  const fetchCustomerData = useCallback(async () => {
-    const firestore = db;
-    try {
-        const assetsInClientQuery = query(collection(firestore, "assets"), where("location", "==", "EN_CLIENTE"));
-        const assetsSnapshot = await getDocs(assetsInClientQuery);
-        const assetsInClient = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
-        const assetIds = assetsInClient.map(doc => doc.id);
-
-        if (assetIds.length === 0) {
-            setCustomerAssetCounts(new Map());
-            setCustomerAssetHistory(new Map());
-            return;
-        }
-
-        const newCounts = new Map<string, CustomerAssetCounts>();
-        if (assetIds.length > 0) {
-            const allEvents: Event[] = [];
-            for (let i = 0; i < assetIds.length; i += FIRESTORE_IN_LIMIT) {
-                const chunk = assetIds.slice(i, i + FIRESTORE_IN_LIMIT);
-                const eventsQuery = query(
-                    collection(firestore, "events"), 
-                    where("asset_id", "in", chunk),
-                    orderBy("timestamp", "desc")
-                );
-                const eventsSnapshot = await getDocs(eventsQuery);
-                eventsSnapshot.docs.forEach(doc => allEvents.push(doc.data() as Event));
-            }
-
-            const lastDeliveryEventMap = new Map<string, Event>();
-            for (const event of allEvents) {
-                if (event.event_type === 'ENTREGA_A_CLIENTE' && !lastDeliveryEventMap.has(event.asset_id)) {
-                    lastDeliveryEventMap.set(event.asset_id, event);
-                }
-            }
-            
-            for (const asset of assetsInClient) {
-                const lastEvent = lastDeliveryEventMap.get(asset.id);
-                if (lastEvent && lastEvent.customer_id) {
-                    const customerId = lastEvent.customer_id;
-                    if (!newCounts.has(customerId)) {
-                        newCounts.set(customerId, { total: 0 });
-                    }
-                    const customerCounts = newCounts.get(customerId)!;
-                    const formatKey = asset.type === 'CO2' ? `CO2-${asset.format}` : asset.format;
-                    customerCounts[formatKey] = (customerCounts[formatKey] || 0) + 1;
-                    customerCounts.total += 1;
-                }
-            }
-        }
-        setCustomerAssetCounts(newCounts);
-        
-        const allDeliveryEventsQuery = query(collection(firestore, "events"), where("event_type", "==", "ENTREGA_A_CLIENTE"));
-        const allEventsSnapshot = await getDocs(allDeliveryEventsQuery);
-
-        const deliveredAssetsByCustomer = new Map<string, Set<string>>();
-        allEventsSnapshot.docs.forEach(doc => {
-            const event = doc.data() as Event;
-            if (event.customer_id) {
-                if (!deliveredAssetsByCustomer.has(event.customer_id)) {
-                    deliveredAssetsByCustomer.set(event.customer_id, new Set());
-                }
-                deliveredAssetsByCustomer.get(event.customer_id)!.add(event.asset_id);
-            }
-        });
-
-        const newHistory = new Map<string, number>();
-        deliveredAssetsByCustomer.forEach((assetSet, customerId) => {
-            newHistory.set(customerId, assetSet.size);
-        });
-        setCustomerAssetHistory(newHistory);
-
-    } catch (error: any) {
-        console.error("Error fetching customer asset data: ", error);
-        if (error.code === 'resource-exhausted') {
-            toast({
-                title: "Límite de Firebase alcanzado",
-                description: "No se pudieron cargar los contadores de activos para los clientes.",
-                variant: "destructive",
-                duration: 9000,
-            });
-        }
-    }
-  }, [toast]);
 
   const fetchCustomers = useCallback(async (
     page: number, 
@@ -205,8 +113,7 @@ export default function CustomersPage() {
 
   useEffect(() => {
     fetchCustomers(1, null);
-    fetchCustomerData();
-  }, [fetchCustomers, fetchCustomerData]);
+  }, [fetchCustomers]);
 
   const goToPage = (page: number) => {
     if (page < 1 || (page > currentPage && !lastVisible)) return;
@@ -248,7 +155,6 @@ export default function CustomersPage() {
         description: "El cliente ha sido eliminado de la base de datos.",
       });
       fetchCustomers(1, null); // Refetch customers after deletion
-      fetchCustomerData();
     } catch (error: any) {
        console.error("Error eliminando cliente: ", error);
        logAppEvent({
@@ -321,46 +227,7 @@ export default function CustomersPage() {
     )
   };
 
-  const AssetCountDisplay = ({ counts, historyCount }: { counts?: CustomerAssetCounts, historyCount?: number }) => {
-    const hasCurrentAssets = counts && counts.total > 0;
-    const hasHistory = historyCount !== undefined && historyCount > 0;
-
-    if (!hasCurrentAssets && !hasHistory) {
-      return <span className="text-sm text-muted-foreground">0 Activos</span>;
-    }
-    
-    const { total, ...formats } = counts || { total: 0 };
-    const formatEntries = Object.entries(formats);
-
-    return (
-      <div className="flex flex-col gap-2">
-        {hasCurrentAssets && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="text-sm font-semibold mr-2">En Posesión:</span>
-              {formatEntries.map(([format, count]) => (
-                  <Badge key={format} variant="secondary" className="text-xs">
-                      {format}: <span className="font-bold ml-1">{count}</span>
-                  </Badge>
-              ))}
-              <Badge variant="default" className="text-xs">
-                  Total: <span className="font-bold ml-1">{total}</span>
-              </Badge>
-          </div>
-        )}
-        {hasHistory && (
-           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="text-sm font-semibold mr-2 flex items-center gap-1.5"><History className="h-4 w-4"/>Histórico:</span>
-              <Badge variant="outline" className="text-xs">
-                  Total Entregados: <span className="font-bold ml-1">{historyCount}</span>
-              </Badge>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-
-  const CustomerCardMobile = ({ customer, counts, historyCount }: { customer: Customer, counts?: CustomerAssetCounts, historyCount?: number }) => (
+  const CustomerCardMobile = ({ customer }: { customer: Customer }) => (
     <div className="flex items-start justify-between rounded-lg border bg-card p-4">
         <div className="flex flex-col gap-1.5 flex-grow">
             <span className="font-semibold">{customer.name}</span>
@@ -368,9 +235,6 @@ export default function CustomersPage() {
             <span className="text-sm text-muted-foreground">{customer.address}</span>
             <span className="text-sm text-muted-foreground">{customer.contact}</span>
             <PhoneLinks phone={customer.phone} />
-            <div className="pt-2">
-              <AssetCountDisplay counts={counts} historyCount={historyCount} />
-            </div>
         </div>
         <div className="flex items-center flex-shrink-0">
             <DropdownMenu>
@@ -432,7 +296,7 @@ export default function CustomersPage() {
                 />
               ) : isMobile ? (
                   <div className="space-y-4 p-4">
-                     {customers.map(customer => <CustomerCardMobile key={customer.id} customer={customer} counts={customerAssetCounts.get(customer.id)} historyCount={customerAssetHistory.get(customer.id)} />)}
+                     {customers.map(customer => <CustomerCardMobile key={customer.id} customer={customer} />)}
                   </div>
               ) : (
                 <Table>
@@ -440,7 +304,6 @@ export default function CustomersPage() {
                     <TableRow>
                       <TableHead>Nombre</TableHead>
                       <TableHead>Tipo</TableHead>
-                      <TableHead>Activos</TableHead>
                       <TableHead>Contacto</TableHead>
                       <TableHead>Teléfono</TableHead>
                       <TableHead>
@@ -454,9 +317,6 @@ export default function CustomersPage() {
                         <TableCell className="font-medium">{customer.name}</TableCell>
                         <TableCell>
                           <Badge variant="outline">{customer.type}</Badge>
-                        </TableCell>
-                        <TableCell>
-                           <AssetCountDisplay counts={customerAssetCounts.get(customer.id)} historyCount={customerAssetHistory.get(customer.id)} />
                         </TableCell>
                         <TableCell>{customer.contact}</TableCell>
                         <TableCell><PhoneLinks phone={customer.phone} /></TableCell>
@@ -534,9 +394,3 @@ export default function CustomersPage() {
     </div>
   );
 }
-    
-    
-
-    
-
-    

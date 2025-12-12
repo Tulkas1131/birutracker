@@ -87,7 +87,7 @@ export function AssetBatchForm({ onSubmit, onCancel }: AssetBatchFormProps) {
             <FormItem>
               <FormLabel>Cantidad a Crear</FormLabel>
               <FormControl>
-                <Input type="number" placeholder="ej., 25" {...field} />
+                <Input type="number" placeholder="ej., 15" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>

@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { auth, db } from "@/lib/firebase";
 import { Loader2, Trash2, ChevronLeft, ChevronRight, SearchX, User } from "lucide-react";
-import { collection, doc, deleteDoc, type Timestamp, type DocumentData, type QueryDocumentSnapshot, onSnapshot, query, where, orderBy, getDocs, limit, startAfter, getCountFromServer } from "firebase/firestore";
+import { collection, doc, deleteDoc, type Timestamp, type DocumentData, type QueryDocumentSnapshot, query, where, orderBy, getDocs, limit, startAfter, getCountFromServer } from "firebase/firestore";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
@@ -236,25 +236,23 @@ function OverviewPageContent() {
 
   useEffect(() => {
     const firestore = db;
-    const unsubAssets = onSnapshot(collection(firestore, "assets"), (snapshot) => {
-        setAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)));
-    }, (error) => { console.error("Error fetching assets: ", error)});
-
-    const unsubUsers = onSnapshot(collection(firestore, "users"), (snapshot) => {
-        setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserData)));
-    }, (error) => { console.error("Error fetching users: ", error)});
-
-    const unsubEvents = onSnapshot(query(collection(firestore, "events"), orderBy("timestamp", "desc")), (snapshot) => {
-        setAllEventsForMap(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event)));
-    }, (error) => { console.error("Error fetching all events: ", error)});
-
-
-    return () => {
-        unsubAssets();
-        unsubUsers();
-        unsubEvents();
-    };
-  }, []);
+    const fetchInitialData = async () => {
+        try {
+            const [assetsSnap, usersSnap, allEventsSnap] = await Promise.all([
+                getDocs(collection(firestore, "assets")),
+                getDocs(collection(firestore, "users")),
+                getDocs(query(collection(firestore, "events"), orderBy("timestamp", "desc")))
+            ]);
+            setAssets(assetsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)));
+            setUsers(usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserData)));
+            setAllEventsForMap(allEventsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event)));
+        } catch(error: any) {
+            console.error("Error fetching initial data for history:", error);
+            toast({ title: "Error de Carga Inicial", description: "No se pudieron cargar todos los datos necesarios.", variant: "destructive"});
+        }
+    }
+    fetchInitialData();
+  }, [toast]);
 
   useEffect(() => {
     if (assets.length > 0) { 
@@ -504,4 +502,3 @@ export default function OverviewPage() {
         </Suspense>
     );
 }
-

@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus, ChevronLeft, ChevronRight, PackageSearch, X, User } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
 import dynamic from "next/dynamic";
@@ -46,7 +47,6 @@ import { logAppEvent } from "@/lib/logging";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Logo } from "@/components/logo";
 import { EmptyState } from "@/components/empty-state";
-import { cn } from "@/lib/utils";
 import { useAuthState } from "react-firebase-hooks/auth";
 
 
@@ -113,47 +113,8 @@ export default function AssetsPage() {
   const userRole = useUserRole();
   const isMobile = useIsMobile();
   const [user] = useAuthState(auth);
-
-  const [assetCountsByFormat, setAssetCountsByFormat] = useState<Record<string, Record<Asset['location'], number>>>({});
-
-  // Optimized function to fetch asset counts
-  const fetchAssetCounts = useCallback(async () => {
-      const firestore = db;
-      try {
-          const assetsCollection = collection(firestore, "assets");
-          // This query now fetches all assets just once to calculate counts.
-          // For very large collections, this should be replaced with a Cloud Function that aggregates counts.
-          const snapshot = await getDocs(assetsCollection);
-          const assetsData = snapshot.docs.map(doc => doc.data() as Asset);
-          
-          const counts = assetsData.reduce((acc, asset) => {
-              if (!acc[asset.format]) {
-                  acc[asset.format] = { EN_PLANTA: 0, EN_CLIENTE: 0, EN_REPARTO: 0 };
-              }
-              if (asset.location in acc[asset.format]) {
-                  acc[asset.format][asset.location]++;
-              }
-              return acc;
-          }, {} as Record<string, Record<Asset['location'], number>>);
-          setAssetCountsByFormat(counts);
-      } catch (error: any) {
-          if (error.code === 'resource-exhausted') {
-              toast({
-                  title: "Límite de Firebase alcanzado",
-                  description: "No se pudieron cargar los contadores de activos.",
-                  variant: "destructive",
-                  duration: 9000,
-              });
-          }
-          console.error("Error fetching asset counts: ", error);
-      }
-  }, [toast]);
-
-  useEffect(() => {
-    fetchAssetCounts();
-  }, [fetchAssetCounts]);
   
- const fetchAssetsAndCounts = useCallback(async (
+ const fetchAssets = useCallback(async (
     page: number, 
     startDoc: QueryDocumentSnapshot<DocumentData> | null = null
 ) => {
@@ -286,15 +247,15 @@ export default function AssetsPage() {
     setCurrentPage(1);
     setPageStartDocs({ 1: null });
     setLastVisible(null);
-    fetchAssetsAndCounts(1, null);
-  }, [activeTab, locationFilter, formatFilter, fetchAssetsAndCounts]);
+    fetchAssets(1, null);
+  }, [activeTab, locationFilter, formatFilter, fetchAssets]);
 
   const goToPage = (page: number) => {
     if (page < 1 || (page > currentPage && !lastVisible)) return;
     
     const startDoc = pageStartDocs[page] || null;
     setCurrentPage(page);
-    fetchAssetsAndCounts(page, startDoc);
+    fetchAssets(page, startDoc);
   };
 
   const handleEdit = (asset: Asset) => {
@@ -325,7 +286,8 @@ export default function AssetsPage() {
         try {
             const firestore = db;
             const assetType = activeTab === 'barrels' ? 'BARRIL' : 'CO2';
-            const allAssetsQuery = query(collection(firestore, "assets"), where("type", "==", assetType), orderBy("code"));
+            // Limit print to a reasonable number to avoid high read costs, e.g. 15
+            const allAssetsQuery = query(collection(firestore, "assets"), where("type", "==", assetType), orderBy("code"), limit(15));
             const allAssetsSnapshot = await getDocs(allAssetsQuery);
             listToPrint = allAssetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
         } catch(e: any) {
@@ -389,8 +351,7 @@ export default function AssetsPage() {
         title: "Activo Eliminado",
         description: `El activo ${assetToDelete.code} ha sido eliminado.`,
       });
-      fetchAssetsAndCounts(currentPage, pageStartDocs[currentPage -1]);
-      fetchAssetCounts();
+      fetchAssets(currentPage, pageStartDocs[currentPage -1]);
     } catch (error: any) {
       console.error("Error eliminando activo: ", error);
       logAppEvent({
@@ -494,8 +455,7 @@ export default function AssetsPage() {
       
       setFormOpen(false);
       setSelectedAsset(undefined);
-      fetchAssetsAndCounts(1, null);
-      fetchAssetCounts();
+      fetchAssets(1, null);
 
     } catch (error: any) {
       console.error("Error guardando activo: ", error);
@@ -536,8 +496,7 @@ export default function AssetsPage() {
       }
       
       await batch.commit();
-      fetchAssetsAndCounts(1, null);
-      fetchAssetCounts();
+      fetchAssets(1, null);
       toast({
         title: "Lote Creado Exitosamente",
         description: `Se han creado ${data.quantity} nuevos activos de tipo ${data.type}.`,
@@ -791,37 +750,6 @@ export default function AssetsPage() {
     );
   };
 
-  const CountsDisplay = ({ counts, onFilter, type }: { counts: Record<string, Record<Asset['location'], number>>, onFilter: (format: string, location: Asset['location']) => void, type: 'BARRIL' | 'CO2' }) => (
-    <div className="flex flex-col gap-y-2 text-sm text-muted-foreground">
-      {Object.entries(counts)
-        .filter(([format]) => {
-            const barrelFormats = ['50L', '30L SLIM', '30L'];
-            const co2Formats = ['2.5kg', '6kg', '9L', '10kg'];
-            if (type === 'BARRIL') return barrelFormats.includes(format);
-            if (type === 'CO2') return co2Formats.includes(format);
-            return false;
-        })
-        .sort(([a], [b]) => a.localeCompare(b)).map(([format, data]) => (
-        <div key={format} className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <span className="font-semibold">{format}:</span>
-          {(['EN_PLANTA', 'EN_CLIENTE', 'EN_REPARTO'] as Asset['location'][]).map(loc => (
-            data[loc] > 0 && (
-              <button key={loc} onClick={() => onFilter(format, loc)} className={cn("flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2", {
-                  'bg-success/20 text-green-800 hover:bg-success/30 border-success/30 dark:text-green-300 dark:hover:bg-green-800/50 dark:border-green-800': loc === 'EN_PLANTA',
-                  'bg-warning/20 text-amber-800 hover:bg-warning/30 border-warning/30 dark:text-amber-300 dark:hover:bg-amber-800/50 dark:border-amber-800': loc === 'EN_CLIENTE',
-                  'bg-secondary text-secondary-foreground hover:bg-secondary/80 border-secondary dark:hover:bg-slate-700': loc === 'EN_REPARTO',
-                  'ring-2 ring-primary': locationFilter === loc && formatFilter === format
-              })}>
-                <span>{getLocationText(loc)}:</span>
-                <span>{data[loc]}</span>
-              </button>
-            )
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-  
   return (
     <>
       <div className="no-print">
@@ -855,16 +783,12 @@ export default function AssetsPage() {
                     <TabsTrigger value="barrels">Barriles</TabsTrigger>
                     <TabsTrigger value="co2">CO2</TabsTrigger>
                   </TabsList>
-                   <div className="flex flex-col items-start sm:items-end gap-2">
-                    <CardDescription>Contadores totales del inventario.</CardDescription>
-                    <CountsDisplay counts={assetCountsByFormat} onFilter={handleFilterClick} type={activeTab === 'barrels' ? 'BARRIL' : 'CO2'} />
-                    {locationFilter && (
-                       <Button variant="ghost" size="sm" onClick={clearFilters} className="text-destructive hover:text-destructive">
+                   {locationFilter && (
+                       <Button variant="ghost" size="sm" onClick={clearFilters} className="text-destructive hover:text-destructive self-end">
                             <X className="mr-2 h-4 w-4" />
                             Limpiar Filtro
                         </Button>
                     )}
-                  </div>
                 </div>
                 <TabsContent value="barrels">
                    <AssetList assetList={assets} type="BARRIL" />
@@ -959,5 +883,3 @@ export default function AssetsPage() {
     </>
   );
 }
-
-    

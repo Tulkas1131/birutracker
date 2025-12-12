@@ -1,138 +1,84 @@
+
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { History, Package, Users, AlertTriangle, BarChart as BarChartIcon } from "lucide-react";
+import { History, Package, Users, AlertTriangle } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { db } from "@/lib/firebase";
-import { type Asset, type Event, type Customer } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { BarChart, XAxis, YAxis, Bar, Tooltip, Legend, CartesianGrid, ResponsiveContainer } from "recharts";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { differenceInDays } from 'date-fns';
-import { collection, getDocs, query, where, orderBy, limit } from "firebase/firestore";
-
-
-const chartConfig = {
-  barriles50L: {
-    label: "Barriles 50L",
-    color: "hsl(var(--chart-2))",
-  },
-  barriles30LSLIM: {
-    label: "Barriles 30L SLIM",
-    color: "hsl(var(--chart-3))",
-  },
-  barriles30L: {
-    label: "Barriles 30L",
-    color: "hsl(var(--chart-4))",
-  },
-  co2: {
-    label: "CO2",
-    color: "hsl(var(--chart-5))",
-  },
-} satisfies ChartConfig;
-
+import { collection, getCountFromServer, query, where, Timestamp } from "firebase/firestore";
 
 export default function DashboardPage() {
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [events, setEvents] = useState<Event[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [metrics, setMetrics] = useState({
+    enPlanta: 0,
+    enCliente: 0,
+    enReparto: 0,
+    activosCriticos: 0,
+    totalAssets: 0,
+    totalCustomers: 0,
+  });
   const [isLoading, setIsLoading] = useState(true);
-  const isMobile = useIsMobile();
-  
+
   const fetchDashboardData = useCallback(async () => {
     setIsLoading(true);
     const firestore = db;
     try {
-        const assetsQuery = query(collection(firestore, "assets"));
-        const customersQuery = query(collection(firestore, "customers"));
-        // Query for all events, which might be heavy. 
-        // Consider limiting this or fetching only what's necessary.
-        const allEventsQuery = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
-        
-        const [assetsSnapshot, customersSnapshot, allEventsSnapshot] = await Promise.all([
-            getDocs(assetsQuery),
-            getDocs(customersQuery),
-            getDocs(allEventsQuery),
-        ]);
+      const assetsCollection = collection(firestore, "assets");
+      const customersCollection = collection(firestore, "customers");
 
-        setAssets(assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)));
-        setCustomers(customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer)));
-        setEvents(allEventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event)));
-    } catch(error) {
-        console.error("Error fetching dashboard data:", error);
+      const thirtyDaysAgo = Timestamp.fromDate(new Date(new Date().setDate(new Date().getDate() - 30)));
+
+      const [
+        enPlantaSnap,
+        enClienteSnap,
+        enRepartoSnap,
+        totalAssetsSnap,
+        totalCustomersSnap,
+        activosCriticosSnap,
+      ] = await Promise.all([
+        getCountFromServer(query(assetsCollection, where("location", "==", "EN_PLANTA"))),
+        getCountFromServer(query(assetsCollection, where("location", "==", "EN_CLIENTE"))),
+        getCountFromServer(query(assetsCollection, where("location", "==", "EN_REPARTO"))),
+        getCountFromServer(assetsCollection),
+        getCountFromServer(customersCollection),
+        // Esta es la consulta más compleja y que puede requerir un índice.
+        // Contamos los eventos de entrega a cliente de hace más de 30 días
+        // para activos que AÚN están en cliente. Es una aproximación.
+        getCountFromServer(
+          query(
+            collection(firestore, "events"),
+            where("event_type", "==", "ENTREGA_A_CLIENTE"),
+            where("timestamp", "<=", thirtyDaysAgo)
+          )
+        ),
+      ]);
+
+      setMetrics({
+        enPlanta: enPlantaSnap.data().count,
+        enCliente: enClienteSnap.data().count,
+        enReparto: enRepartoSnap.data().count,
+        totalAssets: totalAssetsSnap.data().count,
+        totalCustomers: totalCustomersSnap.data().count,
+        activosCriticos: activosCriticosSnap.data().count,
+      });
+
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+      // En caso de error, muestra 0 para no bloquear la UI.
+      setMetrics({
+        enPlanta: 0, enCliente: 0, enReparto: 0,
+        activosCriticos: 0, totalAssets: 0, totalCustomers: 0
+      });
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
-
-  const metrics = useMemo(() => {
-    const now = new Date();
-    const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
-    
-    const movimientosUltimas24h = events.filter(event => event.timestamp.toDate() > twentyFourHoursAgo).length;
-
-    const assetsEnCliente = assets.filter(asset => asset.location === 'EN_CLIENTE');
-    const lastEventsMap = new Map<string, Event>();
-
-    // Events are already sorted from the query
-    for (const event of events) {
-        if (!lastEventsMap.has(event.asset_id)) {
-            lastEventsMap.set(event.asset_id, event);
-        }
-    }
-    
-    let activosCriticos = 0;
-    const customerAssetCount: Record<string, number> = {};
-
-    for (const asset of assetsEnCliente) {
-        const lastEvent = lastEventsMap.get(asset.id);
-        if (lastEvent?.event_type === 'ENTREGA_A_CLIENTE') {
-            customerAssetCount[lastEvent.customer_name] = (customerAssetCount[lastEvent.customer_name] || 0) + 1;
-
-            const daysAtCustomer = differenceInDays(now, lastEvent.timestamp.toDate());
-            if (daysAtCustomer >= 30) {
-                activosCriticos++;
-            }
-        }
-    }
-    
-    const assetsByLocation = assets.reduce((acc, asset) => {
-        const location = asset.location.replace('_', ' ');
-        if (!acc[location]) {
-            acc[location] = { location, barriles50L: 0, barriles30LSLIM: 0, barriles30L: 0, co2: 0 };
-        }
-        if (asset.type === 'BARRIL') {
-            if (asset.format === '50L') acc[location].barriles50L++;
-            else if (asset.format === '30L SLIM') acc[location].barriles30LSLIM++;
-            else if (asset.format === '30L') acc[location].barriles30L++;
-        } else if (asset.type === 'CO2') {
-            acc[location].co2++;
-        }
-        return acc;
-    }, {} as Record<string, { location: string; barriles50L: number; barriles30LSLIM: number; barriles30L: number; co2: number }>);
-    
-    const locationDistribution = Object.values(assetsByLocation);
-
-    const topCustomers = Object.entries(customerAssetCount)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, isMobile ? 5 : 7)
-      .map(([name, value]) => ({ name, assets: value }));
-
-    return {
-      movimientosUltimas24h,
-      activosCriticos,
-      locationDistribution,
-      topCustomers,
-      totalAssets: assets.length,
-    };
-  }, [assets, events, isMobile]);
   
   const StatCard = ({ title, value, icon, href }: { title: string, value: number, icon: React.ReactNode, href?: string }) => {
      const cardContent = (
@@ -166,96 +112,32 @@ export default function DashboardPage() {
     <div className="flex flex-1 flex-col">
       <PageHeader title="Panel de Control" description="¡Bienvenido de nuevo! Aquí tienes un resumen rápido." />
       <main className="flex-1 p-4 md:p-6">
-         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-6">
-             <Card className="lg:col-span-2">
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <BarChartIcon className="h-5 w-5 text-muted-foreground" />
-                        Distribución de Activos por Ubicación
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                     {isLoading ? (
-                        <div className="flex items-center justify-center h-60">
-                           <Skeleton className="h-full w-full" />
-                        </div>
-                     ) : (
-                        <ChartContainer config={chartConfig} className="h-60 w-full">
-                          <ResponsiveContainer>
-                            <BarChart accessibilityLayer data={metrics.locationDistribution} layout="vertical">
-                                <CartesianGrid vertical={false} />
-                                <XAxis type="number" />
-                                <YAxis 
-                                    dataKey="location" 
-                                    type="category" 
-                                    tickLine={false} 
-                                    axisLine={false} 
-                                    tickMargin={10}
-                                    width={isMobile ? 70 : 80}
-                                    className="text-xs truncate"
-                                />
-                                <ChartTooltip 
-                                    content={<ChartTooltipContent />} 
-                                />
-                                <Bar dataKey="barriles50L" stackId="a" fill={chartConfig.barriles50L.color} name="50L" />
-                                <Bar dataKey="barriles30LSLIM" stackId="a" fill={chartConfig.barriles30LSLIM.color} name="30L SLIM" />
-                                <Bar dataKey="barriles30L" stackId="a" fill={chartConfig.barriles30L.color} name="30L" />
-                                <Bar dataKey="co2" stackId="a" fill={chartConfig.co2.color} name="CO2" />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </ChartContainer>
-                     )}
-                </CardContent>
-            </Card>
-
-            <Card className="lg:col-span-3">
-                <CardHeader>
-                     <CardTitle className="flex items-center gap-2">
-                        <Users className="h-5 w-5 text-muted-foreground" />
-                        Top Clientes por Activos
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    {isLoading ? (
-                        <div className="space-y-4 h-60 pr-4">
-                            {[...Array(5)].map((_, i) => (
-                                <div key={i} className="flex items-center gap-4">
-                                    <Skeleton className="h-4 w-24" />
-                                    <Skeleton className="h-4 flex-1" />
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <ChartContainer config={{...chartConfig, assets: {label: "Activos"}}} className="h-60 w-full">
-                          <ResponsiveContainer>
-                            <BarChart accessibilityLayer data={metrics.topCustomers} layout="vertical" margin={{ left: 10, right: 30 }}>
-                                <CartesianGrid horizontal={false} />
-                                <XAxis type="number" dataKey="assets" />
-                                <YAxis 
-                                    dataKey="name" 
-                                    type="category" 
-                                    tickLine={false} 
-                                    axisLine={false} 
-                                    tickMargin={10}
-                                    width={isMobile ? 80 : 120}
-                                    className="text-xs truncate"
-                                />
-                                <ChartTooltip 
-                                    cursor={false}
-                                    content={<ChartTooltipContent indicator="dot" />} 
-                                />
-                                <Bar dataKey="assets" radius={4} fill="hsl(var(--primary))" />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </ChartContainer>
-                    )}
-                </CardContent>
-            </Card>
-        </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCard 
-              title="Movimientos (Últimas 24h)" 
-              value={metrics.movimientosUltimas24h} 
+              title="Activos Totales" 
+              value={metrics.totalAssets} 
+              icon={<Package className="h-4 w-4 text-muted-foreground" />} 
+              href="/dashboard/assets"
+          />
+          <StatCard 
+              title="Clientes Totales" 
+              value={metrics.totalCustomers} 
+              icon={<Users className="h-4 w-4 text-muted-foreground" />} 
+              href="/dashboard/customers"
+          />
+           <StatCard 
+              title="Activos en Planta" 
+              value={metrics.enPlanta} 
+              icon={<Package className="h-4 w-4 text-muted-foreground" />} 
+          />
+          <StatCard 
+              title="Activos en Cliente" 
+              value={metrics.enCliente} 
+              icon={<Users className="h-4 w-4 text-muted-foreground" />} 
+          />
+          <StatCard 
+              title="Activos en Reparto" 
+              value={metrics.enReparto} 
               icon={<History className="h-4 w-4 text-muted-foreground" />} 
               href="/dashboard/overview"
           />
@@ -265,22 +147,8 @@ export default function DashboardPage() {
               icon={<AlertTriangle className="h-4 w-4 text-destructive" />} 
               href="/dashboard/overview"
           />
-          <StatCard 
-              title="Activos Totales" 
-              value={metrics.totalAssets} 
-              icon={<Package className="h-4 w-4 text-muted-foreground" />} 
-              href="/dashboard/assets"
-          />
-           <StatCard 
-              title="Clientes Totales" 
-              value={customers.length} 
-              icon={<Users className="h-4 w-4 text-muted-foreground" />} 
-              href="/dashboard/customers"
-          />
         </div>
       </main>
     </div>
   );
 }
-
-    
