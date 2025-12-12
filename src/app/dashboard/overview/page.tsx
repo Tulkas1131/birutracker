@@ -261,7 +261,7 @@ function OverviewPageContent() {
     } finally {
         setIsLoading(false);
     }
-  }, [filters, toast]); // Removed assetsMap from dependencies
+  }, [filters.customer, filters.assetCode, filters.eventType, filters.criticalOnly, toast]);
 
   useEffect(() => {
     fetchBaseData();
@@ -462,3 +462,5 @@ export default function OverviewPage() {
         </Suspense>
     );
 }
+
+    
