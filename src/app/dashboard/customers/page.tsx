@@ -66,8 +66,8 @@ export default function CustomersPage() {
     try {
         const assetsInClientQuery = query(collection(firestore, "assets"), where("location", "==", "EN_CLIENTE"));
         const assetsSnapshot = await getDocs(assetsInClientQuery);
-        const assetsInClient = assetsSnapshot.docs.map(doc => doc.data() as Asset);
-        const assetIds = assetsSnapshot.docs.map(doc => doc.id);
+        const assetsInClient = assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
+        const assetIds = assetsInClient.map(doc => doc.id);
 
         if (assetIds.length === 0) {
             setCustomerAssetCounts(new Map());
@@ -75,37 +75,39 @@ export default function CustomersPage() {
             return;
         }
 
-        const allEvents: Event[] = [];
-        for (let i = 0; i < assetIds.length; i += FIRESTORE_IN_LIMIT) {
-            const chunk = assetIds.slice(i, i + FIRESTORE_IN_LIMIT);
-            const eventsQuery = query(
-                collection(firestore, "events"), 
-                where("asset_id", "in", chunk),
-                orderBy("timestamp", "desc")
-            );
-            const eventsSnapshot = await getDocs(eventsQuery);
-            eventsSnapshot.docs.forEach(doc => allEvents.push(doc.data() as Event));
-        }
-
-        const lastDeliveryEventMap = new Map<string, Event>();
-        for (const event of allEvents) {
-            if (event.event_type === 'ENTREGA_A_CLIENTE' && !lastDeliveryEventMap.has(event.asset_id)) {
-                lastDeliveryEventMap.set(event.asset_id, event);
-            }
-        }
-        
         const newCounts = new Map<string, CustomerAssetCounts>();
-        for (const asset of assetsInClient) {
-            const lastEvent = lastDeliveryEventMap.get(asset.id);
-            if (lastEvent && lastEvent.customer_id) {
-                const customerId = lastEvent.customer_id;
-                if (!newCounts.has(customerId)) {
-                    newCounts.set(customerId, { total: 0 });
+        if (assetIds.length > 0) {
+            const allEvents: Event[] = [];
+            for (let i = 0; i < assetIds.length; i += FIRESTORE_IN_LIMIT) {
+                const chunk = assetIds.slice(i, i + FIRESTORE_IN_LIMIT);
+                const eventsQuery = query(
+                    collection(firestore, "events"), 
+                    where("asset_id", "in", chunk),
+                    orderBy("timestamp", "desc")
+                );
+                const eventsSnapshot = await getDocs(eventsQuery);
+                eventsSnapshot.docs.forEach(doc => allEvents.push(doc.data() as Event));
+            }
+
+            const lastDeliveryEventMap = new Map<string, Event>();
+            for (const event of allEvents) {
+                if (event.event_type === 'ENTREGA_A_CLIENTE' && !lastDeliveryEventMap.has(event.asset_id)) {
+                    lastDeliveryEventMap.set(event.asset_id, event);
                 }
-                const customerCounts = newCounts.get(customerId)!;
-                const formatKey = asset.type === 'CO2' ? `${asset.format} (CO2)` : asset.format;
-                customerCounts[formatKey] = (customerCounts[formatKey] || 0) + 1;
-                customerCounts.total += 1;
+            }
+            
+            for (const asset of assetsInClient) {
+                const lastEvent = lastDeliveryEventMap.get(asset.id);
+                if (lastEvent && lastEvent.customer_id) {
+                    const customerId = lastEvent.customer_id;
+                    if (!newCounts.has(customerId)) {
+                        newCounts.set(customerId, { total: 0 });
+                    }
+                    const customerCounts = newCounts.get(customerId)!;
+                    const formatKey = asset.type === 'CO2' ? `CO2-${asset.format}` : asset.format;
+                    customerCounts[formatKey] = (customerCounts[formatKey] || 0) + 1;
+                    customerCounts.total += 1;
+                }
             }
         }
         setCustomerAssetCounts(newCounts);
@@ -536,4 +538,6 @@ export default function CustomersPage() {
   );
 }
     
+    
+
     
