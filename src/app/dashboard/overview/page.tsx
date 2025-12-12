@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, Suspense } from 'react';
@@ -169,7 +170,7 @@ function OverviewPageContent() {
         const firestore = db;
         
         let conditions = [];
-        if (filters.customer) conditions.push(where("customer_name", ">=", filters.customer), where("customer_name", "<=", filters.customer + '\uf8ff'));
+        if (filters.customer) conditions.push(where("customer_name", "==", filters.customer));
         if (filters.assetCode) conditions.push(where("asset_code", "==", filters.assetCode));
         if (filters.eventType !== 'ALL') conditions.push(where("event_type", "==", filters.eventType));
         
@@ -504,4 +505,3 @@ export default function OverviewPage() {
     );
 }
 
-    
