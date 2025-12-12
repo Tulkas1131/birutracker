@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/page-header";
-import type { Asset, AssetBatchFormData, Event } from "@/lib/types";
+import type { Asset, AssetBatchFormData } from "@/lib/types";
 import { AssetForm } from "@/components/asset-form";
 import { AssetBatchForm } from "@/components/asset-batch-form";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -76,7 +76,7 @@ const QrLabel = ({ asset }: { asset: Asset }) => {
   );
 };
 
-const AssetCustomerInfo = ({ customerName }: { customerName: string | null }) => {
+const AssetCustomerInfo = ({ customerName }: { customerName: string | null | undefined }) => {
     if (!customerName) return null;
 
     return (
@@ -90,7 +90,6 @@ const AssetCustomerInfo = ({ customerName }: { customerName: string | null }) =>
 
 export default function AssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [assetCustomerInfo, setAssetCustomerInfo] = useState<Record<string, string | null>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setFormOpen] = useState(false);
   const [isBatchFormOpen, setBatchFormOpen] = useState(false);
@@ -187,61 +186,6 @@ export default function AssetsPage() {
         setIsLoading(false);
     }
 }, [activeTab, locationFilter, formatFilter, toast]);
-
-    const fetchCustomerInfoForVisibleAssets = useCallback(async (visibleAssets: Asset[]) => {
-            const assetsInNeedOfInfo = visibleAssets.filter(a => 
-                (a.location === 'EN_CLIENTE' || a.location === 'EN_REPARTO') &&
-                !assetCustomerInfo.hasOwnProperty(a.id)
-            );
-
-            if (assetsInNeedOfInfo.length === 0) return;
-
-            try {
-                const firestore = db;
-                const newInfo: Record<string, string | null> = {};
-                
-                const assetIds = assetsInNeedOfInfo.map(a => a.id);
-                if (assetIds.length === 0) return;
-
-                const eventsQuery = query(
-                    collection(firestore, 'events'),
-                    where('asset_id', 'in', assetIds),
-                    orderBy('timestamp', 'desc')
-                );
-
-                const eventSnapshots = await getDocs(eventsQuery);
-                const lastEventsMap = new Map<string, Event>();
-
-                eventSnapshots.docs.forEach(doc => {
-                    const event = doc.data() as Event;
-                    if (!lastEventsMap.has(event.asset_id)) {
-                        lastEventsMap.set(event.asset_id, event);
-                    }
-                });
-
-                assetsInNeedOfInfo.forEach(asset => {
-                    const lastEvent = lastEventsMap.get(asset.id);
-                    if (lastEvent && lastEvent.customer_name && lastEvent.customer_name !== 'Planta' && lastEvent.customer_name !== 'Proveedor') {
-                        newInfo[asset.id] = lastEvent.customer_name;
-                    } else {
-                        newInfo[asset.id] = null;
-                    }
-                });
-
-                setAssetCustomerInfo(prev => ({ ...prev, ...newInfo }));
-            } catch (error: any) {
-                if (error.code !== 'resource-exhausted') {
-                    console.error("Error fetching customer info for assets:", error);
-                }
-            }
-        }, [assetCustomerInfo]);
-
-    useEffect(() => {
-        if (assets.length > 0) {
-            fetchCustomerInfoForVisibleAssets(assets);
-        }
-    }, [assets, fetchCustomerInfoForVisibleAssets]);
-
 
   useEffect(() => {
     setCurrentPage(1);
@@ -401,6 +345,8 @@ export default function AssetsPage() {
 
     try {
       await runTransaction(firestore, async (transaction) => {
+        const eventTimestamp = Timestamp.now();
+
         if (selectedAsset) {
             // --- Editing existing asset ---
             const assetRef = doc(firestore, "assets", selectedAsset.id);
@@ -409,6 +355,7 @@ export default function AssetsPage() {
                 location: data.location,
                 variety: data.state === 'LLENO' ? data.variety || "" : "",
                 valveType: data.state === 'LLENO' ? data.valveType || "" : "",
+                lastMovementTimestamp: eventTimestamp,
             };
 
             if (selectedAsset.location === 'EN_PLANTA') {
@@ -431,11 +378,13 @@ export default function AssetsPage() {
                     customer_id: "INTERNAL",
                     customer_name: "Planta",
                     event_type: 'LLENADO_EN_PLANTA',
-                    timestamp: Timestamp.now(),
+                    timestamp: eventTimestamp,
                     user_id: user.uid,
                     variety: data.variety || "",
                     valveType: data.valveType || "",
                 });
+                assetDataToUpdate.currentCustomerId = "INTERNAL";
+                assetDataToUpdate.currentCustomerName = "Planta";
             }
 
             transaction.update(assetRef, assetDataToUpdate);
@@ -445,7 +394,17 @@ export default function AssetsPage() {
             // --- Creating new asset ---
             const { prefix, nextNumber } = await generateNextCode(data.type);
             const newCode = `${prefix}-${String(nextNumber).padStart(3, '0')}`;
-            const newAssetData = { ...data, code: newCode, state: 'VACIO' as const, location: 'EN_PLANTA' as const, variety: "", valveType: "" };
+            const newAssetData: Omit<Asset, 'id'> = { 
+                ...data, 
+                code: newCode, 
+                state: 'VACIO' as const, 
+                location: 'EN_PLANTA' as const, 
+                variety: "", 
+                valveType: "",
+                currentCustomerId: "INTERNAL",
+                currentCustomerName: "Planta",
+                lastMovementTimestamp: eventTimestamp,
+            };
             
             const newAssetRef = doc(collection(firestore, "assets"));
             transaction.set(newAssetRef, newAssetData);
@@ -478,6 +437,7 @@ export default function AssetsPage() {
     try {
       const { prefix, nextNumber } = await generateNextCode(data.type);
       const batch = writeBatch(firestore);
+      const eventTimestamp = Timestamp.now();
       
       for (let i = 0; i < data.quantity; i++) {
         const currentNumber = nextNumber + i;
@@ -490,6 +450,9 @@ export default function AssetsPage() {
           location: 'EN_PLANTA' as const,
           variety: '',
           valveType: '',
+          currentCustomerId: "INTERNAL",
+          currentCustomerName: "Planta",
+          lastMovementTimestamp: eventTimestamp,
         };
         const newAssetRef = doc(collection(firestore, "assets"));
         batch.set(newAssetRef, newAssetData);
@@ -574,7 +537,7 @@ export default function AssetsPage() {
              <Badge variant={getLocationVariant(asset.location)}>
                 {getLocationText(asset.location)}
              </Badge>
-             <AssetCustomerInfo customerName={assetCustomerInfo[asset.id]} />
+             <AssetCustomerInfo customerName={asset.currentCustomerName} />
            </div>
         </div>
       </div>
@@ -640,7 +603,7 @@ export default function AssetsPage() {
                     <Badge variant={getLocationVariant(asset.location)}>
                     {getLocationText(asset.location)}
                     </Badge>
-                    <AssetCustomerInfo customerName={assetCustomerInfo[asset.id]} />
+                    <AssetCustomerInfo customerName={asset.currentCustomerName} />
                 </div>
               </TableCell>
               <TableCell>

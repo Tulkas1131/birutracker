@@ -472,9 +472,9 @@ export default function MovementsPage() {
     form.setValue('event_type', logic.primary);
     
     if (logic.autoFillsCustomer) {
-        const eventToUse: Event | undefined = lastEventsMap.get(asset.id);
-        if (eventToUse) {
-            form.setValue('customer_id', eventToUse.customer_id);
+        const customerIdToFill = asset.currentCustomerId || lastEventsMap.get(asset.id)?.customer_id;
+        if (customerIdToFill) {
+            form.setValue('customer_id', customerIdToFill);
         }
     } else if (!logic.requiresCustomerSelection) {
         form.setValue('customer_id', 'INTERNAL'); 
@@ -531,52 +531,74 @@ export default function MovementsPage() {
     let newState: Asset['state'] = forceStateCorrection ? 'LLENO' : scannedAsset.state;
     let newVariety = scannedAsset.variety;
     let newValveType = scannedAsset.valveType;
+    let newCustomerId = scannedAsset.currentCustomerId;
+    let newCustomerName = scannedAsset.currentCustomerName;
+    const eventTimestamp = Timestamp.now();
+
+    const customerIdForEvent = selectedCustomer?.id || 'INTERNAL';
+    const customerNameForEvent = selectedCustomer?.name || 'Planta';
 
     switch (data.event_type) {
       case 'LLENADO_EN_PLANTA': 
         newState = 'LLENO'; 
         newVariety = data.variety; 
         newValveType = data.valveType;
+        newCustomerId = 'INTERNAL';
+        newCustomerName = 'Planta';
         break;
       case 'SALIDA_A_REPARTO':
         if (scannedAsset.state === 'VACIO') newState = 'LLENO';
         newLocation = 'EN_REPARTO';
         newVariety = data.variety || newVariety;
         newValveType = data.valveType || newValveType;
+        newCustomerId = customerIdForEvent;
+        newCustomerName = customerNameForEvent;
         break;
       case 'DEVOLUCION':
         newLocation = 'EN_PLANTA';
+        newCustomerId = 'INTERNAL';
+        newCustomerName = 'Planta';
         break;
       case 'RECOLECCION_DE_CLIENTE':
-      case 'RECEPCION_EN_PLANTA':
         newState = 'VACIO';
-        newLocation = data.event_type === 'RECOLECCION_DE_CLIENTE' ? 'EN_REPARTO' : 'EN_PLANTA';
+        newLocation = 'EN_REPARTO';
         newVariety = ''; 
         newValveType = '';
+        newCustomerId = scannedAsset.currentCustomerId; // Keep the customer context for return trip
+        newCustomerName = scannedAsset.currentCustomerName;
+        break;
+      case 'RECEPCION_EN_PLANTA':
+        newState = 'VACIO';
+        newLocation = 'EN_PLANTA';
+        newVariety = ''; 
+        newValveType = '';
+        newCustomerId = 'INTERNAL';
+        newCustomerName = 'Planta';
         break;
       case 'ENTREGA_A_CLIENTE': 
         newLocation = 'EN_CLIENTE'; 
+        newCustomerId = scannedAsset.currentCustomerId; // This should be pre-filled from SALIDA_A_REPARTO
+        newCustomerName = scannedAsset.currentCustomerName;
         break;
       case 'SALIDA_VACIO': 
         newLocation = 'EN_CLIENTE'; 
         newState = 'VACIO'; 
         newVariety = ''; 
         newValveType = '';
+        newCustomerId = customerIdForEvent;
+        newCustomerName = customerNameForEvent;
         break;
     }
 
     try {
       await runTransaction(firestore, async (transaction) => {
-        const customerId = selectedCustomer?.id || 'INTERNAL';
-        const customerName = selectedCustomer?.name || 'Planta';
-        
         const eventData: Omit<Event, 'id'> = { 
             asset_id: scannedAsset.id, 
             asset_code: scannedAsset.code, 
-            customer_id: customerId, 
-            customer_name: customerName,
+            customer_id: customerIdForEvent, 
+            customer_name: customerNameForEvent,
             event_type: data.event_type, 
-            timestamp: Timestamp.now(), 
+            timestamp: eventTimestamp, 
             user_id: user.uid, 
             variety: data.variety || "",
             valveType: data.valveType || "",
@@ -589,7 +611,10 @@ export default function MovementsPage() {
             location: newLocation, 
             state: newState, 
             variety: newVariety || "", 
-            valveType: newValveType || "" 
+            valveType: newValveType || "",
+            currentCustomerId: newCustomerId,
+            currentCustomerName: newCustomerName,
+            lastMovementTimestamp: eventTimestamp
         });
       });
 

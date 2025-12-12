@@ -16,17 +16,25 @@ export type Asset = {
   location: 'EN_CLIENTE' | 'EN_PLANTA' | 'EN_REPARTO';
   variety?: string;
   valveType?: string;
+  // --- Denormalized fields for performance ---
+  currentCustomerId?: string;
+  currentCustomerName?: string;
+  lastMovementTimestamp?: Timestamp;
 };
 
 export const assetSchema = z.object({
   id: z.string().optional(),
   code: z.string(),
   type: z.enum(['BARRIL', 'CO2']),
-  format: z.string().min(1, 'El formato es requerido.'), // Now a string from a select
+  format: z.string().min(1, 'El formato es requerido.'),
   state: z.enum(['LLENO', 'VACIO']),
   location: z.enum(['EN_CLIENTE', 'EN_PLANTA', 'EN_REPARTO']),
   variety: z.string().optional(),
   valveType: z.string().optional(),
+  // Denormalized fields are not part of the form, they are managed by backend logic
+  currentCustomerId: z.string().optional(),
+  currentCustomerName: z.string().optional(),
+  lastMovementTimestamp: z.instanceof(Timestamp).optional(),
 });
 
 export type AssetFormData = z.infer<typeof assetSchema>;
