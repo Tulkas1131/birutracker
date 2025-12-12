@@ -261,7 +261,7 @@ function OverviewPageContent() {
     } finally {
         setIsLoading(false);
     }
-  }, [filters.customer, filters.assetCode, filters.eventType, filters.criticalOnly, toast]);
+  }, [filters.customer, filters.assetCode, filters.eventType, filters.criticalOnly, toast, currentPage, assetsMap]);
 
   useEffect(() => {
     fetchBaseData();
@@ -273,7 +273,8 @@ function OverviewPageContent() {
     setPageHistory([null]);
     setLastVisible(null);
     fetchEvents(1, null);
-  }, [filters, fetchEvents]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);
 
   const goToPage = (page: number) => {
     if (page < 1 || (page > currentPage && !lastVisible)) return;
