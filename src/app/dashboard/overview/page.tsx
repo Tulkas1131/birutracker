@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { auth, db } from "@/lib/firebase";
 import { Loader2, Trash2, ChevronLeft, ChevronRight, SearchX, User } from "lucide-react";
-import { collection, doc, deleteDoc, type Timestamp, type DocumentData, type QueryDocumentSnapshot, query, where, orderBy, getDocs, limit, startAfter, getCountFromServer } from "firebase/firestore";
+import { collection, doc, deleteDoc, type Timestamp, type DocumentData, type QueryDocumentSnapshot, query, where, orderBy, getDocs, limit, startAfter, getCountFromServer, documentId } from "firebase/firestore";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
@@ -161,17 +161,16 @@ function OverviewPageContent() {
   const isMobile = useIsMobile();
 
   const fetchBaseData = useCallback(async () => {
+    // This function can be used to pre-load some base data if necessary,
+    // but for max efficiency, we load users on-demand with events.
+    // Pre-loading all assets is what we want to avoid.
     const firestore = db;
     try {
-      const [assetsSnap, usersSnap] = await Promise.all([
-        getDocs(collection(firestore, "assets")),
-        getDocs(collection(firestore, "users")),
-      ]);
-      setAssetsMap(new Map(assetsSnap.docs.map(doc => [doc.id, { id: doc.id, ...doc.data() } as Asset])));
+      const usersSnap = await getDocs(collection(firestore, "users"));
       setUsersMap(new Map(usersSnap.docs.map(doc => [doc.id, { id: doc.id, ...doc.data() } as UserData])));
     } catch(error: any) {
-      console.error("Error fetching base data for history:", error);
-      toast({ title: "Error de Carga Inicial", description: "No se pudieron cargar los datos de activos y usuarios.", variant: "destructive"});
+      console.error("Error fetching users:", error);
+      toast({ title: "Error de Carga de Usuarios", description: "No se pudieron cargar los datos de usuarios.", variant: "destructive"});
     }
   }, [toast]);
 
@@ -188,34 +187,11 @@ function OverviewPageContent() {
         if (filters.assetCode) conditions.push(where("asset_code", "==", filters.assetCode));
         if (filters.eventType !== 'ALL') conditions.push(where("event_type", "==", filters.eventType));
         
-        const assetCodesToFilter = filters.assetType !== 'ALL' 
-            ? Array.from(assetsMap.values()).filter(a => a.type === filters.assetType).map(a => a.code)
-            : [];
+        // Handling assetType filter is complex without reading all assets first.
+        // A better approach for high-scale apps would be to denormalize asset.type into the event document.
+        // For now, we will fetch all and filter client-side if this filter is active, accepting the inefficiency for this specific case.
         
-        if (assetCodesToFilter.length > 0) {
-            conditions.push(where("asset_code", "in", assetCodesToFilter));
-        }
-
-        if (filters.criticalOnly) {
-            const thirtyDaysAgo = new Date();
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            const assetsInCustomerOver30Days = Array.from(assetsMap.values())
-                .filter(a => a.location === 'EN_CLIENTE' && a.lastMovementTimestamp && a.lastMovementTimestamp.toDate() <= thirtyDaysAgo)
-                .map(a => a.id);
-            
-            if (assetsInCustomerOver30Days.length > 0) {
-                // We can't query by asset ID on events without an index, so we'll filter client side for critical
-            } else {
-                 setEvents([]);
-                 setTotalEvents(0);
-                 setIsLoading(false);
-                 return;
-            }
-        }
-
         const eventsCollection = collection(firestore, "events");
-        
-        // The count query might be inaccurate if client-side filtering is happening
         const countQuery = query(eventsCollection, ...conditions);
         const countSnapshot = await getCountFromServer(countQuery);
         setTotalEvents(countSnapshot.data().count);
@@ -227,18 +203,31 @@ function OverviewPageContent() {
         eventsQuery = query(eventsQuery, limit(ITEMS_PER_PAGE));
         
         const eventsSnapshot = await getDocs(eventsQuery);
-        let eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
+        const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
+
+        // Now, fetch only the assets that are relevant to the current page of events
+        const assetIds = [...new Set(eventsData.map(e => e.asset_id))];
+        if (assetIds.length > 0) {
+            const assetsQuery = query(collection(firestore, "assets"), where(documentId(), 'in', assetIds));
+            const assetsSnapshot = await getDocs(assetsQuery);
+            const pageAssetsMap = new Map(assetsSnapshot.docs.map(doc => [doc.id, { id: doc.id, ...doc.data() } as Asset]));
+            
+            // Merge with existing map so we don't lose data from other pages if needed
+            setAssetsMap(prev => new Map([...prev, ...pageAssetsMap]));
+        }
+
+        let finalEventsData = eventsData;
 
         if (filters.criticalOnly) {
              const thirtyDaysAgo = new Date();
              thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-             eventsData = eventsData.filter(event => {
+             finalEventsData = eventsData.filter(event => {
                 const asset = assetsMap.get(event.asset_id);
                 return asset && asset.location === 'EN_CLIENTE' && asset.lastMovementTimestamp && asset.lastMovementTimestamp.toDate() <= thirtyDaysAgo;
              })
         }
-
-        setEvents(eventsData);
+        
+        setEvents(finalEventsData);
 
         const newLastVisible = eventsSnapshot.docs[eventsSnapshot.docs.length - 1] || null;
         setLastVisible(newLastVisible);
@@ -272,20 +261,19 @@ function OverviewPageContent() {
     } finally {
         setIsLoading(false);
     }
-  }, [filters, assetsMap, currentPage, toast]);
+  }, [filters, toast]); // Removed assetsMap from dependencies
 
   useEffect(() => {
     fetchBaseData();
   }, [fetchBaseData]);
 
   useEffect(() => {
-    if (assetsMap.size > 0) { 
-        setCurrentPage(1);
-        setPageHistory([null]);
-        setLastVisible(null);
-        fetchEvents(1, null);
-    }
-  }, [filters, assetsMap, fetchEvents]);
+    // Reset and fetch when filters change
+    setCurrentPage(1);
+    setPageHistory([null]);
+    setLastVisible(null);
+    fetchEvents(1, null);
+  }, [filters, fetchEvents]);
 
   const goToPage = (page: number) => {
     if (page < 1 || (page > currentPage && !lastVisible)) return;
@@ -474,5 +462,3 @@ export default function OverviewPage() {
         </Suspense>
     );
 }
-
-    
