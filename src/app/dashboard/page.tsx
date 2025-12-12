@@ -1,19 +1,18 @@
-
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { History, Package, Users, AlertTriangle, BarChart as BarChartIcon } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
-import { auth, db } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 import { type Asset, type Event, type Customer } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { BarChart, XAxis, YAxis, Bar, Tooltip, Legend, CartesianGrid, ResponsiveContainer } from "recharts";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { differenceInDays } from 'date-fns';
-import { collection, onSnapshot, query, where, orderBy } from "firebase/firestore";
+import { collection, getDocs, query, where, orderBy, limit } from "firebase/firestore";
 
 
 const chartConfig = {
@@ -43,32 +42,35 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const isMobile = useIsMobile();
   
-  useEffect(() => {
+  const fetchDashboardData = useCallback(async () => {
+    setIsLoading(true);
     const firestore = db;
-    
-    // Efficiently fetch only data needed for the dashboard
-    const assetsQuery = query(collection(firestore, "assets"));
-    const lastDay = new Date();
-    lastDay.setDate(lastDay.getDate() - 1);
-    const recentEventsQuery = query(collection(firestore, "events"), where("timestamp", ">=", lastDay));
-    const allEventsQuery = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
-    const customersQuery = query(collection(firestore, "customers"));
+    try {
+        const assetsQuery = query(collection(firestore, "assets"));
+        const customersQuery = query(collection(firestore, "customers"));
+        // Query for all events, which might be heavy. 
+        // Consider limiting this or fetching only what's necessary.
+        const allEventsQuery = query(collection(firestore, "events"), orderBy("timestamp", "desc"));
+        
+        const [assetsSnapshot, customersSnapshot, allEventsSnapshot] = await Promise.all([
+            getDocs(assetsQuery),
+            getDocs(customersQuery),
+            getDocs(allEventsQuery),
+        ]);
 
-    const unsubscribers = [
-      onSnapshot(assetsQuery, (snapshot) => {
-        setAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)));
-        setIsLoading(false); // Consider loading finished when assets (main data) arrive
-      }),
-      onSnapshot(allEventsQuery, (snapshot) => {
-        setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event)));
-      }),
-      onSnapshot(customersQuery, (snapshot) => {
-        setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer)));
-      }),
-    ];
-
-    return () => unsubscribers.forEach(unsub => unsub());
+        setAssets(assetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)));
+        setCustomers(customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer)));
+        setEvents(allEventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event)));
+    } catch(error) {
+        console.error("Error fetching dashboard data:", error);
+    } finally {
+        setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   const metrics = useMemo(() => {
     const now = new Date();
@@ -79,9 +81,8 @@ export default function DashboardPage() {
     const assetsEnCliente = assets.filter(asset => asset.location === 'EN_CLIENTE');
     const lastEventsMap = new Map<string, Event>();
 
-    // Sort events once to get the last event for each asset
-    const sortedEvents = [...events].sort((a,b) => b.timestamp.toMillis() - a.timestamp.toMillis());
-    for (const event of sortedEvents) {
+    // Events are already sorted from the query
+    for (const event of events) {
         if (!lastEventsMap.has(event.asset_id)) {
             lastEventsMap.set(event.asset_id, event);
         }
@@ -93,10 +94,8 @@ export default function DashboardPage() {
     for (const asset of assetsEnCliente) {
         const lastEvent = lastEventsMap.get(asset.id);
         if (lastEvent?.event_type === 'ENTREGA_A_CLIENTE') {
-            // Increment customer count
             customerAssetCount[lastEvent.customer_name] = (customerAssetCount[lastEvent.customer_name] || 0) + 1;
 
-            // Check for critical status
             const daysAtCustomer = differenceInDays(now, lastEvent.timestamp.toDate());
             if (daysAtCustomer >= 30) {
                 activosCriticos++;

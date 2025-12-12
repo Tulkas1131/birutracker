@@ -90,7 +90,6 @@ const AssetCustomerInfo = ({ customerName }: { customerName: string | null }) =>
 
 export default function AssetsPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [allDbAssets, setAllDbAssets] = useState<Asset[]>([]);
   const [assetCustomerInfo, setAssetCustomerInfo] = useState<Record<string, string | null>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isFormOpen, setFormOpen] = useState(false);
@@ -115,26 +114,44 @@ export default function AssetsPage() {
   const isMobile = useIsMobile();
   const [user] = useAuthState(auth);
 
-  useEffect(() => {
-    const firestore = db;
-    const assetsCollection = collection(firestore, "assets");
-    const unsubscribe = onSnapshot(assetsCollection, (snapshot) => {
-        const assetsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
-        setAllDbAssets(assetsData);
-    }, (error) => {
-        if (error.code === 'resource-exhausted') {
-            toast({
-              title: "Límite de Firebase alcanzado",
-              description: "No se pudieron cargar los contadores de activos.",
-              variant: "destructive",
-              duration: 9000,
-            });
-        }
-        console.error("Error listening to assets collection for counts: ", error);
-    });
+  const [assetCountsByFormat, setAssetCountsByFormat] = useState<Record<string, Record<Asset['location'], number>>>({});
 
-    return () => unsubscribe();
+  // Optimized function to fetch asset counts
+  const fetchAssetCounts = useCallback(async () => {
+      const firestore = db;
+      try {
+          const assetsCollection = collection(firestore, "assets");
+          // This query now fetches all assets just once to calculate counts.
+          // For very large collections, this should be replaced with a Cloud Function that aggregates counts.
+          const snapshot = await getDocs(assetsCollection);
+          const assetsData = snapshot.docs.map(doc => doc.data() as Asset);
+          
+          const counts = assetsData.reduce((acc, asset) => {
+              if (!acc[asset.format]) {
+                  acc[asset.format] = { EN_PLANTA: 0, EN_CLIENTE: 0, EN_REPARTO: 0 };
+              }
+              if (asset.location in acc[asset.format]) {
+                  acc[asset.format][asset.location]++;
+              }
+              return acc;
+          }, {} as Record<string, Record<Asset['location'], number>>);
+          setAssetCountsByFormat(counts);
+      } catch (error: any) {
+          if (error.code === 'resource-exhausted') {
+              toast({
+                  title: "Límite de Firebase alcanzado",
+                  description: "No se pudieron cargar los contadores de activos.",
+                  variant: "destructive",
+                  duration: 9000,
+              });
+          }
+          console.error("Error fetching asset counts: ", error);
+      }
   }, [toast]);
+
+  useEffect(() => {
+    fetchAssetCounts();
+  }, [fetchAssetCounts]);
   
  const fetchAssetsAndCounts = useCallback(async (
     page: number, 
@@ -151,8 +168,6 @@ export default function AssetsPage() {
         
         const assetsCollection = collection(firestore, "assets");
         
-        // The query for counting and the query for fetching must be identical (except for pagination clauses)
-        // to ensure they can use the same Firestore index.
         const baseQuery = query(assetsCollection, ...conditions, orderBy("code"));
         
         const countSnapshot = await getCountFromServer(baseQuery);
@@ -210,7 +225,7 @@ export default function AssetsPage() {
     } finally {
         setIsLoading(false);
     }
-}, [activeTab, locationFilter, formatFilter]);
+}, [activeTab, locationFilter, formatFilter, toast]);
 
     const fetchCustomerInfoForVisibleAssets = useCallback(async (visibleAssets: Asset[]) => {
             const assetsInNeedOfInfo = visibleAssets.filter(a => 
@@ -224,7 +239,6 @@ export default function AssetsPage() {
                 const firestore = db;
                 const newInfo: Record<string, string | null> = {};
                 
-                // Batch asset IDs to use 'in' query
                 const assetIds = assetsInNeedOfInfo.map(a => a.id);
                 if (assetIds.length === 0) return;
 
@@ -237,7 +251,6 @@ export default function AssetsPage() {
                 const eventSnapshots = await getDocs(eventsQuery);
                 const lastEventsMap = new Map<string, Event>();
 
-                // Get the last event for each asset
                 eventSnapshots.docs.forEach(doc => {
                     const event = doc.data() as Event;
                     if (!lastEventsMap.has(event.asset_id)) {
@@ -377,6 +390,7 @@ export default function AssetsPage() {
         description: `El activo ${assetToDelete.code} ha sido eliminado.`,
       });
       fetchAssetsAndCounts(currentPage, pageStartDocs[currentPage -1]);
+      fetchAssetCounts();
     } catch (error: any) {
       console.error("Error eliminando activo: ", error);
       logAppEvent({
@@ -481,6 +495,7 @@ export default function AssetsPage() {
       setFormOpen(false);
       setSelectedAsset(undefined);
       fetchAssetsAndCounts(1, null);
+      fetchAssetCounts();
 
     } catch (error: any) {
       console.error("Error guardando activo: ", error);
@@ -522,6 +537,7 @@ export default function AssetsPage() {
       
       await batch.commit();
       fetchAssetsAndCounts(1, null);
+      fetchAssetCounts();
       toast({
         title: "Lote Creado Exitosamente",
         description: `Se han creado ${data.quantity} nuevos activos de tipo ${data.type}.`,
@@ -561,20 +577,6 @@ export default function AssetsPage() {
         default: return location;
     }
   };
-  
-  const assetCountsByFormat = useMemo(() => {
-    const assetList = activeTab === 'barrels' ? allDbAssets.filter(a => a.type === 'BARRIL') : allDbAssets.filter(a => a.type === 'CO2');
-    
-    return assetList.reduce((acc, asset) => {
-        if (!acc[asset.format]) {
-          acc[asset.format] = { EN_PLANTA: 0, EN_CLIENTE: 0, EN_REPARTO: 0 };
-        }
-        if (asset.location in acc[asset.format]) {
-           acc[asset.format][asset.location]++;
-        }
-        return acc;
-      }, {} as Record<string, Record<Asset['location'], number>>);
-  }, [allDbAssets, activeTab]);
   
   const totalPages = Math.ceil(totalAssetsInFilter / ITEMS_PER_PAGE);
 
@@ -789,9 +791,17 @@ export default function AssetsPage() {
     );
   };
 
-  const CountsDisplay = ({ counts, onFilter }: { counts: Record<string, Record<Asset['location'], number>>, onFilter: (format: string, location: Asset['location']) => void }) => (
+  const CountsDisplay = ({ counts, onFilter, type }: { counts: Record<string, Record<Asset['location'], number>>, onFilter: (format: string, location: Asset['location']) => void, type: 'BARRIL' | 'CO2' }) => (
     <div className="flex flex-col gap-y-2 text-sm text-muted-foreground">
-      {Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)).map(([format, data]) => (
+      {Object.entries(counts)
+        .filter(([format]) => {
+            const barrelFormats = ['50L', '30L SLIM', '30L'];
+            const co2Formats = ['2.5kg', '6kg', '9L', '10kg'];
+            if (type === 'BARRIL') return barrelFormats.includes(format);
+            if (type === 'CO2') return co2Formats.includes(format);
+            return false;
+        })
+        .sort(([a], [b]) => a.localeCompare(b)).map(([format, data]) => (
         <div key={format} className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <span className="font-semibold">{format}:</span>
           {(['EN_PLANTA', 'EN_CLIENTE', 'EN_REPARTO'] as Asset['location'][]).map(loc => (
@@ -847,7 +857,7 @@ export default function AssetsPage() {
                   </TabsList>
                    <div className="flex flex-col items-start sm:items-end gap-2">
                     <CardDescription>Contadores totales del inventario.</CardDescription>
-                    <CountsDisplay counts={assetCountsByFormat} onFilter={handleFilterClick} />
+                    <CountsDisplay counts={assetCountsByFormat} onFilter={handleFilterClick} type={activeTab === 'barrels' ? 'BARRIL' : 'CO2'} />
                     {locationFilter && (
                        <Button variant="ghost" size="sm" onClick={clearFilters} className="text-destructive hover:text-destructive">
                             <X className="mr-2 h-4 w-4" />
@@ -949,3 +959,5 @@ export default function AssetsPage() {
     </>
   );
 }
+
+    

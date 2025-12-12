@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -205,11 +204,8 @@ export default function CustomersPage() {
 }, [currentPage, toast]);
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "customers"), () => {
-        fetchCustomers(1, null);
-        fetchCustomerData();
-    });
-    return () => unsub();
+    fetchCustomers(1, null);
+    fetchCustomerData();
   }, [fetchCustomers, fetchCustomerData]);
 
   const goToPage = (page: number) => {
@@ -251,7 +247,8 @@ export default function CustomersPage() {
         title: "Cliente Eliminado",
         description: "El cliente ha sido eliminado de la base de datos.",
       });
-      // The onSnapshot will trigger a refetch
+      fetchCustomers(1, null); // Refetch customers after deletion
+      fetchCustomerData();
     } catch (error: any) {
        console.error("Error eliminando cliente: ", error);
        logAppEvent({
@@ -286,7 +283,7 @@ export default function CustomersPage() {
       }
       setFormOpen(false);
       setSelectedCustomer(undefined);
-      // The onSnapshot will trigger a refetch
+      fetchCustomers(1, null); // Refetch customers
     } catch (error: any) {
       console.error("Error guardando cliente: ", error);
       logAppEvent({
@@ -538,6 +535,8 @@ export default function CustomersPage() {
   );
 }
     
+    
+
     
 
     
