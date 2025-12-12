@@ -161,9 +161,6 @@ function OverviewPageContent() {
   const isMobile = useIsMobile();
 
   const fetchBaseData = useCallback(async () => {
-    // This function can be used to pre-load some base data if necessary,
-    // but for max efficiency, we load users on-demand with events.
-    // Pre-loading all assets is what we want to avoid.
     const firestore = db;
     try {
       const usersSnap = await getDocs(collection(firestore, "users"));
@@ -187,10 +184,6 @@ function OverviewPageContent() {
         if (filters.assetCode) conditions.push(where("asset_code", "==", filters.assetCode));
         if (filters.eventType !== 'ALL') conditions.push(where("event_type", "==", filters.eventType));
         
-        // Handling assetType filter is complex without reading all assets first.
-        // A better approach for high-scale apps would be to denormalize asset.type into the event document.
-        // For now, we will fetch all and filter client-side if this filter is active, accepting the inefficiency for this specific case.
-        
         const eventsCollection = collection(firestore, "events");
         const countQuery = query(eventsCollection, ...conditions);
         const countSnapshot = await getCountFromServer(countQuery);
@@ -204,29 +197,37 @@ function OverviewPageContent() {
         
         const eventsSnapshot = await getDocs(eventsQuery);
         const eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
+        
+        let finalEventsData = eventsData;
 
-        // Now, fetch only the assets that are relevant to the current page of events
-        const assetIds = [...new Set(eventsData.map(e => e.asset_id))];
+        // Fetch corresponding assets for the current page of events
+        const assetIds = [...new Set(finalEventsData.map(e => e.asset_id))];
+        const newAssetsMap = new Map<string, Asset>();
         if (assetIds.length > 0) {
             const assetsQuery = query(collection(firestore, "assets"), where(documentId(), 'in', assetIds));
             const assetsSnapshot = await getDocs(assetsQuery);
-            const pageAssetsMap = new Map(assetsSnapshot.docs.map(doc => [doc.id, { id: doc.id, ...doc.data() } as Asset]));
-            
-            // Merge with existing map so we don't lose data from other pages if needed
-            setAssetsMap(prev => new Map([...prev, ...pageAssetsMap]));
+            assetsSnapshot.forEach(doc => {
+                newAssetsMap.set(doc.id, { id: doc.id, ...doc.data() } as Asset);
+            });
         }
-
-        let finalEventsData = eventsData;
+        setAssetsMap(newAssetsMap); // Set the map with only the relevant assets for the page
 
         if (filters.criticalOnly) {
              const thirtyDaysAgo = new Date();
              thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-             finalEventsData = eventsData.filter(event => {
-                const asset = assetsMap.get(event.asset_id);
+             finalEventsData = finalEventsData.filter(event => {
+                const asset = newAssetsMap.get(event.asset_id);
                 return asset && asset.location === 'EN_CLIENTE' && asset.lastMovementTimestamp && asset.lastMovementTimestamp.toDate() <= thirtyDaysAgo;
              })
         }
         
+        if (filters.assetType !== 'ALL') {
+            finalEventsData = finalEventsData.filter(event => {
+                const asset = newAssetsMap.get(event.asset_id);
+                return asset?.type === filters.assetType;
+            });
+        }
+
         setEvents(finalEventsData);
 
         const newLastVisible = eventsSnapshot.docs[eventsSnapshot.docs.length - 1] || null;
@@ -261,7 +262,7 @@ function OverviewPageContent() {
     } finally {
         setIsLoading(false);
     }
-  }, [filters.customer, filters.assetCode, filters.eventType, filters.criticalOnly, toast, currentPage, assetsMap]);
+  }, [filters.customer, filters.assetCode, filters.eventType, filters.assetType, filters.criticalOnly, toast, currentPage]);
 
   useEffect(() => {
     fetchBaseData();
@@ -463,5 +464,3 @@ export default function OverviewPage() {
         </Suspense>
     );
 }
-
-    
