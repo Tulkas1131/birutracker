@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus, ChevronLeft, ChevronRight, PackageSearch, X, User } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Loader2, QrCode, Printer, PackagePlus, ChevronLeft, ChevronRight, PackageSearch, X, User, Filter } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
 import dynamic from "next/dynamic";
 import { collection, onSnapshot, doc, getDoc, deleteDoc, runTransaction, Timestamp, writeBatch, type DocumentData, type QueryDocumentSnapshot, query, where, orderBy, getDocs, limit, startAfter, getCountFromServer } from "firebase/firestore";
@@ -48,6 +48,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Logo } from "@/components/logo";
 import { EmptyState } from "@/components/empty-state";
 import { useAuthState } from "react-firebase-hooks/auth";
+import { cn } from "@/lib/utils";
 
 
 const QRCode = dynamic(() => import('qrcode.react'), {
@@ -105,10 +106,16 @@ export default function AssetsPage() {
   const [pageStartDocs, setPageStartDocs] = useState<Record<number, QueryDocumentSnapshot<DocumentData> | null>>({ 1: null });
   const [totalAssets, setTotalAssets] = useState(0);
 
+  const [locationFilter, setLocationFilter] = useState<'ALL' | Asset['location']>('ALL');
+  const [statusCounts, setStatusCounts] = useState({ enPlanta: 0, enReparto: 0, enCliente: 0 });
+
   const { toast } = useToast();
   const userRole = useUserRole();
   const isMobile = useIsMobile();
   const [user] = useAuthState(auth);
+
+  const activeAssetType = activeTab === 'co2' ? 'CO2' : 'BARRIL';
+  const activeFormat = activeTab === 'co2' ? '9L' : activeTab;
   
  const fetchAssets = useCallback(async (
     page: number, 
@@ -117,24 +124,24 @@ export default function AssetsPage() {
     setIsLoading(true);
     try {
         const firestore = db;
-
-        const isCo2Tab = activeTab === 'co2';
-        const assetType = isCo2Tab ? 'CO2' : 'BARRIL';
-        const formatFilter = isCo2Tab ? '9L' : activeTab;
         
-        let conditions = [where("type", "==", assetType)];
-        if (!isCo2Tab) {
-          conditions.push(where("format", "==", formatFilter));
+        let conditions = [where("type", "==", activeAssetType)];
+        if (activeAssetType === 'BARRIL') {
+          conditions.push(where("format", "==", activeFormat));
+        }
+        if (locationFilter !== 'ALL') {
+          conditions.push(where("location", "==", locationFilter));
         }
         
         const assetsCollection = collection(firestore, "assets");
         
-        const baseQuery = query(assetsCollection, ...conditions, orderBy("code"));
-        
-        const countSnapshot = await getCountFromServer(baseQuery);
+        // Count total assets for the current filter set
+        const totalQuery = query(assetsCollection, ...conditions);
+        const countSnapshot = await getCountFromServer(totalQuery);
         setTotalAssets(countSnapshot.data().count);
 
-        let assetsQuery = baseQuery;
+        // Fetch paginated data
+        let assetsQuery = query(totalQuery, orderBy("code"));
         if (startDoc) {
             assetsQuery = query(assetsQuery, startAfter(startDoc));
         }
@@ -168,10 +175,10 @@ export default function AssetsPage() {
               variant: "destructive",
               duration: 9000,
             });
-        } else if (error.code === 'failed-precondition') {
+        } else if (error.code === 'failed-precondition' || (error.message && error.message.includes('index'))) {
              toast({
               title: "Índice de Firestore Requerido",
-              description: "Esta consulta necesita un índice. Por favor, crea el índice en la consola de Firebase para continuar.",
+              description: "Esta combinación de filtros necesita un índice. Por favor, crea el índice en la consola de Firebase para continuar.",
               variant: "destructive",
               duration: 9000,
             });
@@ -186,22 +193,65 @@ export default function AssetsPage() {
     } finally {
         setIsLoading(false);
     }
-}, [activeTab, toast]);
+}, [activeAssetType, activeFormat, locationFilter, toast]);
 
+  const fetchStatusCounts = useCallback(async () => {
+    const firestore = db;
+    const assetsCollection = collection(firestore, "assets");
+    let baseConditions = [where("type", "==", activeAssetType)];
+    if (activeAssetType === 'BARRIL') {
+      baseConditions.push(where("format", "==", activeFormat));
+    }
+
+    try {
+      const [enPlantaSnap, enRepartoSnap, enClienteSnap] = await Promise.all([
+        getCountFromServer(query(assetsCollection, ...baseConditions, where("location", "==", "EN_PLANTA"))),
+        getCountFromServer(query(assetsCollection, ...baseConditions, where("location", "==", "EN_REPARTO"))),
+        getCountFromServer(query(assetsCollection, ...baseConditions, where("location", "==", "EN_CLIENTE"))),
+      ]);
+      setStatusCounts({
+        enPlanta: enPlantaSnap.data().count,
+        enReparto: enRepartoSnap.data().count,
+        enCliente: enClienteSnap.data().count,
+      });
+    } catch (error: any) {
+        if (error.code === 'failed-precondition') {
+            // Silently fail on index errors for counts, as the main query will catch it.
+            console.warn("Could not fetch status counts due to a missing index.");
+        } else {
+            console.error("Error fetching status counts:", error);
+        }
+        setStatusCounts({ enPlanta: 0, enReparto: 0, enCliente: 0 }); // Reset on error
+    }
+  }, [activeAssetType, activeFormat]);
+
+  // Effect for when main tab changes
   useEffect(() => {
+    setLocationFilter('ALL');
     setCurrentPage(1);
     setPageStartDocs({ 1: null });
     setLastVisible(null);
-    fetchAssets(1, null);
-  }, [activeTab, fetchAssets]);
+    fetchStatusCounts();
+    // fetchAssets will be called by the effect below
+  }, [activeTab, fetchStatusCounts]);
+  
+  // Effect for when filters or page change
+  useEffect(() => {
+      fetchAssets(currentPage, pageStartDocs[currentPage] || null);
+  }, [locationFilter, currentPage, fetchAssets, pageStartDocs]);
 
   const goToPage = (page: number) => {
     if (page < 1 || (page > currentPage && !lastVisible)) return;
-    
-    const startDoc = pageStartDocs[page] || null;
     setCurrentPage(page);
-    fetchAssets(page, startDoc);
+    // The effect above will handle the fetch
   };
+
+  const handleLocationFilterChange = (newFilter: 'ALL' | Asset['location']) => {
+    setLocationFilter(newFilter);
+    setCurrentPage(1);
+    setPageStartDocs({ 1: null });
+    setLastVisible(null);
+  }
 
   const handleEdit = (asset: Asset) => {
     setSelectedAsset(asset);
@@ -230,13 +280,9 @@ export default function AssetsPage() {
         setIsLoading(true);
         try {
             const firestore = db;
-            const isCo2Tab = activeTab === 'co2';
-            const assetType = isCo2Tab ? 'CO2' : 'BARRIL';
-            const formatFilter = isCo2Tab ? '9L' : activeTab;
-
-            let conditions = [where("type", "==", assetType)];
-            if (!isCo2Tab) {
-              conditions.push(where("format", "==", formatFilter));
+            let conditions = [where("type", "==", activeAssetType)];
+            if (activeAssetType === 'BARRIL') {
+              conditions.push(where("format", "==", activeFormat));
             }
             
             // Limit print to a reasonable number to avoid high read costs, e.g. 15
@@ -304,7 +350,9 @@ export default function AssetsPage() {
         title: "Activo Eliminado",
         description: `El activo ${assetToDelete.code} ha sido eliminado.`,
       });
-      fetchAssets(currentPage, pageStartDocs[currentPage -1]);
+      // Refetch current page after delete
+      fetchAssets(currentPage, pageStartDocs[currentPage] || null);
+      fetchStatusCounts(); // Update counts
     } catch (error: any) {
       console.error("Error eliminando activo: ", error);
       logAppEvent({
@@ -424,6 +472,7 @@ export default function AssetsPage() {
       setFormOpen(false);
       setSelectedAsset(undefined);
       fetchAssets(1, null);
+      fetchStatusCounts(); // Update counts
 
     } catch (error: any) {
       console.error("Error guardando activo: ", error);
@@ -469,6 +518,7 @@ export default function AssetsPage() {
       
       await batch.commit();
       fetchAssets(1, null);
+      fetchStatusCounts(); // Update counts
       toast({
         title: "Lote Creado Exitosamente",
         description: `Se han creado ${data.quantity} nuevos activos de tipo ${data.type}.`,
@@ -629,15 +679,38 @@ export default function AssetsPage() {
       </Table>
   );
 
+  const StatusFilters = () => (
+    <div className="flex flex-wrap items-center gap-2 mb-4">
+        <Button variant={locationFilter === 'ALL' ? 'default' : 'outline'} size="sm" onClick={() => handleLocationFilterChange('ALL')}>
+            Todos
+        </Button>
+        <Button variant={locationFilter === 'EN_PLANTA' ? 'default' : 'outline'} size="sm" onClick={() => handleLocationFilterChange('EN_PLANTA')}>
+            En Planta <Badge variant="secondary" className="ml-2">{statusCounts.enPlanta}</Badge>
+        </Button>
+        <Button variant={locationFilter === 'EN_REPARTO' ? 'default' : 'outline'} size="sm" onClick={() => handleLocationFilterChange('EN_REPARTO')}>
+            En Reparto <Badge variant="secondary" className="ml-2">{statusCounts.enReparto}</Badge>
+        </Button>
+        <Button variant={locationFilter === 'EN_CLIENTE' ? 'default' : 'outline'} size="sm" onClick={() => handleLocationFilterChange('EN_CLIENTE')}>
+            En Cliente <Badge variant="secondary" className="ml-2">{statusCounts.enCliente}</Badge>
+        </Button>
+    </div>
+  )
+
   const AssetList = ({ assetList, typeName, format }: { assetList: Asset[], typeName: string, format: string }) => {
     return (
      <Card>
-        <CardHeader className="hidden md:flex">
-          <CardTitle className="text-xl">Activos: {format}</CardTitle>
-          <CardDescription>
-            {`Un listado de todos los activos de formato ${format} en tu inventario.`}
-          </CardDescription>
+        <CardHeader className="hidden md:flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-xl">Activos: {format}</CardTitle>
+            <CardDescription>
+                {`Un listado de todos los activos de formato ${format} en tu inventario.`}
+            </CardDescription>
+          </div>
+          <StatusFilters />
         </CardHeader>
+        <div className="px-6 pt-4 md:hidden">
+            <StatusFilters />
+        </div>
         <CardContent className="p-0 md:p-6 md:pt-0">
           {isLoading ? (
              <div className="flex justify-center items-center py-20">
