@@ -107,7 +107,6 @@ export default function AssetsPage() {
   const [totalAssets, setTotalAssets] = useState(0);
 
   const [locationFilter, setLocationFilter] = useState<'ALL' | Asset['location']>('ALL');
-  const [statusCounts, setStatusCounts] = useState({ enPlanta: 0, enReparto: 0, enCliente: 0 });
 
   const { toast } = useToast();
   const userRole = useUserRole();
@@ -195,45 +194,14 @@ export default function AssetsPage() {
     }
 }, [activeAssetType, activeFormat, locationFilter, toast]);
 
-  const fetchStatusCounts = useCallback(async () => {
-    const firestore = db;
-    const assetsCollection = collection(firestore, "assets");
-    let baseConditions = [where("type", "==", activeAssetType)];
-    if (activeAssetType === 'BARRIL') {
-      baseConditions.push(where("format", "==", activeFormat));
-    }
-
-    try {
-      const [enPlantaSnap, enRepartoSnap, enClienteSnap] = await Promise.all([
-        getCountFromServer(query(assetsCollection, ...baseConditions, where("location", "==", "EN_PLANTA"))),
-        getCountFromServer(query(assetsCollection, ...baseConditions, where("location", "==", "EN_REPARTO"))),
-        getCountFromServer(query(assetsCollection, ...baseConditions, where("location", "==", "EN_CLIENTE"))),
-      ]);
-      setStatusCounts({
-        enPlanta: enPlantaSnap.data().count,
-        enReparto: enRepartoSnap.data().count,
-        enCliente: enClienteSnap.data().count,
-      });
-    } catch (error: any) {
-        if (error.code === 'failed-precondition') {
-            // Silently fail on index errors for counts, as the main query will catch it.
-            console.warn("Could not fetch status counts due to a missing index.");
-        } else {
-            console.error("Error fetching status counts:", error);
-        }
-        setStatusCounts({ enPlanta: 0, enReparto: 0, enCliente: 0 }); // Reset on error
-    }
-  }, [activeAssetType, activeFormat]);
-
   // Effect for when main tab changes
   useEffect(() => {
     setLocationFilter('ALL');
     setCurrentPage(1);
     setPageStartDocs({ 1: null });
     setLastVisible(null);
-    fetchStatusCounts();
     // fetchAssets will be called by the effect below
-  }, [activeTab, fetchStatusCounts]);
+  }, [activeTab]);
   
   // Effect for when filters or page change
   useEffect(() => {
@@ -352,7 +320,6 @@ export default function AssetsPage() {
       });
       // Refetch current page after delete
       fetchAssets(currentPage, pageStartDocs[currentPage] || null);
-      fetchStatusCounts(); // Update counts
     } catch (error: any) {
       console.error("Error eliminando activo: ", error);
       logAppEvent({
@@ -472,7 +439,6 @@ export default function AssetsPage() {
       setFormOpen(false);
       setSelectedAsset(undefined);
       fetchAssets(1, null);
-      fetchStatusCounts(); // Update counts
 
     } catch (error: any) {
       console.error("Error guardando activo: ", error);
@@ -518,7 +484,6 @@ export default function AssetsPage() {
       
       await batch.commit();
       fetchAssets(1, null);
-      fetchStatusCounts(); // Update counts
       toast({
         title: "Lote Creado Exitosamente",
         description: `Se han creado ${data.quantity} nuevos activos de tipo ${data.type}.`,
@@ -685,13 +650,13 @@ export default function AssetsPage() {
             Todos
         </Button>
         <Button variant={locationFilter === 'EN_PLANTA' ? 'default' : 'outline'} size="sm" onClick={() => handleLocationFilterChange('EN_PLANTA')}>
-            En Planta <Badge variant="secondary" className="ml-2">{statusCounts.enPlanta}</Badge>
+            En Planta
         </Button>
         <Button variant={locationFilter === 'EN_REPARTO' ? 'default' : 'outline'} size="sm" onClick={() => handleLocationFilterChange('EN_REPARTO')}>
-            En Reparto <Badge variant="secondary" className="ml-2">{statusCounts.enReparto}</Badge>
+            En Reparto
         </Button>
         <Button variant={locationFilter === 'EN_CLIENTE' ? 'default' : 'outline'} size="sm" onClick={() => handleLocationFilterChange('EN_CLIENTE')}>
-            En Cliente <Badge variant="secondary" className="ml-2">{statusCounts.enCliente}</Badge>
+            En Cliente
         </Button>
     </div>
   )
@@ -905,4 +870,3 @@ export default function AssetsPage() {
   );
 }
 
-    
