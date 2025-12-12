@@ -36,6 +36,7 @@ import { EmptyState } from "@/components/empty-state";
 
 
 const ITEMS_PER_PAGE = 10;
+const FIRESTORE_IN_LIMIT = 30;
 
 type CustomerAssetCounts = {
     [format: string]: number;
@@ -63,7 +64,6 @@ export default function CustomersPage() {
   const fetchCustomerData = useCallback(async () => {
     const firestore = db;
     try {
-        // Optimized query: only get assets currently at customers
         const assetsInClientQuery = query(collection(firestore, "assets"), where("location", "==", "EN_CLIENTE"));
         const assetsSnapshot = await getDocs(assetsInClientQuery);
         const assetsInClient = assetsSnapshot.docs.map(doc => doc.data() as Asset);
@@ -75,17 +75,20 @@ export default function CustomersPage() {
             return;
         }
 
-        // Fetch all delivery events only for assets currently in client
-        const eventsQuery = query(
-            collection(firestore, "events"), 
-            where("asset_id", "in", assetIds),
-            orderBy("timestamp", "desc")
-        );
-        const eventsSnapshot = await getDocs(eventsQuery);
+        const allEvents: Event[] = [];
+        for (let i = 0; i < assetIds.length; i += FIRESTORE_IN_LIMIT) {
+            const chunk = assetIds.slice(i, i + FIRESTORE_IN_LIMIT);
+            const eventsQuery = query(
+                collection(firestore, "events"), 
+                where("asset_id", "in", chunk),
+                orderBy("timestamp", "desc")
+            );
+            const eventsSnapshot = await getDocs(eventsQuery);
+            eventsSnapshot.docs.forEach(doc => allEvents.push(doc.data() as Event));
+        }
 
         const lastDeliveryEventMap = new Map<string, Event>();
-        for (const doc of eventsSnapshot.docs) {
-            const event = doc.data() as Event;
+        for (const event of allEvents) {
             if (event.event_type === 'ENTREGA_A_CLIENTE' && !lastDeliveryEventMap.has(event.asset_id)) {
                 lastDeliveryEventMap.set(event.asset_id, event);
             }
@@ -106,8 +109,7 @@ export default function CustomersPage() {
             }
         }
         setCustomerAssetCounts(newCounts);
-
-        // Calculate historical counts (this is still heavy, could be optimized with a cloud function)
+        
         const allDeliveryEventsQuery = query(collection(firestore, "events"), where("event_type", "==", "ENTREGA_A_CLIENTE"));
         const allEventsSnapshot = await getDocs(allDeliveryEventsQuery);
 
@@ -533,6 +535,5 @@ export default function CustomersPage() {
     </div>
   );
 }
-
     
     
