@@ -25,7 +25,7 @@ import { EmptyState } from '@/components/empty-state';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { cn } from '@/lib/utils';
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 15;
 
 const formatEventType = (eventType: Event['event_type']) => {
     const translations: Record<MovementEventType, string> = {
@@ -45,7 +45,7 @@ const formatDate = (timestamp: Timestamp) => {
     return timestamp.toDate().toLocaleString();
 };
 
-function EventCardMobile({ event, asset, user, currentUser, onDelete, daysAtCustomer, variety, valveType }: { event: Event, asset: Asset | undefined, user: UserData | undefined, currentUser: any, onDelete: (id: string) => void, daysAtCustomer: number | null, variety?: string, valveType?: string }) {
+function EventCardMobile({ event, asset, user, currentUser, onDelete, daysAtCustomer }: { event: Event, asset: Asset | undefined, user: UserData | undefined, currentUser: any, onDelete: (id: string) => void, daysAtCustomer: number | null }) {
     const userRole = useUserRole();
     const isCurrentUserEvent = currentUser?.uid === event.user_id;
 
@@ -57,8 +57,8 @@ function EventCardMobile({ event, asset, user, currentUser, onDelete, daysAtCust
                     <span className="text-sm font-medium">{formatEventType(event.event_type)}</span>
                     <span className="text-sm text-muted-foreground">{event.customer_name}</span>
                     <span className="text-xs text-muted-foreground">{formatDate(event.timestamp)}</span>
-                     {asset?.type === 'BARRIL' && variety && <span className="text-xs text-muted-foreground">Variedad: {variety}</span>}
-                     {asset?.type === 'BARRIL' && valveType && <span className="text-xs text-muted-foreground">Válvula: {valveType}</span>}
+                     {asset?.type === 'BARRIL' && event.variety && <span className="text-xs text-muted-foreground">Variedad: {event.variety}</span>}
+                     {asset?.type === 'BARRIL' && event.valveType && <span className="text-xs text-muted-foreground">Válvula: {event.valveType}</span>}
                      {userRole === 'Admin' && user && (
                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1">
                             <User className="h-3 w-3" />
@@ -70,7 +70,7 @@ function EventCardMobile({ event, asset, user, currentUser, onDelete, daysAtCust
                      )}
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                    {daysAtCustomer !== null && (
+                    {daysAtCustomer !== null && asset?.location === 'EN_CLIENTE' && (
                         daysAtCustomer >= 30 ? (
                             <Badge variant="destructive">{daysAtCustomer} días</Badge>
                         ) : (
@@ -93,7 +93,7 @@ function EventCardMobile({ event, asset, user, currentUser, onDelete, daysAtCust
     );
 }
 
-function EventTableRow({ event, asset, user, currentUser, onDelete, showBeerColumns, daysAtCustomer, variety, valveType }: { event: Event, asset: Asset | undefined, user: UserData | undefined, currentUser: any, onDelete: (id: string) => void, showBeerColumns: boolean, daysAtCustomer: number | null, variety?: string, valveType?: string }) {
+function EventTableRow({ event, asset, user, currentUser, onDelete, showBeerColumns, daysAtCustomer }: { event: Event, asset: Asset | undefined, user: UserData | undefined, currentUser: any, onDelete: (id: string) => void, showBeerColumns: boolean, daysAtCustomer: number | null }) {
   const userRole = useUserRole();
   const isCurrentUserEvent = currentUser?.uid === event.user_id;
 
@@ -104,7 +104,7 @@ function EventTableRow({ event, asset, user, currentUser, onDelete, showBeerColu
       <TableCell className="hidden sm:table-cell">{formatEventType(event.event_type)}</TableCell>
       <TableCell>{event.customer_name}</TableCell>
       <TableCell className="hidden md:table-cell">
-        {daysAtCustomer !== null ? (
+        {daysAtCustomer !== null && asset?.location === 'EN_CLIENTE' ? (
           daysAtCustomer >= 30 ? (
             <Badge variant="destructive">{daysAtCustomer} días</Badge>
           ) : (
@@ -114,8 +114,8 @@ function EventTableRow({ event, asset, user, currentUser, onDelete, showBeerColu
           '--'
         )}
       </TableCell>
-      {showBeerColumns && <TableCell className="hidden lg:table-cell">{variety || 'N/A'}</TableCell>}
-      {showBeerColumns && <TableCell className="hidden lg:table-cell">{valveType || 'N/A'}</TableCell>}
+      {showBeerColumns && <TableCell className="hidden lg:table-cell">{event.variety || 'N/A'}</TableCell>}
+      {showBeerColumns && <TableCell className="hidden lg:table-cell">{event.valveType || 'N/A'}</TableCell>}
       {userRole === 'Admin' && (
           <TableCell>{user?.email || 'Desconocido'}</TableCell>
       )}
@@ -137,9 +137,8 @@ function EventTableRow({ event, asset, user, currentUser, onDelete, showBeerColu
 
 function OverviewPageContent() {
   const [events, setEvents] = useState<Event[]>([]);
-  const [allEventsForMap, setAllEventsForMap] = useState<Event[]>([]);
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [users, setUsers] = useState<UserData[]>([]);
+  const [assetsMap, setAssetsMap] = useState<Map<string, Asset>>(new Map());
+  const [usersMap, setUsersMap] = useState<Map<string, UserData>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const searchParams = useSearchParams();
   
@@ -161,6 +160,21 @@ function OverviewPageContent() {
   const [currentUser] = useAuthState(auth);
   const isMobile = useIsMobile();
 
+  const fetchBaseData = useCallback(async () => {
+    const firestore = db;
+    try {
+      const [assetsSnap, usersSnap] = await Promise.all([
+        getDocs(collection(firestore, "assets")),
+        getDocs(collection(firestore, "users")),
+      ]);
+      setAssetsMap(new Map(assetsSnap.docs.map(doc => [doc.id, { id: doc.id, ...doc.data() } as Asset])));
+      setUsersMap(new Map(usersSnap.docs.map(doc => [doc.id, { id: doc.id, ...doc.data() } as UserData])));
+    } catch(error: any) {
+      console.error("Error fetching base data for history:", error);
+      toast({ title: "Error de Carga Inicial", description: "No se pudieron cargar los datos de activos y usuarios.", variant: "destructive"});
+    }
+  }, [toast]);
+
   const fetchEvents = useCallback(async (
     page: number, 
     lastDoc: QueryDocumentSnapshot<DocumentData> | null = null
@@ -174,23 +188,35 @@ function OverviewPageContent() {
         if (filters.assetCode) conditions.push(where("asset_code", "==", filters.assetCode));
         if (filters.eventType !== 'ALL') conditions.push(where("event_type", "==", filters.eventType));
         
-        // This filtering is now client-side, but query is prepared for server-side if needed
-        const assetsToFilter = filters.assetType !== 'ALL' ? assets.filter(a => a.type === filters.assetType).map(a => a.id) : [];
+        const assetCodesToFilter = filters.assetType !== 'ALL' 
+            ? Array.from(assetsMap.values()).filter(a => a.type === filters.assetType).map(a => a.code)
+            : [];
+        
+        if (assetCodesToFilter.length > 0) {
+            conditions.push(where("asset_code", "in", assetCodesToFilter));
+        }
 
         if (filters.criticalOnly) {
             const thirtyDaysAgo = new Date();
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            conditions.push(where("timestamp", "<=", thirtyDaysAgo));
-            conditions.push(where("event_type", "==", "ENTREGA_A_CLIENTE"));
-        } else if (filters.assetType !== 'ALL') {
-            // Firestore does not support 'in' and inequality filters in the same query.
-            // So we fetch all and filter client-side if assetType is used without criticalOnly.
-            // This is a trade-off to avoid complex indexing.
+            const assetsInCustomerOver30Days = Array.from(assetsMap.values())
+                .filter(a => a.location === 'EN_CLIENTE' && a.lastMovementTimestamp && a.lastMovementTimestamp.toDate() <= thirtyDaysAgo)
+                .map(a => a.id);
+            
+            if (assetsInCustomerOver30Days.length > 0) {
+                // We can't query by asset ID on events without an index, so we'll filter client side for critical
+            } else {
+                 setEvents([]);
+                 setTotalEvents(0);
+                 setIsLoading(false);
+                 return;
+            }
         }
 
         const eventsCollection = collection(firestore, "events");
         
-        const countQuery = query(eventsCollection, ...conditions.filter(c => c.A !== 'asset_id'));
+        // The count query might be inaccurate if client-side filtering is happening
+        const countQuery = query(eventsCollection, ...conditions);
         const countSnapshot = await getCountFromServer(countQuery);
         setTotalEvents(countSnapshot.data().count);
         
@@ -203,8 +229,13 @@ function OverviewPageContent() {
         const eventsSnapshot = await getDocs(eventsQuery);
         let eventsData = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event));
 
-        if (filters.assetType !== 'ALL' && !filters.criticalOnly) {
-            eventsData = eventsData.filter(event => assetsToFilter.includes(event.asset_id));
+        if (filters.criticalOnly) {
+             const thirtyDaysAgo = new Date();
+             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+             eventsData = eventsData.filter(event => {
+                const asset = assetsMap.get(event.asset_id);
+                return asset && asset.location === 'EN_CLIENTE' && asset.lastMovementTimestamp && asset.lastMovementTimestamp.toDate() <= thirtyDaysAgo;
+             })
         }
 
         setEvents(eventsData);
@@ -219,7 +250,16 @@ function OverviewPageContent() {
     } catch(error: any) {
         console.error("Error fetching data: ", error);
         logAppEvent({ level: 'ERROR', message: 'Failed to fetch history data', component: 'HistoryPage', stack: error.stack });
-        if (error.code === 'resource-exhausted') {
+        if (error.code === 'failed-precondition' || (error.message && error.message.includes('index'))) {
+             toast({
+              title: "Índice de Firestore Requerido",
+              description: "Esta combinación de filtros requiere un índice en Firestore que no existe. Prueba con filtros más simples o crea el índice en la consola de Firebase.",
+              variant: "destructive",
+              duration: 9000,
+            });
+            setEvents([]);
+            setTotalEvents(0);
+        } else if (error.code === 'resource-exhausted') {
             toast({
               title: "Límite de Firebase alcanzado",
               description: "No se pudo cargar el historial de movimientos.",
@@ -232,36 +272,20 @@ function OverviewPageContent() {
     } finally {
         setIsLoading(false);
     }
-  }, [filters, assets, currentPage, toast]);
+  }, [filters, assetsMap, currentPage, toast]);
 
   useEffect(() => {
-    const firestore = db;
-    const fetchInitialData = async () => {
-        try {
-            const [assetsSnap, usersSnap, allEventsSnap] = await Promise.all([
-                getDocs(collection(firestore, "assets")),
-                getDocs(collection(firestore, "users")),
-                getDocs(query(collection(firestore, "events"), orderBy("timestamp", "desc")))
-            ]);
-            setAssets(assetsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)));
-            setUsers(usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserData)));
-            setAllEventsForMap(allEventsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Event)));
-        } catch(error: any) {
-            console.error("Error fetching initial data for history:", error);
-            toast({ title: "Error de Carga Inicial", description: "No se pudieron cargar todos los datos necesarios.", variant: "destructive"});
-        }
-    }
-    fetchInitialData();
-  }, [toast]);
+    fetchBaseData();
+  }, [fetchBaseData]);
 
   useEffect(() => {
-    if (assets.length > 0) { 
+    if (assetsMap.size > 0) { 
         setCurrentPage(1);
         setPageHistory([null]);
         setLastVisible(null);
         fetchEvents(1, null);
     }
-  }, [filters, assets.length, fetchEvents]);
+  }, [filters, assetsMap, fetchEvents]);
 
   const goToPage = (page: number) => {
     if (page < 1 || (page > currentPage && !lastVisible)) return;
@@ -277,61 +301,13 @@ function OverviewPageContent() {
   const handleFilterChange = (filterName: keyof typeof filters, value: string | boolean) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
-  
-  const assetsMap = useMemo(() => new Map(assets.map(asset => [asset.id, asset])), [assets]);
-  const usersMap = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
 
-  const assetFillHistoryMap = useMemo(() => {
-    const fillHistory = new Map<string, { timestamp: Timestamp; variety?: string; valveType?: string }[]>();
-    const fillEvents = allEventsForMap
-      .filter(e => e.event_type === 'LLENADO_EN_PLANTA')
-      .sort((a, b) => a.timestamp.toMillis() - b.timestamp.toMillis());
-
-    for (const event of fillEvents) {
-      if (!fillHistory.has(event.asset_id)) {
-        fillHistory.set(event.asset_id, []);
+  const getDaysAtCustomer = useCallback((asset: Asset | undefined): number | null => {
+      if (!asset || asset.location !== 'EN_CLIENTE' || !asset.lastMovementTimestamp) {
+          return null;
       }
-      fillHistory.get(event.asset_id)!.push({
-        timestamp: event.timestamp,
-        variety: event.variety,
-        valveType: event.valveType,
-      });
-    }
-    return fillHistory;
-  }, [allEventsForMap]);
-
-  const getCarryForwardData = useCallback((event: Event) => {
-    const history = assetFillHistoryMap.get(event.asset_id);
-    if (!history) {
-      return { variety: event.variety, valveType: event.valveType };
-    }
-    const lastFill = history.slice().reverse().find(fill => fill.timestamp.toMillis() <= event.timestamp.toMillis());
-    return {
-      variety: lastFill?.variety || event.variety,
-      valveType: lastFill?.valveType || event.valveType
-    };
-  }, [assetFillHistoryMap]);
-
-  const daysAtCustomerMap = useMemo(() => {
-    const map = new Map<string, number>();
-    const deliveryEvents = new Map<string, Timestamp>();
-
-    for (const event of allEventsForMap) {
-        if (event.event_type === 'ENTREGA_A_CLIENTE' && !deliveryEvents.has(event.asset_id)) {
-            deliveryEvents.set(event.asset_id, event.timestamp);
-        }
-    }
-
-    for (const asset of assets) {
-        if (asset.location === 'EN_CLIENTE') {
-            const deliveryTimestamp = deliveryEvents.get(asset.id);
-            if (deliveryTimestamp) {
-                map.set(asset.id, differenceInDays(new Date(), deliveryTimestamp.toDate()));
-            }
-        }
-    }
-    return map;
-  }, [assets, allEventsForMap]);
+      return differenceInDays(new Date(), asset.lastMovementTimestamp.toDate());
+  }, []);
 
   const totalPages = Math.ceil(totalEvents / ITEMS_PER_PAGE);
 
@@ -352,7 +328,7 @@ function OverviewPageContent() {
     }
   };
 
-  const showBeerColumns = filters.assetType === 'ALL' || filters.assetType === 'BARRIL';
+  const showBeerColumns = useMemo(() => filters.assetType === 'ALL' || filters.assetType === 'BARRIL', [filters.assetType]);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -425,10 +401,8 @@ function OverviewPageContent() {
                     {events.map((event) => {
                         const asset = assetsMap.get(event.asset_id);
                         const user = usersMap.get(event.user_id);
-                        const days = asset ? daysAtCustomerMap.get(asset.id) : undefined;
-                        const { variety, valveType } = getCarryForwardData(event);
                         return (
-                           <EventCardMobile key={event.id} event={event} asset={asset} user={user} currentUser={currentUser} onDelete={handleDelete} daysAtCustomer={days === undefined ? null : days} variety={variety} valveType={valveType} />
+                           <EventCardMobile key={event.id} event={event} asset={asset} user={user} currentUser={currentUser} onDelete={handleDelete} daysAtCustomer={getDaysAtCustomer(asset)} />
                         )
                     })}
                 </div>
@@ -451,10 +425,8 @@ function OverviewPageContent() {
                     {events.map((event) => {
                        const asset = assetsMap.get(event.asset_id);
                        const user = usersMap.get(event.user_id);
-                       const days = asset ? daysAtCustomerMap.get(asset.id) : undefined;
-                       const { variety, valveType } = getCarryForwardData(event);
                        return (
-                           <EventTableRow key={event.id} event={event} asset={asset} user={user} currentUser={currentUser} onDelete={handleDelete} showBeerColumns={showBeerColumns} daysAtCustomer={days === undefined ? null : days} variety={variety} valveType={valveType} />
+                           <EventTableRow key={event.id} event={event} asset={asset} user={user} currentUser={currentUser} onDelete={handleDelete} showBeerColumns={showBeerColumns} daysAtCustomer={getDaysAtCustomer(asset)} />
                        )
                     })}
                   </TableBody>
@@ -497,8 +469,10 @@ function OverviewPageContent() {
 
 export default function OverviewPage() {
     return (
-        <Suspense fallback={<div>Loading...</div>}>
+        <Suspense fallback={<div className="flex justify-center items-center py-20 h-60"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}>
             <OverviewPageContent />
         </Suspense>
     );
 }
+
+    
