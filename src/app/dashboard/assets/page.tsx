@@ -96,17 +96,14 @@ export default function AssetsPage() {
   const [isQrCodeOpen, setQrCodeOpen] = useState(false);
   const [isConfirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [assetToDelete, setAssetToDelete] = useState<Asset | null>(null);
-  const [activeTab, setActiveTab] = useState('barrels');
+  const [activeTab, setActiveTab] = useState('50L');
   const [selectedAsset, setSelectedAsset] = useState<Asset | undefined>(undefined);
   const [assetsToPrint, setAssetsToPrint] = useState<Asset[]>([]);
-  
-  const [locationFilter, setLocationFilter] = useState<Asset['location'] | null>(null);
-  const [formatFilter, setFormatFilter] = useState<string | null>(null);
   
   const [currentPage, setCurrentPage] = useState(1);
   const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
   const [pageStartDocs, setPageStartDocs] = useState<Record<number, QueryDocumentSnapshot<DocumentData> | null>>({ 1: null });
-  const [totalAssetsInFilter, setTotalAssetsInFilter] = useState(0);
+  const [totalAssets, setTotalAssets] = useState(0);
 
   const { toast } = useToast();
   const userRole = useUserRole();
@@ -120,18 +117,22 @@ export default function AssetsPage() {
     setIsLoading(true);
     try {
         const firestore = db;
-        const assetType = activeTab === 'barrels' ? 'BARRIL' : 'CO2';
+
+        const isCo2Tab = activeTab === 'co2';
+        const assetType = isCo2Tab ? 'CO2' : 'BARRIL';
+        const formatFilter = isCo2Tab ? '9L' : activeTab;
         
         let conditions = [where("type", "==", assetType)];
-        if (locationFilter) conditions.push(where("location", "==", locationFilter));
-        if (formatFilter) conditions.push(where("format", "==", formatFilter));
+        if (!isCo2Tab) {
+          conditions.push(where("format", "==", formatFilter));
+        }
         
         const assetsCollection = collection(firestore, "assets");
         
         const baseQuery = query(assetsCollection, ...conditions, orderBy("code"));
         
         const countSnapshot = await getCountFromServer(baseQuery);
-        setTotalAssetsInFilter(countSnapshot.data().count);
+        setTotalAssets(countSnapshot.data().count);
 
         let assetsQuery = baseQuery;
         if (startDoc) {
@@ -185,14 +186,14 @@ export default function AssetsPage() {
     } finally {
         setIsLoading(false);
     }
-}, [activeTab, locationFilter, formatFilter, toast]);
+}, [activeTab, toast]);
 
   useEffect(() => {
     setCurrentPage(1);
     setPageStartDocs({ 1: null });
     setLastVisible(null);
     fetchAssets(1, null);
-  }, [activeTab, locationFilter, formatFilter, fetchAssets]);
+  }, [activeTab, fetchAssets]);
 
   const goToPage = (page: number) => {
     if (page < 1 || (page > currentPage && !lastVisible)) return;
@@ -229,9 +230,17 @@ export default function AssetsPage() {
         setIsLoading(true);
         try {
             const firestore = db;
-            const assetType = activeTab === 'barrels' ? 'BARRIL' : 'CO2';
+            const isCo2Tab = activeTab === 'co2';
+            const assetType = isCo2Tab ? 'CO2' : 'BARRIL';
+            const formatFilter = isCo2Tab ? '9L' : activeTab;
+
+            let conditions = [where("type", "==", assetType)];
+            if (!isCo2Tab) {
+              conditions.push(where("format", "==", formatFilter));
+            }
+            
             // Limit print to a reasonable number to avoid high read costs, e.g. 15
-            const allAssetsQuery = query(collection(firestore, "assets"), where("type", "==", assetType), orderBy("code"), limit(15));
+            const allAssetsQuery = query(collection(firestore, "assets"), ...conditions, orderBy("code"), limit(15));
             const allAssetsSnapshot = await getDocs(allAssetsQuery);
             listToPrint = allAssetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset));
         } catch(e: any) {
@@ -500,23 +509,7 @@ export default function AssetsPage() {
     }
   };
   
-  const totalPages = Math.ceil(totalAssetsInFilter / ITEMS_PER_PAGE);
-
-  const handleTabChange = (value: string) => {
-    setActiveTab(value);
-    setFormatFilter(null);
-    setLocationFilter(null);
-  };
-  
-  const handleFilterClick = (format: string, location: Asset['location']) => {
-    setFormatFilter(format);
-    setLocationFilter(location);
-  };
-
-  const clearFilters = () => {
-    setFormatFilter(null);
-    setLocationFilter(null);
-  };
+  const totalPages = Math.ceil(totalAssets / ITEMS_PER_PAGE);
 
   const AssetCardMobile = ({ asset }: { asset: Asset }) => (
     <div className="flex items-center justify-between rounded-lg border bg-card p-4">
@@ -636,16 +629,13 @@ export default function AssetsPage() {
       </Table>
   );
 
-  const AssetList = ({ assetList, type }: { assetList: Asset[], type: 'BARRIL' | 'CO2' }) => {
-    const typeName = type === 'BARRIL' ? 'barriles' : 'cilindros';
+  const AssetList = ({ assetList, typeName, format }: { assetList: Asset[], typeName: string, format: string }) => {
     return (
      <Card>
         <CardHeader className="hidden md:flex">
-          <CardTitle className="text-xl">{type === 'BARRIL' ? 'Barriles' : 'Cilindros de CO2'}</CardTitle>
+          <CardTitle className="text-xl">Activos: {format}</CardTitle>
           <CardDescription>
-            {locationFilter && formatFilter 
-                ? `Mostrando ${totalAssetsInFilter} activos de formato "${formatFilter}" en "${getLocationText(locationFilter as Asset['location'])}".`
-                : `Un listado de todos los activos de tipo ${typeName} en tu inventario.`}
+            {`Un listado de todos los activos de formato ${format} en tu inventario.`}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0 md:p-6 md:pt-0">
@@ -656,22 +646,15 @@ export default function AssetsPage() {
           ) : assetList.length === 0 ? (
             <EmptyState 
                 icon={<PackageSearch className="h-16 w-16" />}
-                title={locationFilter ? 'No hay activos para este filtro' : `No hay ${typeName} aún`}
-                description={locationFilter ? 'Prueba a seleccionar otro filtro o límpialo para ver todos los activos.' : `Crea tu primer activo para empezar a rastrear tu inventario de ${typeName}.`}
+                title={`No hay ${typeName} de ${format} aún`}
+                description={`Crea tu primer activo para empezar a rastrear tu inventario de ${typeName}.`}
                 action={
-                    locationFilter ? (
-                         <Button onClick={clearFilters}>
-                          <X className="mr-2 h-5 w-5" />
-                          Limpiar Filtro
+                    <DialogTrigger asChild>
+                        <Button onClick={handleNew}>
+                          <PlusCircle className="mr-2 h-5 w-5" />
+                          Nuevo Activo
                         </Button>
-                    ) : (
-                        <DialogTrigger asChild>
-                            <Button onClick={handleNew}>
-                              <PlusCircle className="mr-2 h-5 w-5" />
-                              Nuevo Activo
-                            </Button>
-                        </DialogTrigger>
-                    )
+                    </DialogTrigger>
                 }
             />
           ) : isMobile ? (
@@ -740,24 +723,26 @@ export default function AssetsPage() {
             }
           />
           <main className="flex-1 p-4 pt-0 md:p-6 md:pt-0">
-              <Tabs defaultValue={activeTab} onValueChange={handleTabChange}>
+              <Tabs defaultValue={activeTab} onValueChange={setActiveTab}>
                 <div className="flex flex-col sm:flex-row items-start justify-between gap-4 mb-4">
                   <TabsList>
-                    <TabsTrigger value="barrels">Barriles</TabsTrigger>
+                    <TabsTrigger value="50L">Barriles 50L</TabsTrigger>
+                    <TabsTrigger value="30L">Barriles 30L</TabsTrigger>
+                    <TabsTrigger value="30L SLIM">Barriles 30L SLIM</TabsTrigger>
                     <TabsTrigger value="co2">CO2</TabsTrigger>
                   </TabsList>
-                   {locationFilter && (
-                       <Button variant="ghost" size="sm" onClick={clearFilters} className="text-destructive hover:text-destructive self-end">
-                            <X className="mr-2 h-4 w-4" />
-                            Limpiar Filtro
-                        </Button>
-                    )}
                 </div>
-                <TabsContent value="barrels">
-                   <AssetList assetList={assets} type="BARRIL" />
+                <TabsContent value="50L">
+                   <AssetList assetList={assets} typeName="barriles" format="50L" />
+                </TabsContent>
+                <TabsContent value="30L">
+                   <AssetList assetList={assets} typeName="barriles" format="30L" />
+                </TabsContent>
+                <TabsContent value="30L SLIM">
+                   <AssetList assetList={assets} typeName="barriles" format="30L SLIM" />
                 </TabsContent>
                 <TabsContent value="co2">
-                   <AssetList assetList={assets} type="CO2" />
+                   <AssetList assetList={assets} typeName="cilindros" format="CO2" />
                 </TabsContent>
               </Tabs>
           </main>
@@ -846,3 +831,5 @@ export default function AssetsPage() {
     </>
   );
 }
+
+    
